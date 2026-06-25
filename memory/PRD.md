@@ -11,7 +11,41 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
 
 
-### 🔁 Auto-Republish + No-Preview Links (P0) — DEPLOYED 2026-02 (zenrex.ai LIVE)
+### 🧠🧠🧠🧠 الـ 4 Architectural AI Layers — DEPLOYED 2026-02 (zenrex.ai LIVE)
+
+**User vision (verbatim):** "ابي أفضل تركيبة ... ابي نسبة التدخل البشري قليلة ... ابي الطبقات تكون فعلاً يستخدمهم كل واحد ومهامه ما احد يتعدى على مهام الاخرين"
+
+**Architecture:**
+
+| Layer | الدور | Module | Model | Cost |
+|---|---|---|---|---|
+| **AI #1 — Customer Brain** | (existing) intake + conversation | freebuild_agent main loop | Claude Sonnet 4.5 / GPT-5.5 (router) | tokens/turn |
+| **AI #2.1 — Planner** | يحوّل طلب العميل لخطة JSON مهيكلة (pages, phases, suggestions, risks) | `planner.py` (NEW) | Claude Sonnet 4.5 | ~$0.02/build |
+| **AI #2.3 — Code Reviewer** | يراجع كل write_full_html قبل الـ commit، يقرر approve/fix/reject | `code_reviewer.py` (NEW) | Claude Sonnet 4.5 | ~$0.01/review |
+| **AI #2.4 — Context Manager** | (existing) smart-merge + project memory | freebuild_agent helpers | n/a | n/a |
+| **AI #3 — Builder** | (existing) ينفّذ tools (write_full_html, apply_section, ...) | freebuild_agent | Claude Sonnet 4.5 / GLM-4.6 | tokens/turn |
+| **AI #4 — Browser Engineer** | (built earlier) Playwright audit للموقع المنشور | freebuild_chat engineer_audit | Playwright + Claude | 500 credits/audit |
+
+**SSE events the user sees in chat:**
+- `build_plan` → 🧠 indigo card with summary, pages count, phases, suggestions, risks
+- `code_review` → 🛡️ colored card (green=approve, amber=fix, red=reject) with score + top issues
+- `tool` → tool execution
+- `auto_published` → 🚀 emerald card with new versioned URL
+
+**Circuit breakers (so it doesn't loop forever):**
+- Reviewer skips when diff < 400 chars OR (first build AND new < 1500 chars).
+- After 2 consecutive rejects in same turn, the reviewer is force-approved to avoid infinite re-tries.
+- Planner skipped on small edits (keyword detection: "غير ، عدل ، fix" → no plan, "ابن ، اعمل ، build" → plan).
+
+**Production verified:**
+- Planner generates 3-page plan + 6 phases + 7 suggestions + 5 risks for "متجر قهوة".
+- Reviewer fires on prod (logs show REJECT verdicts pushing the AI to rewrite better HTML).
+- The 4-layer pipeline runs on every BUILD request now.
+
+**Files added:** `/app/backend/modules/freebuild/planner.py`, `/app/backend/modules/freebuild/code_reviewer.py`.
+**Files modified:** `freebuild_agent.py` (write_full_html moved to async dispatcher + Planner injection + SSE emit), `freebuild_chat.py` (no change needed), `FreeBuildChat.js` (renders build_plan + code_review cards), `tests/test_smart_merge.py` (uses new async dispatcher).
+
+
 
 **User pain (verbatim):** "كل ما تحدث تحديث لازم يضيفه في كل محادثة بالتغير يتأكد منه ... للان يرسل روابط بنفس الفكرة. هنا ينقلني الى عدة اقسام بغير تعديل وبس اضغط على كلمة الحساب يرجع يطلع لي الموقع المعدل ... في رابط مختلط"
 

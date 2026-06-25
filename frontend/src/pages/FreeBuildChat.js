@@ -3137,6 +3137,14 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               // mixed/stale URL again.
               liveSteps.push({ kind: 'auto_published', ...payload });
               scheduleUpdate();
+            } else if (eventName === 'build_plan') {
+              // AI #2.1 — Planner produced a structured plan.
+              liveSteps.push({ kind: 'build_plan', ...payload });
+              scheduleUpdate();
+            } else if (eventName === 'code_review') {
+              // AI #2.3 — Code Reviewer verdict.
+              liveSteps.push({ kind: 'code_review', ...payload });
+              scheduleUpdate();
             } else if (eventName === 'done') {
               streamReceivedDone = true;
               // Combine all accumulated live_text narration + closing summary
@@ -4155,6 +4163,62 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                                   <div className="text-[10px] text-zinc-500 mt-2">
                                     الإصدار السابق ({s.previous_url}) صار قديم — يعمل auto-redirect للجديد.
                                   </div>
+                                )}
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'build_plan') {
+                            // AI #2.1 — Planner card.
+                            return (
+                              <div key={sIdx} data-testid={`build-plan-${sIdx}`} className="my-2 rounded-lg border border-indigo-400/40 bg-indigo-500/10 px-3.5 py-3 text-sm">
+                                <div className="flex items-center gap-2 text-indigo-200 font-bold mb-1.5">
+                                  <span>🧠</span>
+                                  <span>المهندس المعماري — خطة البناء</span>
+                                  {s.from_cache && <span className="text-[9px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">cached</span>}
+                                  {s.fallback && <span className="text-[9px] bg-amber-900/50 text-amber-300 px-1.5 py-0.5 rounded">fallback</span>}
+                                </div>
+                                {s.summary && <div className="text-zinc-200 mb-2 leading-6">{s.summary}</div>}
+                                <div className="flex flex-wrap gap-1.5 text-[11px] text-indigo-300 mb-2">
+                                  <span className="bg-indigo-500/10 border border-indigo-500/30 rounded px-2 py-0.5">📄 {s.pages_count} صفحات</span>
+                                  <span className="bg-indigo-500/10 border border-indigo-500/30 rounded px-2 py-0.5">🔄 {(s.phases || []).length} مراحل</span>
+                                  {(s.integrations || []).length > 0 && (
+                                    <span className="bg-indigo-500/10 border border-indigo-500/30 rounded px-2 py-0.5">🔌 {s.integrations.length} integrations</span>
+                                  )}
+                                </div>
+                                {(s.suggestions || []).length > 0 && (
+                                  <details className="mt-2">
+                                    <summary className="text-[11px] text-indigo-200 cursor-pointer hover:text-white">💡 اقتراحات إضافية ({s.suggestions.length})</summary>
+                                    <ul className="text-[12px] text-zinc-300 mt-1.5 pr-4 space-y-1">
+                                      {s.suggestions.slice(0, 7).map((sg, i) => <li key={i}>• {sg}</li>)}
+                                    </ul>
+                                  </details>
+                                )}
+                                {(s.risks || []).length > 0 && (
+                                  <details className="mt-1">
+                                    <summary className="text-[11px] text-amber-300 cursor-pointer hover:text-amber-100">⚠️ مخاطر ({s.risks.length})</summary>
+                                    <ul className="text-[12px] text-zinc-300 mt-1.5 pr-4 space-y-1">
+                                      {s.risks.slice(0, 5).map((r, i) => <li key={i}>• {r}</li>)}
+                                    </ul>
+                                  </details>
+                                )}
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'code_review') {
+                            const sevColor = s.verdict === 'reject' ? 'red' : s.verdict === 'fix' ? 'amber' : 'emerald';
+                            return (
+                              <div key={sIdx} data-testid={`code-review-${sIdx}`} className={`my-2 rounded-lg border border-${sevColor}-400/40 bg-${sevColor}-500/10 px-3.5 py-2.5 text-sm`}>
+                                <div className={`flex items-center gap-2 text-${sevColor}-200 font-bold mb-1`}>
+                                  <span>{s.verdict === 'reject' ? '❌' : s.verdict === 'fix' ? '🛠️' : '✅'}</span>
+                                  <span>المراجع الكودي — {s.verdict?.toUpperCase()}</span>
+                                  <span className="text-[10px] bg-zinc-900/60 px-1.5 py-0.5 rounded">{s.score}/100</span>
+                                </div>
+                                {(s.issues || []).length > 0 && (
+                                  <ul className="text-[12px] text-zinc-300 mt-1 pr-4 space-y-0.5">
+                                    {s.issues.slice(0, 5).map((iss, i) => (
+                                      <li key={i}>• <span className="text-zinc-500">[{iss.severity}]</span> {iss.msg}</li>
+                                    ))}
+                                  </ul>
                                 )}
                               </div>
                             );

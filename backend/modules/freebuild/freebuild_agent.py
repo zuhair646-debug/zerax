@@ -3018,106 +3018,9 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             return {"__async__": True}
 
         if name == "write_full_html":
-            new_html = (args.get("html") or "").strip()
-            if not new_html:
-                return {"ok": False, "error": "html cannot be empty"}
-            if not re.search(r"<html[\s\S]*</html>", new_html, re.I):
-                return {"ok": False, "error": "must be a complete <!DOCTYPE html>...</html> document"}
-            # 🛡️ DESIGN PRESERVATION: when an established design already
-            # exists (≥800 chars of HTML) we REFUSE to nuke it. This stops
-            # the #1 user complaint: "AI replaced my approved design with
-            # generic empty colored boxes when I asked to ADD a chat."
-            # The AI must use apply_section / create_page instead.
-            existing_size = len(ctx.current_html or "")
-            design_locked = bool((ctx.project or {}).get("design_locked"))
-            allow_full_rewrite = bool(args.get("allow_full_rewrite")) or \
-                                  bool((ctx.project or {}).get("design_unlocked"))
-            # ℹ️ Advisory only — log when overwriting locked/large designs but
-            # do NOT block the AI. User explicitly requested that hard blockers
-            # be removed; we trust the workflow_engine + system prompt to guide
-            # behaviour. The AI is responsible for its choices.
-            if design_locked:
-                logger.info(
-                    "[write_full_html] advisory: design_locked=True — proceeding anyway"
-                )
-            if existing_size >= 800 and not allow_full_rewrite:
-                logger.info(
-                    f"[write_full_html] advisory: overwriting existing design "
-                    f"({existing_size} chars) without allow_full_rewrite — applying smart-merge"
-                )
-            # 🧠 Smart-Merge — if the AI's new HTML is missing any section
-            # that existed before, splice the original section back in. This
-            # is the safety net for the #1 destructive failure mode (forgot
-            # to include other sections when asked for a surgical edit).
-            #
-            # Trigger criteria: at least one existing <section id> AND user
-            # did NOT explicitly request a full rewrite. The size-based
-            # threshold (≥800 chars) used to gate this; replaced with the
-            # cleaner "has sections" test so even small projects are protected.
-            preserved_sections: List[str] = []
-            try:
-                _existing_section_count = len(re.findall(
-                    r'<section\b[^>]*\bid\s*=\s*["\'][^"\']+["\']',
-                    ctx.current_html or "", re.IGNORECASE,
-                ))
-            except Exception:
-                _existing_section_count = 0
-            if _existing_section_count >= 1 and not allow_full_rewrite:
-                new_html, preserved_sections = _smart_merge_preserve_sections(
-                    ctx.current_html or "", new_html,
-                )
-                if preserved_sections:
-                    logger.info(
-                        f"[write_full_html] smart-merge preserved {len(preserved_sections)} "
-                        f"section(s): {preserved_sections}"
-                    )
-            # auto-fix dead navigation links
-            new_html, fixed = _fix_dead_navigation_links(new_html)
-            # 🔗 Anchor → real-page rewriting (multi-page enforcement)
-            new_html, anchor_rewrites = _rewrite_anchors_to_real_pages(
-                new_html, ctx.pages,
-            )
-            ctx.snapshot_before_write()
-            ctx.current_html = new_html
-            ctx._sync_active_page()
-            ctx.changes_made += 1
-            # 🛡️ Post-write completeness check — warn the AI immediately if
-            # the page it just wrote is blank. This kills the failure mode
-            # where the AI writes a skeleton and moves on without realising.
-            try:
-                _section_count = len(re.findall(
-                    r'<section\b[^>]*\bid\s*=\s*["\'][^"\']+["\']',
-                    new_html, re.IGNORECASE,
-                ))
-                _text_only = re.sub(r"<[^>]+>", " ", new_html)
-                _text_only = re.sub(r"\s+", " ", _text_only).strip()
-                _meaningful = len(_text_only)
-            except Exception:
-                _section_count, _meaningful = 0, len(new_html)
-            _result: Dict[str, Any] = {
-                "ok": True,
-                "new_length": len(new_html),
-                "section_count": _section_count,
-                "meaningful_chars": _meaningful,
-                "dead_links_fixed": fixed,
-                "anchor_to_page_rewrites": anchor_rewrites,
-            }
-            if _section_count < 2 or _meaningful < 600:
-                _result["incomplete_warning"] = (
-                    f"⚠️ الصفحة اللي كتبتها ناقصة: {_section_count} قسم، "
-                    f"{_meaningful} حرف نصّ. الحد الأدنى للصفحة المكتملة = "
-                    f"2 أقسام + 600 حرف نصّ. أكملها عبر write_full_html مرة "
-                    f"أخرى بمحتوى حقيقي قبل ما تستدعي mark_page_built."
-                )
-            if preserved_sections:
-                _result["preserved_sections"] = preserved_sections
-                _result["preservation_message_ar"] = (
-                    f"🛡️ **Smart-Merge:** الصفحة كان فيها {len(preserved_sections)} "
-                    f"قسم لم تذكرهم في الـHTML الجديد، فأعدتهم تلقائياً للحفاظ على عمل "
-                    f"العميل: {', '.join('#'+s for s in preserved_sections)}. "
-                    f"لو كنت تقصد حذفهم فعلاً، استدع `remove_section(ids=[...])` صراحة."
-                )
-            return _result
+            # Async dispatch (the reviewer + smart-merge live in _exec_tool_async).
+            return {"__async__": True}
+
         if name == "apply_section":
             sid = (args.get("id") or "").strip()
             frag = (args.get("html") or "").strip()
@@ -3945,6 +3848,102 @@ async def _dispatch_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, A
 # ─── Async Tool Dispatcher (web_search, fetch_url, generate_image) ────────────
 async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     try:
+        # ═══════════════════════════════════════════════════════════════
+        # 🛡️ write_full_html — async because the AI #2.3 (Code Reviewer)
+        # call is async. Runs smart-merge → dead-link fix → anchor-rewrite
+        # → reviewer → commit.
+        # ═══════════════════════════════════════════════════════════════
+        if name == "write_full_html":
+            new_html = (args.get("html") or "").strip()
+            if not new_html:
+                return {"ok": False, "error": "html cannot be empty"}
+            if not re.search(r"<html[\s\S]*</html>", new_html, re.I):
+                return {"ok": False, "error": "must be a complete <!DOCTYPE html>...</html> document"}
+            existing_size = len(ctx.current_html or "")
+            allow_full_rewrite = bool(args.get("allow_full_rewrite")) or \
+                                  bool((ctx.project or {}).get("design_unlocked"))
+            # 🛡️ Smart-Merge protection
+            preserved_sections: List[str] = []
+            try:
+                _existing_section_count = len(re.findall(
+                    r'<section\b[^>]*\bid\s*=\s*["\'][^"\']+["\']',
+                    ctx.current_html or "", re.IGNORECASE,
+                ))
+            except Exception:
+                _existing_section_count = 0
+            if _existing_section_count >= 1 and not allow_full_rewrite:
+                new_html, preserved_sections = _smart_merge_preserve_sections(
+                    ctx.current_html or "", new_html,
+                )
+                if preserved_sections:
+                    logger.info(f"[write_full_html] smart-merge preserved {len(preserved_sections)} section(s)")
+            new_html, fixed = _fix_dead_navigation_links(new_html)
+            new_html, anchor_rewrites = _rewrite_anchors_to_real_pages(new_html, ctx.pages)
+            # 🛡️ AI #2.3 — Code Reviewer pass
+            review_outcome: Optional[Dict[str, Any]] = None
+            try:
+                from .code_reviewer import review_code_change, render_review_summary
+                review_outcome = await review_code_change(
+                    action="write_full_html",
+                    proposed_html=new_html,
+                    current_html=ctx.current_html or "",
+                    user_request=getattr(ctx, "user_message", "") or "",
+                    project_name=(ctx.project or {}).get("name") or "",
+                    page_filename=(ctx.active_page or "index.html"),
+                )
+                if review_outcome:
+                    logger.info(f"[write_full_html] {render_review_summary(review_outcome)}")
+                    verdict = review_outcome.get("verdict")
+                    if verdict == "reject":
+                        # Track rejection count on ctx — after 2 rejects, force approve to avoid infinite loops.
+                        ctx._review_reject_count = getattr(ctx, "_review_reject_count", 0) + 1
+                        if ctx._review_reject_count >= 2:
+                            logger.warning(f"[write_full_html] reviewer rejected {ctx._review_reject_count}x — forcing approve to break loop")
+                            review_outcome["forced_approve"] = True
+                            # fall through to commit
+                        else:
+                            issues = review_outcome.get("issues") or []
+                            top = "\n".join(f"- [{i.get('severity','?')}] {i.get('msg','?')}" for i in issues[:5])
+                            return {
+                                "ok": False, "rejected_by_reviewer": True,
+                                "score": review_outcome.get("score"),
+                                "issues": issues,
+                                "feedback": "❌ المراجع رفض. أعد الكتابة مع معالجة:\n" + top,
+                            }
+                    if verdict == "fix" and review_outcome.get("improved_html"):
+                        new_html = review_outcome["improved_html"]
+                        new_html, _ = _fix_dead_navigation_links(new_html)
+                        new_html, _ = _rewrite_anchors_to_real_pages(new_html, ctx.pages)
+            except Exception as _re:
+                logger.warning(f"[write_full_html] reviewer skipped: {_re}")
+            ctx.snapshot_before_write()
+            ctx.current_html = new_html
+            ctx._sync_active_page()
+            ctx.changes_made += 1
+            ctx._needs_republish = True  # signals auto-republish at turn end
+            try:
+                _section_count = len(re.findall(r'<section\b[^>]*\bid\s*=\s*["\'][^"\']+["\']', new_html, re.IGNORECASE))
+                _text_only = re.sub(r"<[^>]+>", " ", new_html)
+                _meaningful = len(re.sub(r"\s+", " ", _text_only).strip())
+            except Exception:
+                _section_count, _meaningful = 0, len(new_html)
+            _result: Dict[str, Any] = {
+                "ok": True, "new_length": len(new_html),
+                "section_count": _section_count, "meaningful_chars": _meaningful,
+                "dead_links_fixed": fixed, "anchor_to_page_rewrites": anchor_rewrites,
+            }
+            if preserved_sections:
+                _result["preserved_sections"] = preserved_sections
+            if review_outcome and not review_outcome.get("skipped"):
+                _result["code_review"] = {
+                    "verdict": review_outcome.get("verdict"),
+                    "score": review_outcome.get("score"),
+                    "issue_count": len(review_outcome.get("issues") or []),
+                    "issues": (review_outcome.get("issues") or [])[:5],
+                    "auto_fixed": review_outcome.get("verdict") == "fix",
+                }
+            return _result
+
         if name == "web_search":
             query = (args.get("query") or "").strip()
             max_results = max(1, min(int(args.get("max_results") or 5), 10))
@@ -9559,12 +9558,51 @@ async def _stream_one_provider(
     ctx = FreeBuildToolContext(project, auth_token=auth_token, db=db, is_owner=is_owner)
     if ctx_holder is not None:
         ctx_holder["ctx"] = ctx
+    # Stash the raw user message on ctx so child layers (code reviewer,
+    # planner) can read it for richer context.
+    try:
+        ctx.user_message = user_message
+    except Exception:
+        pass
 
     # Track all narration text across iterations so we can fall back to it
     # if the AI ends without calling finish() with a proper summary.
     all_text_chunks: List[str] = []
 
     initial_state = _exec_tool(ctx, "read_current_html", {})
+
+    # ═══════════════════════════════════════════════════════════════════
+    # 🧠 AI #2.1 — Planner pass (only on new builds / major requests)
+    # ═══════════════════════════════════════════════════════════════════
+    try:
+        from .planner import generate_build_plan, render_plan_summary
+        _plan = await generate_build_plan(
+            user_message=user_message,
+            project_name=project.get("name") or "",
+            project_id=project.get("id") or "",
+            current_html=ctx.current_html or "",
+            pages_existing=list((ctx.pages or {}).keys()),
+        )
+        if _plan:
+            try:
+                ctx.build_plan = _plan
+            except Exception:
+                pass
+            logger.info(f"[planner] {render_plan_summary(_plan)}")
+            yield _sse("build_plan", {
+                "summary": _plan.get("summary"),
+                "pages_count": len(_plan.get("pages") or []),
+                "phases": _plan.get("phases") or [],
+                "suggestions": _plan.get("suggestions") or [],
+                "risks": _plan.get("risks") or [],
+                "integrations": _plan.get("integrations") or [],
+                "design_hints": _plan.get("design_hints") or {},
+                "from_cache": _plan.get("from_cache", False),
+                "fallback": _plan.get("fallback", False),
+            })
+    except Exception as _pe:
+        logger.warning(f"[planner] skipped: {_pe}")
+
     template_note = ""
     cat_id = project.get("category_id")
     if cat_id:
@@ -10238,6 +10276,19 @@ async def _stream_one_provider(
                     snippet = f" — قسم #{tu['input'].get('id','?')}"
                 yield _sse("tool", {"name": tu["name"], "phase": "done", "label": label_done + snippet, "step": iterations})
                 await asyncio.sleep(0)
+                # 🛡️ Surface the Code Reviewer verdict to the user as its own
+                # event (rendered as a colored card in chat). Only fires for
+                # tools that pass through the reviewer (currently write_full_html).
+                _cr = result.get("code_review") if isinstance(result, dict) else None
+                if _cr:
+                    yield _sse("code_review", {
+                        "verdict": _cr.get("verdict"),
+                        "score": _cr.get("score"),
+                        "issue_count": _cr.get("issue_count"),
+                        "issues": _cr.get("issues") or [],
+                        "auto_fixed": _cr.get("auto_fixed", False),
+                        "tool": tu["name"],
+                    })
                 if provider in ("anthropic", "emergent_anthropic"):
                     messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)[:6000]}]})
                 else:

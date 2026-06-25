@@ -6,8 +6,20 @@ back in automatically. This was added because the AI repeatedly destroyed
 approved sections when asked for surgical edits.
 """
 import re
+import asyncio
 
 from backend.modules.freebuild import freebuild_agent as fa
+
+
+def _exec(ctx, name, args):
+    """Test helper: run the agent's full dispatch (handles async tools).
+    Mirrors the production flow: sync _exec_tool may return {"__async__": True}
+    which redirects to _exec_tool_async. We follow that redirection here so
+    tests cover the real code path."""
+    result = fa._exec_tool(ctx, name, args)
+    if isinstance(result, dict) and result.get("__async__"):
+        result = asyncio.run(fa._exec_tool_async(ctx, name, args))
+    return result
 
 
 SECTION_HERO = (
@@ -104,7 +116,7 @@ class TestSmartMergeIntegrationWithWriteFullHtml:
         ctx = self._ctx(old)
         # AI tries to "fix the hero" but writes a new doc that only has #hero
         new = _full(SECTION_HERO.replace("Hero", "Brand-new Hero"))
-        result = fa._exec_tool(ctx, "write_full_html", {"html": new})
+        result = _exec(ctx, "write_full_html", {"html": new})
         assert result.get("ok") is True
         assert set(result.get("preserved_sections", [])) == {"features", "pricing"}
         # The active page now contains all three sections
@@ -121,7 +133,7 @@ class TestSmartMergeIntegrationWithWriteFullHtml:
         old = _full(SECTION_HERO, SECTION_FEATURES, SECTION_PRICING)
         ctx = self._ctx(old)
         new = _full(SECTION_HERO)
-        result = fa._exec_tool(
+        result = _exec(
             ctx, "write_full_html",
             {"html": new, "allow_full_rewrite": True},
         )
@@ -138,7 +150,7 @@ class TestSmartMergeIntegrationWithWriteFullHtml:
         small = "<html><body><p>tiny</p></body></html>"
         ctx = self._ctx(small)
         new = _full(SECTION_HERO)
-        result = fa._exec_tool(ctx, "write_full_html", {"html": new})
+        result = _exec(ctx, "write_full_html", {"html": new})
         assert result.get("ok") is True
         # No preservation needed (existing HTML was too small).
         assert "preserved_sections" not in result
