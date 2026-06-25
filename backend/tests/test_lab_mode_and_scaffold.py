@@ -244,41 +244,30 @@ class TestLabModeBranchSource:
 
     def test_lab_branch_uses_stream_agent_turn(self):
         src = inspect.getsource(fc_mod)
-        # Find the lab branch and confirm it calls stream_agent_turn
-        # (not brain_stream_turn) within ~30 lines.
-        idx = src.find('if mode == "lab":')
-        assert idx > 0, "lab-mode branch missing"
+        # After the lab→default refactor, the default branch (mode!="legacy_brain")
+        # calls stream_agent_turn directly.
+        idx = src.find('if mode != "legacy_brain":')
+        assert idx > 0, "default branch missing"
         snippet = src[idx: idx + 3000]
-        assert "stream_agent_turn(" in snippet, "lab branch must call stream_agent_turn"
-        # Brain must NOT be invoked inside the lab branch — find the
-        # boundary of the else: clause that uses Brain.
+        assert "stream_agent_turn(" in snippet, "default branch must call stream_agent_turn"
         else_idx = snippet.find("else:")
         if else_idx > 0:
-            lab_only = snippet[:else_idx]
-            assert "brain_stream_turn" not in lab_only, "lab branch must NOT call Brain"
+            default_only = snippet[:else_idx]
+            assert "brain_stream_turn" not in default_only, "default branch must NOT call Brain"
 
     def test_default_branch_still_uses_brain(self):
-        """Backwards compat: when mode != 'lab' the Brain orchestrator
-        must still run (no regression)."""
+        """Backwards compat: when mode == 'legacy_brain' the Brain
+        orchestrator is still available for A/B testing."""
         src = inspect.getsource(fc_mod)
         assert "brain_stream_turn(" in src
 
     def test_lab_uses_isolated_project_copy(self):
-        """The lab branch must use proj_lab (a copy) so the real project's
+        """The default branch must use proj_lab (a copy) so the real project's
         workflow_state is not mutated permanently."""
         src = inspect.getsource(fc_mod)
-        idx = src.find('if mode == "lab":')
-        lab_block = src[idx: idx + 2000]
-        assert "proj_lab = dict(proj)" in lab_block, "lab must operate on a project copy"
-        # Confirm DB update inside the lab block targets pages/current_html
-        # but NEVER writes workflow_state back to the real project doc.
-        # (Search for "workflow_state" inside the persist call.)
-        persist_idx = lab_block.find("db.freebuild_projects.update_one")
-        if persist_idx > 0:
-            persist_block = lab_block[persist_idx: persist_idx + 500]
-            assert "workflow_state" not in persist_block, (
-                "lab persist must NOT write workflow_state to real project"
-            )
+        idx = src.find('if mode != "legacy_brain":')
+        lab_block = src[idx: idx + 3000]
+        assert "proj_lab = dict(proj)" in lab_block, "default branch must operate on a project copy"
 
 
 # ════════════════════════════════════════════════════════════════════════

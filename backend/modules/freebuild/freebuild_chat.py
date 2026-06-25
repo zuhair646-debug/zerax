@@ -6677,16 +6677,20 @@ For questions: legal@zenrex.ai
             except Exception:
                 pass
             try:
-                if mode == "lab":
-                    # 🧪 LAB MODE — bypasses Brain orchestrator and workflow
-                    # constraints entirely. Pure: user message → AI tools → result.
-                    # Same 3 models, same tools, NO discovery/mockup/skeleton/
-                    # wiring/surgical phases. Used for isolating bugs from
-                    # the workflow layer.
+                # 🎯 DEFAULT PATH = Lab pathway. The Brain orchestrator was
+                # the root cause of multi-page navigation/build failures
+                # (confirmed by user A/B: Lab Mode builds working multi-page
+                # sites with working nav; the default chat going through
+                # Brain produced sites where pages don't navigate). We now
+                # route ALL chat through stream_agent_turn directly, with
+                # an isolated project copy.
+                # Pass `mode=legacy_brain` to opt back into Brain v2 for
+                # debugging/A-B testing.
+                if mode != "legacy_brain":
                     proj_lab = dict(proj)
                     proj_lab["workflow_state"] = {
-                        "stage": "surgical_edit",  # most permissive — no addendum constraints
-                        "discovery_answers": {"_lab_mode": "yes"},
+                        "stage": "surgical_edit",
+                        "discovery_answers": (proj.get("workflow_state") or {}).get("discovery_answers") or {},
                     }
                     from .freebuild_agent import FreeBuildToolContext as _FBC
                     _ctx = _FBC(
@@ -6716,7 +6720,7 @@ For questions: legal@zenrex.ai
                                 captured["html_updated"] = done.get("html_updated", False)
                                 captured["credits_charged"] = int(done.get("credits_charged") or 0)
                             except Exception:
-                                logger.exception("lab stream: failed to parse done event")
+                                logger.exception("default stream: failed to parse done event")
                         if chunk.startswith("event: tool\n") and '"phase": "done"' in chunk:
                             ctx_now = ctx_holder.get("ctx")
                             if ctx_now and ctx_now.changes_made > last_persisted_changes and ctx_now.current_html:
@@ -6730,12 +6734,21 @@ For questions: legal@zenrex.ai
                                     )
                                     last_persisted_changes = ctx_now.changes_made
                                 except Exception:
-                                    logger.exception("lab mid-stream persist failed")
-                        await event_queue.put(chunk)
+                                    logger.exception("default mid-stream persist failed")
+                        try:
+                            event_queue.put_nowait(chunk)
+                        except _asyncio.QueueFull:
+                            try:
+                                event_queue.get_nowait()
+                                event_queue.put_nowait(chunk)
+                            except _asyncio.QueueEmpty:
+                                pass
                 else:
-                    # Brain v2 takes over: state machine, discovery, plan,
-                    # memory, strict completion. It defers to the legacy
-                    # executor only inside the EXECUTING state.
+                    # mode == "legacy_brain" — opt-in path for debugging
+                    # Brain v2 (state machine, discovery, plan, memory, strict
+                    # completion). It defers to the legacy executor only
+                    # inside the EXECUTING state. Kept available so we can
+                    # A/B test if the user reports the new default is worse.
                     brain_cfg = BrainConfig(
                         section="freebuild",
                         user_language=user_language,
