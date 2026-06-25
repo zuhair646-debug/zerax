@@ -2690,7 +2690,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   const [activePhaseOverride, setActivePhaseOverride] = useState(null);
   const activePhase = activePhaseOverride || project?.current_phase || 'discovery';
   const setActivePhase = setActivePhaseOverride;
-  const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
+  const [activeTab, _setActiveTabRaw] = useState('chat'); // chat | live | approved
   // Credits guard — disables input + shows recharge UI when credits = 0
   const { isBlocked: creditsBlocked, refresh: refreshCredits, credits: liveCredits, unlimited: liveUnlimited } = useCreditsGuard();
 
@@ -2698,6 +2698,19 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   const isVideoMode = ['video_studio', 'anime_studio', 'longform_video'].includes(project?.mode);
   const isStudioMode = isVideoMode || project?.mode === 'image_studio';
   const isAppMode = project?.mode === 'app';
+  // Website-from-scratch mode — هذا اللي المستخدم طلب فيه:
+  // إلغاء تبويبات "المعاينة الحية" و "المعتمدات" بالكامل، وخلي بس المحادثة + المراحل.
+  // الـ studios والـ app modes تحافظ على تبويباتها (تحتاج المعاينة المرئية).
+  const isWebsiteMode = !isStudioMode && !isAppMode;
+  // Guard: في وضع بناء المواقع من الصفر، أي محاولة لتغيير الـ tab لـ 'live' أو
+  // 'approved' (سواء من زر داخل الشات أو من toast action) تتجاهل وترجع للمحادثة.
+  const setActiveTab = useCallback((tab) => {
+    if (isWebsiteMode && tab !== 'chat') {
+      _setActiveTabRaw('chat');
+      return;
+    }
+    _setActiveTabRaw(tab);
+  }, [isWebsiteMode]);
   const VIDEO_PHASE_EMOJI = { film_type: '🎞️', characters: '👥', script: '📝', voice: '🎙️', storyboard: '🖼️', preview: '👁️', render: '✨' };
   const sidebarPhases = isVideoMode
     ? VIDEO_PHASES.map((p) => ({ id: p.id, title: p.label, icon: VIDEO_PHASE_EMOJI[p.id] || '🎬', desc: p.desc }))
@@ -2784,6 +2797,14 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
       else setAppDevice('iphone');
     }
   }, [project?.mode, project?.platform]);
+
+  // Website-from-scratch: لا يوجد تبويبات معاينة/معتمدات. لو في كود قديم يحاول
+  // يغير الـ tab بشكل تلقائي (مثلاً بعد build)، نرجعه فوراً لتبويب المحادثة.
+  useEffect(() => {
+    if (isWebsiteMode && activeTab !== 'chat') {
+      setActiveTab('chat');
+    }
+  }, [isWebsiteMode, activeTab]);
 
   const refreshProject = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -3697,6 +3718,8 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
 
               const handleClick = () => {
                 setActivePhase(phase.id);
+                // Website-from-scratch: لا يوجد تبويبات معاينة/معتمدات — كل شيء في المحادثة.
+                if (isWebsiteMode) { setActiveTab('chat'); return; }
                 if (isVideoMode) { setActiveTab('chat'); return; }
                 if (phase.id === 'assets') setActiveTab('approved');
                 else if (phase.id === 'preview' || phase.id === 'build') {
@@ -3796,6 +3819,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                 <span className="text-[10px] bg-emerald-500/20 px-1.5 py-0.5 rounded-full">{messages.length}</span>
               )}
             </button>
+            {!isWebsiteMode && (
             <button
               type="button"
               onClick={() => setActiveTab('live')}
@@ -3806,6 +3830,8 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               <span>المعاينة الحية</span>
               {project.current_html && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />}
             </button>
+            )}
+            {!isWebsiteMode && (
             <button
               type="button"
               onClick={() => setActiveTab('approved')}
@@ -3818,6 +3844,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                 <span className="text-[10px] bg-violet-500/20 px-1.5 py-0.5 rounded-full">{approvedAssets.length}</span>
               )}
             </button>
+            )}
             <div className="flex-1" />
             {/* GitHub push / paywall button — website mode only */}
             {!isVideoMode && (
