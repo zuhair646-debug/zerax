@@ -2703,10 +2703,10 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   // إلغاء تبويبات "المعاينة الحية" و "المعتمدات" بالكامل، وخلي بس المحادثة + المراحل.
   // الـ studios والـ app modes تحافظ على تبويباتها (تحتاج المعاينة المرئية).
   const isWebsiteMode = !isStudioMode && !isAppMode;
-  // Guard: في وضع بناء المواقع من الصفر، أي محاولة لتغيير الـ tab لـ 'live' أو
-  // 'approved' (سواء من زر داخل الشات أو من toast action) تتجاهل وترجع للمحادثة.
+  // Guard: في وضع بناء المواقع من الصفر، نسمح بتبويب 'live' لكن نمنع 'approved'
+  // (المعتمدات شيلناها كلياً). الـ live الآن يستخدم الرابط المنشور بدل srcDoc.
   const setActiveTab = useCallback((tab) => {
-    if (isWebsiteMode && tab !== 'chat') {
+    if (isWebsiteMode && tab === 'approved') {
       _setActiveTabRaw('chat');
       return;
     }
@@ -2801,10 +2801,11 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
     }
   }, [project?.mode, project?.platform]);
 
-  // Website-from-scratch: لا يوجد تبويبات معاينة/معتمدات. لو في كود قديم يحاول
-  // يغير الـ tab بشكل تلقائي (مثلاً بعد build)، نرجعه فوراً لتبويب المحادثة.
+  // Website-from-scratch: تبويب "المعتمدات" محذوف كلياً. تبويب "المعاينة" مرجوع
+  // بآلية جديدة (iframe على الرابط المنشور بدل srcDoc). أي محاولة قديمة لفتح
+  // 'approved' في website mode تُرجعك للمحادثة.
   useEffect(() => {
-    if (isWebsiteMode && activeTab !== 'chat') {
+    if (isWebsiteMode && activeTab === 'approved') {
       setActiveTab('chat');
     }
   }, [isWebsiteMode, activeTab]);
@@ -3848,6 +3849,19 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               {project.current_html && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />}
             </button>
             )}
+            {isWebsiteMode && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('live')}
+              data-testid="tab-live"
+              className={`px-3 sm:px-4 py-2.5 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${activeTab === 'live' ? 'text-cyan-300 border-cyan-400' : 'text-zinc-400 border-transparent hover:text-white'}`}
+              title={project?.published_slug ? `معاينة النسخة المنشورة v${project?.published_version || 1}` : 'انشر الموقع أولاً ليفتح'}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>الرابط المباشر</span>
+              {project?.published_slug && <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">v{project?.published_version || 1}</span>}
+            </button>
+            )}
             {!isWebsiteMode && (
             <button
               type="button"
@@ -4520,7 +4534,85 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                   instead of an HTML iframe — the customer never gets a website here. */}
               {['video_studio', 'anime_studio', 'longform_video', 'image_studio'].includes(project?.mode) ? (
                 <VideoStudioPreview project={project} />
+              ) : isWebsiteMode ? (
+                /* 🆕 New approach: instead of rendering raw current_html in an
+                   iframe (which had the "white screen" bug with images and
+                   complex sections), we point the iframe directly at the
+                   PUBLISHED URL (https://zenrex.ai/s/{slug}-v{N}). Because
+                   auto-republish bumps the version on every meaningful edit,
+                   this iframe reload automatically reflects the latest build
+                   without the rendering quirks. */
+                <div className="flex-1 flex flex-col" data-testid="website-live-preview">
+                  <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
+                    <h2 className="text-sm font-bold text-cyan-300 flex items-center gap-2">
+                      <Eye className="w-4 h-4" /> <span>الرابط المباشر</span>
+                      {project?.published_version && (
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">
+                          v{project.published_version}
+                        </span>
+                      )}
+                    </h2>
+                    {project?.published_slug ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <a
+                          href={`https://zenrex.ai/s/${project.published_slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-testid="open-live-link"
+                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black text-xs font-bold flex items-center gap-1.5"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>افتح في تبويب جديد</span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const f = document.querySelector('[data-testid="website-live-iframe"]');
+                            if (f) f.src = `https://zenrex.ai/s/${project.published_slug}?_t=${Date.now()}`;
+                          }}
+                          data-testid="reload-live-iframe"
+                          className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-cyan-500/20 border border-cyan-400/30 text-cyan-200 text-xs font-bold flex items-center gap-1.5"
+                        >
+                          <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+                          <span>تحديث</span>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  {project?.published_slug ? (
+                    <div className="flex-1 bg-white overflow-hidden">
+                      <iframe
+                        key={`live-${project.published_slug}-${project.published_version || 1}`}
+                        title="Live Site"
+                        data-testid="website-live-iframe"
+                        src={`https://zenrex.ai/s/${project.published_slug}`}
+                        className="w-full h-full"
+                        style={{ border: 0, minHeight: '600px' }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center p-8 text-center">
+                      <div className="max-w-md">
+                        <Eye className="w-16 h-16 mx-auto mb-4 text-zinc-700" />
+                        <p className="text-zinc-300 font-bold mb-2">لم يُنشر الموقع بعد</p>
+                        <p className="text-zinc-500 text-sm leading-7">
+                          الرابط المباشر يظهر هنا بعد أول نشر. اطلب من الذكاء «انشر الموقع» داخل المحادثة وراح يطلع لك URL يتجدد تلقائياً مع كل تعديل (v1 → v2 → v3 ...).
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('chat')}
+                          className="mt-4 px-4 py-2 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-sm font-bold"
+                        >
+                          ← ارجع للمحادثة واطلب النشر
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ) : (
+                <></>
+              )}
+              {!['video_studio', 'anime_studio', 'longform_video', 'image_studio'].includes(project?.mode) && !isWebsiteMode && (
                 <>
               <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between gap-3">
                 <h2 className="text-sm font-bold text-cyan-300 flex items-center gap-2">
