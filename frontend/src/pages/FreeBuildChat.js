@@ -2739,6 +2739,10 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   // when they don't like the direction the AI is taking. When aborted, we
   // queue a follow-up that prompts: "What do you want me to change?"
   const streamAbortRef = useRef(null);
+  // 🛠️ Auto-engineer: counts errors during the latest agent stream so we can
+  // surface a one-click "استدعي المهندس" offer if the build went sideways.
+  const errorStepsCountRef = useRef(0);
+  const consecutiveFailedTurnsRef = useRef(0);
   const [stopReason, setStopReason] = useState(null); // 'user_cancel' | null
 
   // Auto-scroll to bottom when AI streams new content — UNLESS the user has
@@ -3030,6 +3034,9 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
     }
     setLoading(true);
     setThinkingStage(0);
+    // Reset per-turn diagnostics so the auto-engineer offer only fires on
+    // ERRORS that happen during THIS turn (not leftovers from before).
+    try { errorStepsCountRef.current = 0; } catch (_) { /* ignore */ }
     const token = localStorage.getItem('token');
     const msgText = message;
     const filesToSend = attachments;
@@ -3289,6 +3296,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               notifyCreditsChanged();
             } else if (eventName === 'error') {
               liveSteps.push({ kind: 'error', message: payload.message });
+              try { errorStepsCountRef.current += 1; } catch (_) { /* ignore */ }
             } else if (eventName === 'ping') {
               // Heartbeat — keeps proxies alive during long tool generation. No UI.
             } else if (eventName === 'tool_progress') {
@@ -3365,6 +3373,42 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
           }
           return { ...p, messages: msgs };
         });
+
+        // 🛠️ AUTO-ENGINEER OFFER ──────────────────────────────────────
+        // If this turn had ≥2 error events OR was the 2nd consecutive
+        // turn that produced no HTML update, surface a one-click engineer
+        // offer right under the assistant message. The engineer is
+        // strictly opt-in (we never auto-summon to avoid surprise spend).
+        try {
+          const errCount = errorStepsCountRef.current || 0;
+          if (!htmlUpdated && (!finalSummary || finalSummary.length < 40)) {
+            consecutiveFailedTurnsRef.current = (consecutiveFailedTurnsRef.current || 0) + 1;
+          } else {
+            consecutiveFailedTurnsRef.current = 0;
+          }
+          const shouldOffer = errCount >= 2 || consecutiveFailedTurnsRef.current >= 2;
+          if (shouldOffer) {
+            setProject((p) => {
+              if (!p) return p;
+              return {
+                ...p,
+                messages: [
+                  ...(p.messages || []),
+                  {
+                    role: 'engineer_offer',
+                    content: errCount >= 2
+                      ? `⚠️ لاحظت ${errCount} أخطاء في هذا التنفيذ. هل أستدعي المهندس للتشخيص الحقيقي؟`
+                      : '⚠️ يبدو أن آخر محاولتين لم تنتجا تعديل واضح. هل أستدعي المهندس؟',
+                    timestamp: new Date().toISOString(),
+                    suggested_prompt: 'استدعي المهندس - افحص آخر محاولات البناء وحدد المشكلة الحقيقية ثم اقترح الإصلاح',
+                  },
+                ],
+              };
+            });
+          }
+          errorStepsCountRef.current = 0;
+        } catch (_) { /* ignore */ }
+        // ────────────────────────────────────────────────────────────
         if (htmlUpdated) {
           toast.success('✨ تم تحديث المعاينة الحية', {
             action: { label: 'افتح', onClick: () => setActiveTab('live') },
@@ -3587,18 +3631,6 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
             <FolderOpen className="w-4 h-4" />
             <span className="text-xs font-medium hidden sm:inline">مشاريعي</span>
           </button>
-          {project?.id && (
-            <button
-              type="button"
-              onClick={() => navigate(`/lab/${project.id}`)}
-              data-testid="open-lab-chat"
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:text-amber-200 transition-all shrink-0"
-              title="افتح المختبر — شات مباشر بدون مراحل"
-            >
-              <span className="text-sm">🧪</span>
-              <span className="text-xs font-medium hidden sm:inline">المختبر</span>
-            </button>
-          )}
           <a href="/" className="hidden md:inline-flex shrink-0" aria-label="Zenrex"><ZenrexBrand size={22} /></a>
           {/* Digital clock — replaces the old Globe + project title duplicate.
               Project name is now shown in the PhaseHeaderPill below this bar. */}
@@ -4083,6 +4115,31 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               )}
 
               {messages.map((m, i) => (
+                m.role === 'engineer_offer' ? (
+                  <div key={`offer-${i}-${m.timestamp}`} className="flex justify-start" data-testid={`engineer-offer-${i}`}>
+                    <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-gradient-to-br from-purple-500/15 to-fuchsia-500/10 border border-purple-400/40 text-purple-100 shadow-lg shadow-purple-500/10">
+                      <div className="text-sm mb-3 leading-7">{m.content}</div>
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          data-testid={`engineer-offer-accept-${i}`}
+                          onClick={() => summonEngineer(m.suggested_prompt || 'استدعي المهندس - افحص هذا المشروع وحدد المشكلة')}
+                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-fuchsia-600 hover:from-purple-400 hover:to-fuchsia-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-purple-500/30"
+                        >
+                          🛠️ استدعِ المهندس الآن
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`engineer-offer-dismiss-${i}`}
+                          onClick={() => setProject((p) => p ? { ...p, messages: (p.messages || []).filter((_, j) => j !== i) } : p)}
+                          className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs"
+                        >
+                          تجاهل
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
                 <div key={m.agent_holder_id || `${m.timestamp}-${m.role}-${i}`} className={`flex min-w-0 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`min-w-0 max-w-[88%] sm:max-w-[85%] rounded-2xl px-3 sm:px-4 py-3 ${
                     m.role === 'user'
@@ -4617,6 +4674,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                     )}
                   </div>
                 </div>
+                )
               ))}
               <div ref={chatEndRef} />
               {!loading && lastTask && lastTask.label && (
