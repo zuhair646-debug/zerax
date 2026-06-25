@@ -11,6 +11,20 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
 
 
+### 🧹 Website-Mode UI Cleanup + AI Unrestricted (P0) — VERIFIED 2026-02 (preview, awaiting deploy)
+**User pain (verbatim):** "الغي لي بس اللي هو المعاينة اللي على جنب والاعتماد اثنينهم دول الغيهم ... وتأكد ان الذكاء الصناعي مفتوح تماما ما عنده اي عوائق او تعليمات داخلية واعطيه الادوات كاملة. احنا نتكلم بس قسم بناء المواقع من الصفر."
+
+**FIX (this iteration):**
+1. `FreeBuildChat.js` — added `isWebsiteMode = !isStudioMode && !isAppMode`. Tab-bar buttons `tab-live` (المعاينة الحية) and `tab-approved` (المعتمدات) are gated behind `!isWebsiteMode` so they are **absent from the DOM** in website mode.
+2. Wrapped `setActiveTab` in a guard that snaps any `'live'`/`'approved'` request back to `'chat'` in website mode (defends against legacy callsites in toast actions and inline links).
+3. Added corrective `useEffect` that re-resets `activeTab='chat'` if anything bypasses the wrapper.
+4. Phase-click handler updated: in website mode, clicking any phase only sets the phase, never switches the tab.
+5. **Backend already had** `inject_workflow_addendum=False` threaded into the single `stream_agent_turn` callsite in `freebuild_chat.py` (L6707) — the AI receives the base system prompt with no phase-rule banner.
+6. video_studio / anime_studio / longform_video / image_studio / app modes are **untouched** — they keep their tabs (regression-tested OK).
+
+**Tests:** iteration_68 — 7/7 backend + 3/3 frontend Playwright scenarios PASS. New regression test file `/app/backend/tests/test_website_tabs_removed.py`. 36/36 pre-existing tests (smart-merge, blockers-relaxed, workflow-tools) still PASS.
+
+
 ### 🧪 Lab Mode + Scaffold Stripping (P0) — DEPLOYED 2026-06-24
 **User pain (72+ hours, 3000+ credits lost):** "الذكاء الاصطناعي يبني صفحة وحدة والباقي صفحات بيضاء" + "يهدم العمل السابق لما أطلب تعديل".
 
