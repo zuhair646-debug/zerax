@@ -9430,6 +9430,7 @@ async def stream_agent_turn(
     auth_token: Optional[str] = None,
     db: Any = None,
     is_owner: bool = False,
+    inject_workflow_addendum: bool = True,
 ) -> AsyncGenerator[str, None]:
     """SSE generator: yields live thinking events while the agent works.
 
@@ -9610,27 +9611,31 @@ async def _stream_one_provider(
     # ── 🎬 WORKFLOW STAGE — read the project's build stage (4-stage protocol)
     # so we can inject the appropriate system-prompt addendum below. The
     # stage is persisted in project.workflow_state.stage.
-    try:
-        from .workflow_engine import (get_workflow_state, stage_prompt_addendum,
-                                       stage_label_ar)
-        _wf_state = get_workflow_state(project)
-        _wf_addendum = stage_prompt_addendum(_wf_state, project)
-        _wf_label = stage_label_ar(_wf_state.get("stage", ""))
-        # Stage banner at the TOP of the prompt — strongest signal to the LLM
-        # about which stage it is in. Placed BEFORE the base prompt so it
-        # outranks any conflicting instructions further down.
-        _stage_banner = (
-            f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🎬 **المرحلة الحالية: {_wf_label}** (stage={_wf_state.get('stage')})\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"اقرأ أدناه قواعد هذه المرحلة بعناية والتزم بها قبل أي قواعد أخرى.\n"
-        )
-        _wf_addendum = _stage_banner + (_wf_addendum or "")
-        logger.info(f"[workflow] stage={_wf_state.get('stage')} ({_wf_label})")
-    except Exception as _wfe:
-        logger.warning(f"[workflow] addendum load failed: {_wfe}")
-        _wf_addendum = ""
-        _wf_label = ""
+    _wf_addendum = ""
+    _wf_label = ""
+    if inject_workflow_addendum:
+        try:
+            from .workflow_engine import (get_workflow_state, stage_prompt_addendum,
+                                           stage_label_ar)
+            _wf_state = get_workflow_state(project)
+            _wf_addendum = stage_prompt_addendum(_wf_state, project)
+            _wf_label = stage_label_ar(_wf_state.get("stage", ""))
+            # Stage banner at the TOP of the prompt — strongest signal to the LLM
+            # about which stage it is in.
+            _stage_banner = (
+                f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎬 **المرحلة الحالية: {_wf_label}** (stage={_wf_state.get('stage')})\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"اقرأ أدناه قواعد هذه المرحلة بعناية والتزم بها قبل أي قواعد أخرى.\n"
+            )
+            _wf_addendum = _stage_banner + (_wf_addendum or "")
+            logger.info(f"[workflow] stage={_wf_state.get('stage')} ({_wf_label})")
+        except Exception as _wfe:
+            logger.warning(f"[workflow] addendum load failed: {_wfe}")
+            _wf_addendum = ""
+            _wf_label = ""
+    else:
+        logger.info("[workflow] addendum DISABLED (free chat mode)")
 
     if provider in ("anthropic", "emergent_anthropic"):
         from anthropic import AsyncAnthropic

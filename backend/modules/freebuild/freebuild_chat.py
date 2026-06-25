@@ -6687,19 +6687,24 @@ For questions: legal@zenrex.ai
                 # Pass `mode=legacy_brain` to opt back into Brain v2 for
                 # debugging/A-B testing.
                 if mode != "legacy_brain":
-                    proj_lab = dict(proj)
-                    proj_lab["workflow_state"] = {
+                    # 🆓 FREE CHAT — no workflow stages, no Brain, no rules.
+                    # Pure AI + tools. The workflow_state on the project doc
+                    # is preserved (we don't write to it) so we can re-enable
+                    # stages later via mode='legacy_brain' or a future flag.
+                    proj_free = dict(proj)
+                    proj_free["workflow_state"] = {
                         "stage": "surgical_edit",
                         "discovery_answers": (proj.get("workflow_state") or {}).get("discovery_answers") or {},
                     }
                     async for chunk in stream_agent_turn(
-                        proj_lab, message, history,
+                        proj_free, message, history,
                         ctx_holder=ctx_holder,
                         user_language=user_language,
                         auth_token=_agent_token,
                         db=db,
                         is_owner=is_platform_owner_stream,
                         max_iterations=40,
+                        inject_workflow_addendum=False,
                     ):
                         if chunk.startswith("event: done\n"):
                             try:
