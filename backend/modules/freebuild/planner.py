@@ -43,7 +43,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("zenrex.freebuild.planner")
 
-PLAN_TIMEOUT_SECONDS = 30
+PLAN_TIMEOUT_SECONDS = 60
 _PLAN_CACHE: Dict[str, Dict[str, Any]] = {}
 _PLAN_CACHE_MAX = 200
 

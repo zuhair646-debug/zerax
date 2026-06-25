@@ -41,7 +41,7 @@ logger = logging.getLogger("zenrex.freebuild.code_reviewer")
 # Cost thresholds — review is ~$0.01 per call, so skip if the change is too small.
 MIN_REVIEWABLE_CHARS = 400       # If the diff is smaller than this, skip review.
 MAX_HTML_FOR_REVIEW = 60_000     # Truncate huge HTML to keep cost bounded.
-REVIEW_TIMEOUT_SECONDS = 25
+REVIEW_TIMEOUT_SECONDS = 45
 
 
 _REVIEWER_SYSTEM_PROMPT = """أنت مهندس برمجة سيوبر-سينيور (10+ سنوات خبرة) متخصص في مراجعة HTML/CSS/JS قبل تطبيق التغييرات.

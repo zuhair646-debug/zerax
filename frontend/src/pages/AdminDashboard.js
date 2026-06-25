@@ -40,7 +40,6 @@ const AdminDashboard = ({ user }) => {
   ] : [];
 
   const quickActions = [
-    { title: 'مهندس Zenrex 🛠️', desc: 'بوابة المالك — استعرض كل المشاريع، تحدّث مع AI عن أي مشروع، اقرأ كوده، عدّله، أعد نشره، وافحصه بـ Playwright', path: '/admin/engineer', icon: <Wrench className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', testId: 'admin-tile-engineer' },
     { title: 'إدارة الطلبات', desc: 'عرض ومراجعة جميع الطلبات', path: '/admin/requests', icon: <FileText className="w-6 h-6" />, color: 'from-blue-500 to-cyan-500' },
     { title: 'إدارة المدفوعات', desc: 'مراجعة والموافقة على المدفوعات', path: '/admin/payments', icon: <CreditCard className="w-6 h-6" />, color: 'from-green-500 to-emerald-500' },
     { title: 'إدارة العملاء', desc: 'عرض وإدارة قائمة العملاء', path: '/admin/clients', icon: <Users className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
@@ -69,38 +68,9 @@ const AdminDashboard = ({ user }) => {
           <p className="text-gray-400">نظرة شاملة على المنصة</p>
         </div>
 
-        {/* Owner Engineer hero — the one entry point for AI maintenance */}
-        <button
-          type="button"
-          onClick={() => navigate('/admin/engineer')}
-          data-testid="admin-engineer-hero"
-          className="w-full mb-8 overflow-hidden rounded-3xl border border-amber-400/30 bg-gradient-to-br from-amber-500/15 via-slate-800 to-slate-950 p-6 text-right shadow-2xl shadow-amber-500/10 transition hover:border-amber-300/60 hover:shadow-amber-500/20"
-        >
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-2xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-200">
-                <CheckCircle className="h-4 w-4" /> الذكاء الموحّد مفعّل
-              </div>
-              <h2 className="text-2xl font-black text-white md:text-3xl flex items-center gap-2 justify-end">
-                <span>مهندس Zenrex — دعم فني ذكي</span>
-                <Wrench className="w-7 h-7 text-amber-300" />
-              </h2>
-              <p className="mt-3 text-sm leading-7 text-slate-300">
-                نفس ذكاء البناء (Planner → Builder → Code Reviewer) لكن بصلاحيات المالك: استعرض كل مشاريع المنصة، تحاور مع AI عن أي مشروع، عدّل كوده، أعد نشره، وافحصه بـ Playwright — كله من مكان واحد.
-              </p>
-            </div>
-            <div className="grid min-w-[280px] grid-cols-2 gap-3 text-center">
-              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                <div className="text-2xl font-black text-amber-300">4</div>
-                <div className="text-xs text-slate-400">طبقات AI متعاونة</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                <div className="text-2xl font-black text-emerald-300">LIVE</div>
-                <div className="text-xs text-slate-400">قراءة وكتابة وفحص</div>
-              </div>
-            </div>
-          </div>
-        </button>
+        {/* Admin overview header — Engineer access is now via in-chat
+            summon ("استدعي المهندس") inside any FreeBuild project, so
+            the hero shortcut from the dashboard was removed (2026-02). */}
 
         {loading ? (
           <div className="text-center py-12 text-white">جاري التحميل...</div>

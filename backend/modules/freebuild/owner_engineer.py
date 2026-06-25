@@ -887,6 +887,156 @@ def setup_owner_engineer_routes(router: APIRouter, db, get_current_user):
         _ensure_owner(user)
         return await _tool_get_platform_stats(db)
 
+    # ────────────────────────────────────────────────────────────────────
+    # 🛠️ IN-CHAT ENGINEER SUMMON  (any user, scoped to their own project)
+    # ────────────────────────────────────────────────────────────────────
+    # When the user types "استدعي المهندس" in FreeBuild chat, the frontend
+    # POSTs here instead of the normal agent stream. The engineer runs
+    # against THIS project only, with these tools:
+    #   read_full_html · run_browser_audit · apply_fix_to_project ·
+    #   republish_project · get_project_summary
+    # Streamed back as event: engineer_start / engineer_tool / engineer_text /
+    # engineer_done so the UI can render the conversation in purple.
+
+    _ENGINEER_SCOPED_SYSTEM = """أنت "مهندس Zenrex" — مهندس صيانة وإصلاح للمشروع الحالي حصراً.
+
+**صلاحياتك (لهذا المشروع فقط):**
+1. `get_project_summary` — تفاصيل المشروع
+2. `read_full_html` — اقرأ HTML أي صفحة
+3. `run_browser_audit` — افتح الموقع المنشور بـ Playwright وافحص الأخطاء فعلياً
+4. `apply_fix_to_project` — أصلح الكود (مع Code Reviewer قبل الحفظ)
+5. `republish_project` — انشر النسخة الجديدة
+
+**سير العمل الإلزامي عند استدعائك:**
+1. **افحص أولاً** — `get_project_summary` ثم `read_full_html` للصفحة المعنية
+2. **شخّص بصدق** — لو الموقع منشور، شغّل `run_browser_audit` تشوف الأخطاء الفعلية
+3. **اشرح ما وجدته** للعميل بلغة بسيطة (سبب المشكلة + الحل المقترح)
+4. **اقترح الإصلاح** كخيارات (1️⃣ سريع / 2️⃣ شامل) ودع العميل يختار
+5. **بعد موافقته**، نفّذ `apply_fix_to_project` ثم `republish_project`
+6. **تحقق** بـ `run_browser_audit` ثاني لو منشور
+
+**ممنوع:**
+- ممنوع الكذب أو الاختراع. كل ادعاء يجب أن يستند إلى نتيجة tool.
+- ممنوع تحط فيكس بدون ما تقرأ الكود الحالي.
+- ممنوع تكتب "سأفحص الآن" بدون استدعاء tool فعلي.
+
+**لغتك:** عربي سعودي. تقني، صريح، مباشر. أنت مهندس لا مساعد.
+
+عند استدعاء أداة: اكتب JSON نقي بدون ```json ولا أي شرح حوله. مثال:
+{"tool": "read_full_html", "args": {"project_id": "...", "filename": "index.html"}}
+"""
+
+    @router.post("/project/{pid}/engineer-summon")
+    async def engineer_summon(
+        pid: str,
+        message: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        """Engineer summoned inside a regular FreeBuild chat. Scoped to ONE project."""
+        # Verify the user owns this project (cross-project access stays in /owner/engineer/* only).
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "id": 1, "name": 1, "user_id": 1, "messages": 1, "published_slug": 1}
+        ) or await db.freebuild_chat_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "id": 1, "name": 1, "user_id": 1, "messages": 1, "published_slug": 1}
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found or access denied")
+
+        uid = user["user_id"]
+        sid = f"engineer-{pid}"
+
+        # Project-focused context block.
+        summary = await _tool_get_project_summary(db, pid)
+        ctx_block = ""
+        if summary.get("ok"):
+            ctx_block = (
+                f"\n\n**المشروع الحالي (قيد التشخيص):**\n"
+                f"- id: {pid}\n"
+                f"- name: {summary.get('name')}\n"
+                f"- mode: {summary.get('mode')}\n"
+                f"- pages: {summary.get('page_count')} ({', '.join((summary.get('pages') or [])[:6])})\n"
+                f"- published: {summary.get('live_url') or 'غير منشور'}\n"
+                f"كل tool call استخدم project_id={pid} بدون سؤال.\n"
+            )
+
+        try:
+            from modules.shared.claude_simple import ask_claude
+        except Exception:
+            raise HTTPException(500, "Claude unavailable")
+
+        async def event_stream():
+            yield f"event: engineer_start\ndata: {json.dumps({'project_id': pid, 'name': proj.get('name')}, ensure_ascii=False)}\n\n"
+            try:
+                system_prompt = _ENGINEER_SCOPED_SYSTEM + ctx_block + (
+                    "\n\n**TOOLS:**\n" + json.dumps([
+                        t for t in _tools_schema()
+                        if t["name"] in ("get_project_summary", "read_full_html",
+                                         "run_browser_audit", "apply_fix_to_project",
+                                         "republish_project")
+                    ], ensure_ascii=False)
+                )
+                conversation = f"USER: {message}"
+
+                final_answer = ""
+                tool_steps: List[Dict[str, Any]] = []
+                for _ in range(8):
+                    resp = await ask_claude(
+                        system=system_prompt,
+                        user_message=conversation,
+                        session_id=sid,
+                        max_tokens=4000,
+                        timeout=60,
+                    )
+                    txt = (resp or "").strip()
+                    tool_json = _extract_first_json_object(txt)
+                    if tool_json and tool_json.get("tool"):
+                        tool_name = tool_json.get("tool")
+                        tool_args = tool_json.get("args") or {}
+                        # Hard-bind project_id to this project only.
+                        tool_args["project_id"] = pid
+                        args_preview = {
+                            k: (v[:120] + "...[truncated]" if isinstance(v, str) and len(v) > 200 else v)
+                            for k, v in tool_args.items()
+                        }
+                        yield f"event: engineer_tool\ndata: {json.dumps({'name': tool_name, 'args': args_preview}, ensure_ascii=False)}\n\n"
+                        result = await _dispatch_owner_tool(db, tool_name, tool_args, actor_user_id=uid)
+                        result_preview = {
+                            k: (v[:300] + "...[truncated]" if isinstance(v, str) and len(v) > 500 else v)
+                            for k, v in result.items()
+                        }
+                        yield f"event: engineer_tool_result\ndata: {json.dumps({'name': tool_name, 'result': result_preview}, ensure_ascii=False)}\n\n"
+                        tool_steps.append({"name": tool_name, "ok": bool(result.get("ok"))})
+                        conversation += f"\nASSISTANT: {txt[:400]}\nTOOL_RESULT[{tool_name}]: {json.dumps(result, ensure_ascii=False)[:2800]}"
+                        continue
+                    final_answer = txt
+                    break
+
+                yield f"event: engineer_text\ndata: {json.dumps({'content': final_answer or 'فحص اكتمل.', 'tools_run': len(tool_steps)}, ensure_ascii=False)}\n\n"
+
+                # Persist into the project's message history so the chat preserves the engineer's turn.
+                try:
+                    eng_msg = {
+                        "role": "engineer",
+                        "content": final_answer or "فحص اكتمل.",
+                        "ts": _now_iso(),
+                        "tool_steps": tool_steps,
+                    }
+                    user_msg = {"role": "user", "content": message, "ts": _now_iso(), "summon": "engineer"}
+                    for col in ("freebuild_projects", "freebuild_chat_projects"):
+                        await db[col].update_one(
+                            {"id": pid, "user_id": uid},
+                            {"$push": {"messages": {"$each": [user_msg, eng_msg]}}},
+                        )
+                except Exception as e:
+                    logger.warning(f"[engineer-summon] persist failed: {e}")
+
+                yield f"event: engineer_done\ndata: {json.dumps({'ok': True}, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                logger.exception(f"[engineer-summon] failed: {e}")
+                yield f"event: engineer_error\ndata: {json.dumps({'message': str(e)[:200]}, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
     @router.get("/owner/engineer/independence")
     async def owner_independence(user=Depends(get_current_user)):
         """Reports which AI providers the platform actually uses.

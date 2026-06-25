@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import VideoStudioPreview from './VideoStudioPreview';
 import VideoPhaseTracker, { VIDEO_PHASES } from '../components/VideoPhaseTracker';
@@ -2909,8 +2909,120 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
     return () => window.removeEventListener('zenrex:option-pick', onPick);
   }, []);
 
+  // ── 🛠️ Engineer summon detection ───────────────────────────────────
+  // Keywords that trigger the in-chat Engineer: real diagnosis + fix,
+  // streams as purple bubbles. Detect at the FRONT of `send()` so we
+  // don't burn credits routing through the regular builder agent.
+  const _ENGINEER_KEYWORDS = useMemo(() => ([
+    'استدعي المهندس', 'ادعي المهندس', 'استدعاء المهندس',
+    'نادي المهندس', 'تعال يا مهندس', 'يا مهندس',
+    'call engineer', 'summon engineer', '/engineer',
+  ]), []);
+  const isEngineerSummon = (text) => {
+    const t = (text || '').trim().toLowerCase();
+    if (!t) return false;
+    return _ENGINEER_KEYWORDS.some(k => t.includes(k.toLowerCase()));
+  };
+
+  const summonEngineer = async (userText) => {
+    const token = localStorage.getItem('token');
+    const holderId = `engineer-${Date.now()}`;
+    // Optimistic insert user + empty engineer placeholder.
+    setProject((p) => {
+      if (!p) return p;
+      return {
+        ...p,
+        messages: [
+          ...(p.messages || []),
+          { role: 'user', content: userText, timestamp: new Date().toISOString(), summon: 'engineer' },
+          { role: 'engineer', content: '', timestamp: new Date().toISOString(),
+            agent_holder_id: holderId, tool_steps: [], engineer_streaming: true },
+        ],
+      };
+    });
+    try {
+      const fd = new FormData();
+      fd.append('message', userText);
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/engineer-summon`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!r.ok || !r.body) {
+        toast.error('فشل استدعاء المهندس');
+        return;
+      }
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let toolSteps = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        let currentEv = null;
+        for (const line of lines) {
+          if (line.startsWith('event: ')) currentEv = line.slice(7).trim();
+          else if (line.startsWith('data: ')) {
+            try {
+              const d = JSON.parse(line.slice(6));
+              if (currentEv === 'engineer_tool') {
+                toolSteps.push({ kind: 'tool', name: d.name, args: d.args });
+                setProject((p) => {
+                  if (!p) return p;
+                  const msgs = [...(p.messages || [])];
+                  const idx = msgs.findIndex(mm => mm.agent_holder_id === holderId);
+                  if (idx >= 0) msgs[idx] = { ...msgs[idx], tool_steps: [...toolSteps] };
+                  return { ...p, messages: msgs };
+                });
+              } else if (currentEv === 'engineer_tool_result') {
+                toolSteps.push({ kind: 'result', name: d.name, ok: d.result?.ok, summary: JSON.stringify(d.result).slice(0, 200) });
+                setProject((p) => {
+                  if (!p) return p;
+                  const msgs = [...(p.messages || [])];
+                  const idx = msgs.findIndex(mm => mm.agent_holder_id === holderId);
+                  if (idx >= 0) msgs[idx] = { ...msgs[idx], tool_steps: [...toolSteps] };
+                  return { ...p, messages: msgs };
+                });
+              } else if (currentEv === 'engineer_text') {
+                setProject((p) => {
+                  if (!p) return p;
+                  const msgs = [...(p.messages || [])];
+                  const idx = msgs.findIndex(mm => mm.agent_holder_id === holderId);
+                  if (idx >= 0) msgs[idx] = { ...msgs[idx], content: d.content || '', engineer_streaming: false };
+                  return { ...p, messages: msgs };
+                });
+              } else if (currentEv === 'engineer_error') {
+                toast.error(d.message || 'خطأ في المهندس');
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      }
+    } catch (e) {
+      toast.error(String(e?.message || e));
+    } finally {
+      setProject((p) => {
+        if (!p) return p;
+        const msgs = (p.messages || []).map(mm =>
+          mm.agent_holder_id === holderId ? { ...mm, engineer_streaming: false } : mm
+        );
+        return { ...p, messages: msgs };
+      });
+    }
+  };
+
   const send = async () => {
     if ((!message.trim() && attachments.length === 0 && !replyToAsset) || loading) return;
+    // 🛠️ Engineer summon — bypass normal agent flow.
+    if (attachments.length === 0 && !replyToAsset && isEngineerSummon(message)) {
+      const userText = message;
+      setMessage('');
+      await summonEngineer(userText);
+      return;
+    }
     if (creditsBlocked) {
       toast.error('رصيد النقاط انتهى — اشحن باقة لمواصلة الدردشة');
       navigate('/pricing');
@@ -3975,8 +4087,19 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                   <div className={`min-w-0 max-w-[88%] sm:max-w-[85%] rounded-2xl px-3 sm:px-4 py-3 ${
                     m.role === 'user'
                       ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-50'
+                      : m.role === 'engineer'
+                      ? 'bg-gradient-to-br from-purple-500/10 via-violet-600/10 to-fuchsia-500/10 border border-purple-400/40 text-purple-50 shadow-lg shadow-purple-500/10'
                       : 'bg-zinc-800/70 border border-white/10 text-zinc-100'
-                  }`}>
+                  }`} data-testid={m.role === 'engineer' ? `engineer-msg-${i}` : undefined}>
+                    {m.role === 'engineer' && (
+                      <div className="mb-2 flex items-center gap-2 text-[11px] font-bold text-purple-200">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-500/30 border border-purple-300/40">🛠️</span>
+                        <span>مهندس Zenrex</span>
+                        {m.tool_steps && m.tool_steps.length > 0 && (
+                          <span className="text-[10px] text-purple-300/70">· شغّل {m.tool_steps.length} أداة فعلياً</span>
+                        )}
+                      </div>
+                    )}
                     {/* Quoted asset (WhatsApp-style reply) */}
                     {m.reference && m.reference.image_url && (
                       <button
