@@ -8922,10 +8922,10 @@ async def run_agent_turn(
     providers_to_try = []
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
         providers_to_try.append(("anthropic", model))
-    if os.environ.get("EMERGENT_LLM_KEY", "").strip():
-        providers_to_try.append(("emergent_anthropic", model))
+    # 🚫 Emergent Universal Key is intentionally NOT in this chain.
+    # Zenrex calls Anthropic directly only — full independence.
     if not providers_to_try:
-        return {"ok": False, "error": "Claude key required (ANTHROPIC_API_KEY or EMERGENT_LLM_KEY)"}
+        return {"ok": False, "error": "ANTHROPIC_API_KEY غير مهيّأ. ضع المفتاح في backend/.env"}
 
     last_err = None
     providers_tried = []

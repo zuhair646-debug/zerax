@@ -1,24 +1,24 @@
 """
-Unified single-shot Claude helper — Independence-first.
+Pure Anthropic Direct — No Emergent, No Middleman.
 
-Resolution order for the API:
-    1. ANTHROPIC_API_KEY direct (the platform owner's own Anthropic key) — preferred.
-    2. EMERGENT_LLM_KEY fallback via emergentintegrations — kept ONLY for
-       backwards compatibility so nothing breaks before the owner sets
-       their direct key.
+This module is the SINGLE source of truth for Claude calls from
+non-streaming code paths (planner, code reviewer, owner engineer).
 
-The owner can verify which path is live by calling `which_provider()`.
+Independence guarantee:
+    • Calls go DIRECTLY to api.anthropic.com via the official `anthropic` SDK.
+    • There is NO fallback to Emergent. If ANTHROPIC_API_KEY is missing or
+      Anthropic is unreachable, the call fails LOUDLY so the platform owner
+      sees the problem instead of silently routing through a third party.
 
 Public surface:
     await ask_claude(system, user_message, ...) → str   # one-turn helper
-    which_provider() → "anthropic_direct" | "emergent" | "none"
+    which_provider() → "anthropic_direct" | "none"
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger("zenrex.shared.claude_simple")
 
@@ -26,11 +26,13 @@ DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
 
 
 def which_provider() -> str:
-    """Tell the operator which provider is active right now."""
+    """Returns 'anthropic_direct' if the platform is independent, else 'none'.
+
+    Emergent is deliberately NOT reported here — this platform no longer
+    routes any Claude traffic through it.
+    """
     if (os.environ.get("ANTHROPIC_API_KEY") or "").strip():
         return "anthropic_direct"
-    if (os.environ.get("EMERGENT_LLM_KEY") or "").strip():
-        return "emergent"
     return "none"
 
 
@@ -50,7 +52,6 @@ async def _ask_anthropic_direct(
         system=system,
         messages=[{"role": "user", "content": user_message}],
     )
-    # Anthropic SDK returns a Message with content blocks (TextBlock).
     parts: list[str] = []
     for block in (resp.content or []):
         text = getattr(block, "text", None)
@@ -59,67 +60,25 @@ async def _ask_anthropic_direct(
     return "".join(parts).strip()
 
 
-async def _ask_emergent_fallback(
-    system: str,
-    user_message: str,
-    session_id: str,
-    model: str,
-    max_tokens: int,
-) -> str:
-    from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
-    key = os.environ["EMERGENT_LLM_KEY"].strip()
-    chat = LlmChat(
-        api_key=key,
-        session_id=session_id,
-        system_message=system,
-    ).with_model("anthropic", model).with_params(max_tokens=max_tokens)
-    resp = await chat.send_message(UserMessage(text=user_message))
-    return resp if isinstance(resp, str) else str(resp)
-
-
 async def ask_claude(
     system: str,
     user_message: str,
-    session_id: str = "anon",
+    session_id: str = "anon",  # noqa: ARG001 — kept for API compatibility
     model: str = DEFAULT_MODEL,
     max_tokens: int = 4000,
     timeout: float = 90.0,
 ) -> str:
-    """One-shot Claude call. Prefers direct Anthropic; falls back to Emergent.
+    """One-shot Claude call — Anthropic Direct ONLY.
 
     Returns the text response (may be empty on failure).
-    Raises on configuration error (no provider available).
+    Raises RuntimeError if no Anthropic key is configured.
     """
-    provider = which_provider()
-    if provider == "none":
+    if which_provider() != "anthropic_direct":
         raise RuntimeError(
-            "ما فيه مزود Claude متاح. ضع ANTHROPIC_API_KEY في .env (مفضّل) "
-            "أو EMERGENT_LLM_KEY (احتياطي)."
+            "ANTHROPIC_API_KEY غير مهيّأ. ضع المفتاح في backend/.env — "
+            "Zenrex لا يستخدم أي مزود وسيط."
         )
-
-    # Direct first.
-    if provider == "anthropic_direct":
-        try:
-            return await asyncio.wait_for(
-                _ask_anthropic_direct(system, user_message, model, max_tokens, timeout),
-                timeout=timeout + 5,
-            )
-        except Exception as e:
-            # Drop to emergent if available.
-            logger.warning(f"[claude_simple] direct failed: {e}; trying emergent fallback")
-            if (os.environ.get("EMERGENT_LLM_KEY") or "").strip():
-                try:
-                    return await asyncio.wait_for(
-                        _ask_emergent_fallback(system, user_message, session_id, model, max_tokens),
-                        timeout=timeout + 5,
-                    )
-                except Exception as e2:
-                    logger.exception(f"[claude_simple] emergent fallback also failed: {e2}")
-                    raise
-            raise
-
-    # Emergent only path.
     return await asyncio.wait_for(
-        _ask_emergent_fallback(system, user_message, session_id, model, max_tokens),
+        _ask_anthropic_direct(system, user_message, model, max_tokens, timeout),
         timeout=timeout + 5,
     )
