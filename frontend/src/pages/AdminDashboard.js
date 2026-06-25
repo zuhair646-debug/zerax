@@ -3,7 +3,7 @@ import { Navbar } from '@/components/Navbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { Users, FileText, CreditCard, Globe, Image, Video, Settings, Clock, CheckCircle, Activity, Coins, Brain, Code2, ShieldCheck, Sparkles, ShieldAlert, DollarSign, TrendingUp, Wrench } from 'lucide-react';
+import { Users, FileText, CreditCard, Globe, Image, Video, Settings, Clock, CheckCircle, Activity, Coins, ShieldCheck, Sparkles, ShieldAlert, TrendingUp, Wrench } from 'lucide-react';
 
 const AdminDashboard = ({ user }) => {
   const navigate = useNavigate();
@@ -40,7 +40,7 @@ const AdminDashboard = ({ user }) => {
   ] : [];
 
   const quickActions = [
-    { title: 'مهندس Zenrex 🛠️', desc: 'بوابة المالك — استعرض كل المشاريع، تحدّث مع AI عن أي مشروع، اقرأ كوده وحلّل وضعه (للمالك فقط)', path: '/admin/engineer', icon: <Wrench className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', testId: 'admin-tile-engineer' },
+    { title: 'مهندس Zenrex 🛠️', desc: 'بوابة المالك — استعرض كل المشاريع، تحدّث مع AI عن أي مشروع، اقرأ كوده، عدّله، أعد نشره، وافحصه بـ Playwright', path: '/admin/engineer', icon: <Wrench className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', testId: 'admin-tile-engineer' },
     { title: 'إدارة الطلبات', desc: 'عرض ومراجعة جميع الطلبات', path: '/admin/requests', icon: <FileText className="w-6 h-6" />, color: 'from-blue-500 to-cyan-500' },
     { title: 'إدارة المدفوعات', desc: 'مراجعة والموافقة على المدفوعات', path: '/admin/payments', icon: <CreditCard className="w-6 h-6" />, color: 'from-green-500 to-emerald-500' },
     { title: 'إدارة العملاء', desc: 'عرض وإدارة قائمة العملاء', path: '/admin/clients', icon: <Users className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
@@ -48,48 +48,13 @@ const AdminDashboard = ({ user }) => {
     { title: 'مركز المسوّقين 📈', desc: 'تتبع نقرات وإحصائيات كل مسوّق + مدى تأثيره الحقيقي وأفضل منشوراته', path: '/admin/affiliates', icon: <Sparkles className="w-6 h-6" />, color: 'from-pink-500 to-purple-600', testId: 'admin-tile-affiliates' },
     { title: 'طلبات السحب 💰', desc: 'موافقة وتحويل أموال المسوّقين عبر PayPal — تأكيد بضغطة', path: '/admin/payouts', icon: <Sparkles className="w-6 h-6" />, color: 'from-emerald-500 to-amber-600', testId: 'admin-tile-payouts' },
     { title: 'النقاط والعروض', desc: 'إدارة النقاط والأسعار والعروض', path: '/admin/credits', icon: <Coins className="w-6 h-6" />, color: 'from-amber-500 to-yellow-500' },
-    { title: 'تدريب الذكاء', desc: 'تعليم الذكاء الاصطناعي أمثلة احترافية', path: '/admin/training', icon: <Brain className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
     { title: 'غرفة التحكم الأمنية 🛡️', desc: 'حماية 10 طبقات · فحص AI مستمر · IPs محظورة · نسخ احتياطي · سجل أحداث', path: '/admin/security', icon: <ShieldAlert className="w-6 h-6" />, color: 'from-red-500 to-rose-600', testId: 'admin-tile-security' },
-    { title: 'برمجة زيتاكس 🔐', desc: 'ذكاء يعدّل كود المنصة بنفسه (للمالك فقط)', path: '/admin/autocoder', icon: <Code2 className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', testId: 'admin-tile-autocoder' },
     { title: 'تداولي الذكي 📈', desc: 'لوحة تداول الأسهم الأمريكية الحلال (Alpaca + Claude AI) — للمالك فقط', path: '/admin/my-trading', icon: <TrendingUp className="w-6 h-6" />, color: 'from-green-500 to-emerald-600', testId: 'admin-tile-my-trading' },
     { title: 'مركز التسويق الذكي 📣', desc: 'ذكاء يولّد، يجدول، وينشر تلقائياً عبر 6 منصات (Telegram/Twitter/IG/...)', path: '/admin/marketing', icon: <Sparkles className="w-6 h-6" />, color: 'from-pink-500 to-amber-500', testId: 'admin-tile-marketing' },
     { title: 'الاستقلالية والمفاتيح 🔓', desc: 'كل API keys مع روابط مباشرة للحصول عليها', path: '/admin/independence', icon: <ShieldCheck className="w-6 h-6" />, color: 'from-emerald-500 to-teal-600', testId: 'admin-tile-independence' },
-    { title: 'نمو الذكاء 🧠', desc: 'الدروس اللي يتعلمها الذكاء يومياً من تفاعلاتك', path: '/admin/learning', icon: <Sparkles className="w-6 h-6" />, color: 'from-pink-500 to-rose-600', testId: 'admin-tile-learning' },
-    { title: 'جاهزية الذكاء 🚀', desc: 'حالة نماذج AI والتكاملات الناقصة وروابط الارتقاء', path: '/admin/ai-readiness', icon: <Brain className="w-6 h-6" />, color: 'from-violet-500 to-amber-500', testId: 'admin-tile-ai-readiness' },
-    // 'وضع الذكاء 🎛️' — DEPRECATED 2026-02. Replaced by the new 4-layer architecture
-    // (Planner + Code Reviewer + Builder + Engineer). No more user-selectable
-    // models — claude_only is the locked default. Tile removed from the dashboard
-    // (route /admin/ai-mode still exists internally for safety but no nav link).
     { title: 'إدارة المواقع', desc: 'إضافة وتحديث المواقع', path: '/admin/websites', icon: <Globe className="w-6 h-6" />, color: 'from-orange-500 to-red-500' },
     { title: 'سجل النشاط', desc: 'تتبع جميع الأنشطة على المنصة', path: '/admin/activity', icon: <Activity className="w-6 h-6" />, color: 'from-cyan-500 to-blue-500' },
     { title: 'الإعدادات', desc: 'إعدادات الموقع ومعلومات الدفع', path: '/admin/settings', icon: <Settings className="w-6 h-6" />, color: 'from-gray-500 to-slate-600' },
-  ];
-
-  const aiCommandCards = [
-    {
-      title: 'برمجة زيتاكس',
-      desc: 'اطلب مني أبني/أصلح/أختبر وأنشر، مع خطوات واضحة وخلاصة مربعة في النهاية.',
-      path: '/admin/autocoder',
-      icon: <Code2 className="w-5 h-5" />,
-      badge: 'تنفيذ مباشر',
-      testId: 'admin-ai-command-autocoder',
-    },
-    {
-      title: 'جاهزية الذكاء',
-      desc: 'شوف نماذج AI، التكاملات الناقصة، روابط المفاتيح، وأولويات ترقية Zenrex.',
-      path: '/admin/ai-readiness',
-      icon: <Brain className="w-5 h-5" />,
-      badge: 'تقرير شامل',
-      testId: 'admin-ai-command-readiness',
-    },
-    {
-      title: 'الاستقلالية والمفاتيح',
-      desc: 'روابط الخدمات المطلوبة مثل Sentry وR2 وOpenRouter وFal وStripe.',
-      path: '/admin/independence',
-      icon: <ShieldCheck className="w-5 h-5" />,
-      badge: 'مفاتيح ناقصة',
-      testId: 'admin-ai-command-keys',
-    },
   ];
 
   return (
@@ -104,41 +69,38 @@ const AdminDashboard = ({ user }) => {
           <p className="text-gray-400">نظرة شاملة على المنصة</p>
         </div>
 
-        <div data-testid="admin-ai-command-center" className="mb-8 overflow-hidden rounded-3xl border border-amber-400/20 bg-gradient-to-br from-amber-500/15 via-slate-800 to-slate-950 p-6 shadow-2xl shadow-amber-500/10">
+        {/* Owner Engineer hero — the one entry point for AI maintenance */}
+        <button
+          type="button"
+          onClick={() => navigate('/admin/engineer')}
+          data-testid="admin-engineer-hero"
+          className="w-full mb-8 overflow-hidden rounded-3xl border border-amber-400/30 bg-gradient-to-br from-amber-500/15 via-slate-800 to-slate-950 p-6 text-right shadow-2xl shadow-amber-500/10 transition hover:border-amber-300/60 hover:shadow-amber-500/20"
+        >
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl">
               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-200">
-                <CheckCircle className="h-4 w-4" /> مركز الذكاء مفعّل
+                <CheckCircle className="h-4 w-4" /> الذكاء الموحّد مفعّل
               </div>
-              <h2 className="text-2xl font-black text-white md:text-3xl">إذا ما شفت التغيير: ابدأ من هنا</h2>
+              <h2 className="text-2xl font-black text-white md:text-3xl flex items-center gap-2 justify-end">
+                <span>مهندس Zenrex — دعم فني ذكي</span>
+                <Wrench className="w-7 h-7 text-amber-300" />
+              </h2>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                رتّبت لك مدخل واضح لكل ما يخص ذكاء Zenrex: اطلب تنفيذ مهام من برمجة زيتاكس، راقب جاهزية الذكاء، وشوف المفاتيح والخدمات الناقصة بروابط مباشرة.
+                نفس ذكاء البناء (Planner → Builder → Code Reviewer) لكن بصلاحيات المالك: استعرض كل مشاريع المنصة، تحاور مع AI عن أي مشروع، عدّل كوده، أعد نشره، وافحصه بـ Playwright — كله من مكان واحد.
               </p>
             </div>
             <div className="grid min-w-[280px] grid-cols-2 gap-3 text-center">
               <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
                 <div className="text-2xl font-black text-amber-300">4</div>
-                <div className="text-xs text-slate-400">نماذج AI أساسية</div>
+                <div className="text-xs text-slate-400">طبقات AI متعاونة</div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
                 <div className="text-2xl font-black text-emerald-300">LIVE</div>
-                <div className="text-xs text-slate-400">Railway + Vercel</div>
+                <div className="text-xs text-slate-400">قراءة وكتابة وفحص</div>
               </div>
             </div>
           </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            {aiCommandCards.map((card) => (
-              <button key={card.path} data-testid={card.testId} onClick={() => navigate(card.path)} className="group rounded-2xl border border-white/10 bg-black/25 p-4 text-right transition hover:-translate-y-0.5 hover:border-amber-300/40 hover:bg-black/35">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <span className="rounded-xl bg-amber-500/15 p-2 text-amber-300">{card.icon}</span>
-                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/70">{card.badge}</span>
-                </div>
-                <h3 className="mb-1 font-black text-white group-hover:text-amber-200">{card.title}</h3>
-                <p className="text-xs leading-6 text-slate-400">{card.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
+        </button>
 
         {loading ? (
           <div className="text-center py-12 text-white">جاري التحميل...</div>

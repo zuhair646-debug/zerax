@@ -1,4 +1,4 @@
-# Zenrex Farm — PRD (Updated 2026-02 — Owner Engineer Portal LIVE)
+# Zenrex Farm — PRD (Updated 2026-02 — Owner Engineer = Full Maintenance Console)
 
 ## Problem Statement
 Arabic-first AI builder for websites/apps/images/videos with credits-based pricing, Stripe payments, background-task persistence, and exportable codebase. Deployed on Hetzner VPS (zenrex.ai).
@@ -9,7 +9,8 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - Frontend: React PWA, Service Worker v9
 - Stripe: Official `stripe` SDK with proxy support
 - **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
-- **Owner Engineer Portal** at `/admin/engineer` — cross-platform AI oversight for the owner (2026-02).
+- **Owner Engineer Portal** (`/admin/engineer`) — read + write + browser-audit, the single AI console for the owner (2026-02).
+- **Removed (2026-02):** `AdminAIMode` (3-model picker), `FreebuildLab`, hero "AI Command Center" + tiles for `autocoder / training / learning / ai-readiness` (replaced by the unified Owner Engineer).
 
 
 ### 🛠️ Owner Engineer Portal — DEPLOYED 2026-02 (preview verified, awaiting VPS push)

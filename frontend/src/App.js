@@ -26,7 +26,6 @@ import ShareHistory from '@/pages/ShareHistory';
 import Profile from '@/pages/Profile';
 import FreeBuildChat from '@/pages/FreeBuildChat';
 import OwnerEngineer from '@/pages/OwnerEngineer';
-import FreebuildLab from '@/pages/FreebuildLab';
 import NativeAppNew from '@/pages/NativeAppNew';
 import MyProjects from '@/pages/MyProjects';
 import SiteToAppWizard from '@/pages/SiteToAppWizard';
@@ -109,7 +108,6 @@ import AdminSections from '@/pages/AdminSections';
 import AdminApiKeys from '@/pages/AdminApiKeys';
 import AdminIndependence from '@/pages/AdminIndependence';
 import AdminAIReadiness from '@/pages/AdminAIReadiness';
-import AdminAIMode from '@/pages/AdminAIMode';
 import AdminLearning from '@/pages/AdminLearning';
 import AdminNotifications from '@/pages/AdminNotifications';
 import StoragePage from '@/pages/StoragePage';
@@ -219,7 +217,6 @@ function App() {
           <Route path="/dashboard/profile" element={<ProtectedRoute><Profile user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/freebuild/chat" element={<ProtectedRoute><TermsGate section="websites"><FreeBuildChat user={user} setUser={setUser} /></TermsGate></ProtectedRoute>} />
           <Route path="/freebuild/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
-          <Route path="/lab/:id" element={<ProtectedRoute><FreebuildLab /></ProtectedRoute>} />
           <Route path="/native/new" element={<ProtectedRoute><TermsGate section="apps"><NativeAppNew /></TermsGate></ProtectedRoute>} />
           <Route path="/native/convert" element={<ProtectedRoute><SiteToAppWizard /></ProtectedRoute>} />
           <Route path="/native/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
@@ -295,7 +292,6 @@ function App() {
           <Route path="/admin/api-keys" element={<ProtectedRoute adminOnly><AdminApiKeys user={user} /></ProtectedRoute>} />
           <Route path="/admin/independence" element={<ProtectedRoute adminOnly><AdminIndependence user={user} /></ProtectedRoute>} />
           <Route path="/admin/ai-readiness" element={<ProtectedRoute adminOnly><AdminAIReadiness user={user} /></ProtectedRoute>} />
-          <Route path="/admin/ai-mode" element={<ProtectedRoute adminOnly><AdminAIMode user={user} /></ProtectedRoute>} />
           <Route path="/admin/learning" element={<ProtectedRoute adminOnly><AdminLearning user={user} /></ProtectedRoute>} />
           <Route path="/admin/security" element={<ProtectedRoute adminOnly><SecurityControlRoom user={user} /></ProtectedRoute>} />
           <Route path="/admin/pricing" element={<ProtectedRoute adminOnly><PricingAdmin user={user} /></ProtectedRoute>} />
