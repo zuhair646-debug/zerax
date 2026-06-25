@@ -151,16 +151,19 @@ async def review_code_change(
     if len(review_target) > MAX_HTML_FOR_REVIEW:
         review_target = review_target[:MAX_HTML_FOR_REVIEW] + "\n<!-- ...truncated... -->\n</body></html>"
 
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        logger.warning("[code-review] EMERGENT_LLM_KEY missing — skipping review")
+    api_key_present = bool(
+        (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+        or (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+    )
+    if not api_key_present:
+        logger.warning("[code-review] no Claude key (ANTHROPIC_API_KEY or EMERGENT_LLM_KEY) — skipping review")
         return {"verdict": "approve", "skipped": True, "error": "no_api_key", "score": 100, "issues": []}
 
     try:
         # Lazy import — keeps the module light when reviewer is disabled.
-        from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
+        from modules.shared.claude_simple import ask_claude  # type: ignore
     except Exception as e:
-        logger.warning(f"[code-review] emergentintegrations unavailable: {e}")
+        logger.warning(f"[code-review] claude_simple unavailable: {e}")
         return {"verdict": "approve", "skipped": True, "error": "lib_unavailable", "score": 100, "issues": []}
 
     session_id = f"reviewer-{project_name or 'anon'}-{action}"
@@ -173,16 +176,15 @@ async def review_code_change(
     )
 
     try:
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=session_id,
-            system_message=_REVIEWER_SYSTEM_PROMPT,
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929").with_params(max_tokens=8000)
-
-        user_msg = UserMessage(text=user_msg_text)
         raw_response = await asyncio.wait_for(
-            chat.send_message(user_msg),
-            timeout=REVIEW_TIMEOUT_SECONDS,
+            ask_claude(
+                system=_REVIEWER_SYSTEM_PROMPT,
+                user_message=user_msg_text,
+                session_id=session_id,
+                max_tokens=8000,
+                timeout=REVIEW_TIMEOUT_SECONDS,
+            ),
+            timeout=REVIEW_TIMEOUT_SECONDS + 5,
         )
     except asyncio.TimeoutError:
         logger.warning(f"[code-review] timed out after {REVIEW_TIMEOUT_SECONDS}s — defaulting to approve")

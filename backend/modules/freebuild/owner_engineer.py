@@ -755,25 +755,25 @@ def setup_owner_engineer_routes(router: APIRouter, db, get_current_user):
 
         history.append({"role": "user", "content": message, "ts": _now_iso(), "project_id": project_id})
 
-        api_key = os.environ.get("EMERGENT_LLM_KEY")
-        if not api_key:
-            raise HTTPException(500, "EMERGENT_LLM_KEY missing")
+        api_key_present = bool(
+            (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+            or (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+        )
+        if not api_key_present:
+            raise HTTPException(500, "No Claude key configured (ANTHROPIC_API_KEY or EMERGENT_LLM_KEY)")
 
-        from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
+        from modules.shared.claude_simple import ask_claude  # type: ignore
 
         async def event_stream():
             yield f"event: start\ndata: {json.dumps({'session_id': sid, 'project_id': project_id})}\n\n"
             try:
-                chat = LlmChat(
-                    api_key=api_key, session_id=sid,
-                    system_message=_OWNER_SYSTEM_PROMPT + project_context_block + (
-                        "\n\n**TOOLS AVAILABLE:** " + json.dumps(_tools_schema(), ensure_ascii=False)
-                        + "\n\nعند استدعاء أداة، اكتب فقط JSON نقي بدون markdown fences وبدون أي شرح إضافي، مثال صحيح:\n"
-                        + '{"tool": "get_platform_stats", "args": {}}\n'
-                        + 'ممنوع كتابة ```json أو ``` حول الـ JSON. ممنوع كتابة أي نص قبله أو بعده. '
-                        + "بعد ما يجيك tool_result، أكمل المحادثة عادي بالعربي السعودي."
-                    ),
-                ).with_model("anthropic", "claude-sonnet-4-5-20250929").with_params(max_tokens=4000)
+                system_prompt = _OWNER_SYSTEM_PROMPT + project_context_block + (
+                    "\n\n**TOOLS AVAILABLE:** " + json.dumps(_tools_schema(), ensure_ascii=False)
+                    + "\n\nعند استدعاء أداة، اكتب فقط JSON نقي بدون markdown fences وبدون أي شرح إضافي، مثال صحيح:\n"
+                    + '{"tool": "get_platform_stats", "args": {}}\n'
+                    + 'ممنوع كتابة ```json أو ``` حول الـ JSON. ممنوع كتابة أي نص قبله أو بعده. '
+                    + "بعد ما يجيك tool_result، أكمل المحادثة عادي بالعربي السعودي."
+                )
 
                 conversation = "\n".join(
                     f"{m['role'].upper()}: {m.get('content','')}" for m in history[-12:]
@@ -782,7 +782,13 @@ def setup_owner_engineer_routes(router: APIRouter, db, get_current_user):
                 # Tool loop (max 10 iterations — supports read→fix→republish→audit chains)
                 final_answer = ""
                 for _ in range(10):
-                    resp = await chat.send_message(UserMessage(text=conversation))
+                    resp = await ask_claude(
+                        system=system_prompt,
+                        user_message=conversation,
+                        session_id=sid,
+                        max_tokens=4000,
+                        timeout=60,
+                    )
                     if not isinstance(resp, str):
                         resp = str(resp)
                     txt = resp.strip()
@@ -880,3 +886,32 @@ def setup_owner_engineer_routes(router: APIRouter, db, get_current_user):
     async def owner_stats(user=Depends(get_current_user)):
         _ensure_owner(user)
         return await _tool_get_platform_stats(db)
+
+    @router.get("/owner/engineer/independence")
+    async def owner_independence(user=Depends(get_current_user)):
+        """Tell the owner whether the platform AI is independent (direct
+        Anthropic) or still routed through Emergent's gateway."""
+        _ensure_owner(user)
+        try:
+            from modules.shared.claude_simple import which_provider
+            provider = which_provider()
+        except Exception:
+            provider = "none"
+        # Also check the legacy direct path (Builder).
+        builder_paths = []
+        if (os.environ.get("ANTHROPIC_API_KEY") or "").strip():
+            builder_paths.append("anthropic_direct")
+        if (os.environ.get("EMERGENT_LLM_KEY") or "").strip():
+            builder_paths.append("emergent")
+        return {
+            "primary": provider,                       # what the new core modules use
+            "builder_chain": builder_paths,            # what the main builder agent will try, in order
+            "independent": provider == "anthropic_direct",
+            "openai_key_set": bool((os.environ.get("OPENAI_API_KEY") or "").strip()),
+            "openrouter_key_set": bool((os.environ.get("OPENROUTER_API_KEY") or "").strip()),
+            "message": (
+                "مستقل 100% — كل النداءات مباشرة لـ Anthropic. لا اعتماد على Emergent." if provider == "anthropic_direct"
+                else "حالياً يستخدم Emergent Universal Key — ليس مستقلاً. ضع ANTHROPIC_API_KEY في .env للاستقلال." if provider == "emergent"
+                else "تحذير: لا يوجد أي مزود Claude مهيّأ!"
+            ),
+        }

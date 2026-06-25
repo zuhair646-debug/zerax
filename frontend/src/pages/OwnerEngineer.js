@@ -42,6 +42,7 @@ export default function OwnerEngineer({ user }) {
   const [activeProject, setActiveProject] = useState(null); // {id,name,owner_email,published_slug,...}
   const [projectDetail, setProjectDetail] = useState(null);
   const [stats, setStats] = useState(null);
+  const [independence, setIndependence] = useState(null);
 
   // ── Chat state ─────────────────────────────────────────────────────
   const [sessions, setSessions] = useState([]);
@@ -78,6 +79,10 @@ export default function OwnerEngineer({ user }) {
     try {
       const r = await fetch(`${BASE}/stats`, { headers: authHeaders });
       if (r.ok) setStats(await r.json());
+    } catch { /* non-critical */ }
+    try {
+      const r2 = await fetch(`${BASE}/independence`, { headers: authHeaders });
+      if (r2.ok) setIndependence(await r2.json());
     } catch { /* non-critical */ }
   };
 
@@ -214,6 +219,19 @@ export default function OwnerEngineer({ user }) {
           <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
         </div>
         <div className="flex items-center gap-2">
+          {independence && (
+            <span
+              data-testid="independence-badge"
+              title={independence.message}
+              className={`text-[10px] font-bold px-2 py-1 rounded-full border ${
+                independence.independent
+                  ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/40'
+                  : 'bg-amber-500/15 text-amber-200 border-amber-400/40'
+              }`}
+            >
+              {independence.independent ? '🟢 مستقل 100%' : '🟡 Emergent'}
+            </span>
+          )}
           {stats && (
             <span className="text-[10px] text-zinc-500 hidden sm:inline">
               {stats.total_projects} مشروع · {stats.published_projects} منشور · {stats.total_users} مستخدم

@@ -238,12 +238,15 @@ async def generate_build_plan(
     if key in _PLAN_CACHE:
         return {**_PLAN_CACHE[key], "from_cache": True}
 
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
+    api_key_present = bool(
+        (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+        or (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+    )
+    if not api_key_present:
         return _minimal_default_plan(user_message)
 
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
+        from modules.shared.claude_simple import ask_claude  # type: ignore
     except Exception:
         return _minimal_default_plan(user_message)
 
@@ -260,14 +263,15 @@ async def generate_build_plan(
     )
 
     try:
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"planner-{project_id or 'anon'}",
-            system_message=_PLANNER_SYSTEM_PROMPT,
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929").with_params(max_tokens=4000)
         raw = await asyncio.wait_for(
-            chat.send_message(UserMessage(text=msg_text)),
-            timeout=PLAN_TIMEOUT_SECONDS,
+            ask_claude(
+                system=_PLANNER_SYSTEM_PROMPT,
+                user_message=msg_text,
+                session_id=f"planner-{project_id or 'anon'}",
+                max_tokens=4000,
+                timeout=PLAN_TIMEOUT_SECONDS,
+            ),
+            timeout=PLAN_TIMEOUT_SECONDS + 5,
         )
     except asyncio.TimeoutError:
         logger.warning("[planner] timed out → minimal default plan")
@@ -278,7 +282,7 @@ async def generate_build_plan(
 
     parsed = _safe_parse(raw if isinstance(raw, str) else "")
     if not isinstance(parsed, dict):
-        # One retry with stronger nudge — if the model produced prose, force JSON.
+        # One retry with stronger nudge.
         try:
             preview = (raw or "")[:200] if isinstance(raw, str) else "(non-string)"
             logger.warning(f"[planner] first parse failed. preview={preview!r}")
@@ -287,8 +291,14 @@ async def generate_build_plan(
                 "ابدأ مباشرة بـ `{` وانتهِ بـ `}` بدون أي شرح أو markdown."
             )
             raw2 = await asyncio.wait_for(
-                chat.send_message(UserMessage(text=retry_msg)),
-                timeout=20,
+                ask_claude(
+                    system=_PLANNER_SYSTEM_PROMPT,
+                    user_message=msg_text + "\n\n" + retry_msg,
+                    session_id=f"planner-{project_id or 'anon'}-retry",
+                    max_tokens=4000,
+                    timeout=20,
+                ),
+                timeout=25,
             )
             parsed = _safe_parse(raw2 if isinstance(raw2, str) else "")
         except Exception as e:
