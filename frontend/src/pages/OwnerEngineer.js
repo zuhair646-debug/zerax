@@ -16,7 +16,8 @@ import {
   Send, ArrowRight, Sparkles, Wrench, FolderOpen, BarChart3, Search,
   RefreshCw, ExternalLink, Layers, User as UserIcon, Eye,
   Activity, AlertTriangle, Power, ShieldCheck, X, Check, ListChecks,
-  Image as ImageIcon, Film, Gamepad2, Globe,
+  Image as ImageIcon, Film, Gamepad2, Globe, Paperclip, Mic, Square,
+  MessageCircle, Tv2, ChevronDown, Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -60,6 +61,18 @@ export default function OwnerEngineer({ user }) {
   const [maintenance, setMaintenance] = useState([]); // [{section, active, ...}]
   const [patches, setPatches] = useState([]);
   const [dashLoading, setDashLoading] = useState(false);
+
+  // ── New layout state (2026-06 redesign) ────────────────────────────
+  const [activeView, setActiveView] = useState('chat'); // 'chat' | 'reports' | 'live'
+  const [showSessionsMenu, setShowSessionsMenu] = useState(false);
+  const [showProjectsMenu, setShowProjectsMenu] = useState(false);
+  const [attachedFile, setAttachedFile] = useState(null); // {name, size, dataUrl?}
+  const [recording, setRecording] = useState(false);
+  const [recElapsed, setRecElapsed] = useState(0); // seconds
+  const mediaRecorderRef = useRef(null);
+  const recChunksRef = useRef([]);
+  const recTimerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const authHeaders = useMemo(() => {
     const token = localStorage.getItem('token');
@@ -165,6 +178,89 @@ export default function OwnerEngineer({ user }) {
     }
   };
 
+  // ── File upload ────────────────────────────────────────────────────
+  const handleFileSelect = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) {
+      toast.error('الحد الأقصى 10MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setAttachedFile({
+        name: f.name, size: f.size, type: f.type, dataUrl: ev.target.result,
+      });
+      toast.success(`📎 تم إرفاق: ${f.name}`);
+    };
+    reader.readAsDataURL(f);
+    e.target.value = ''; // reset
+  };
+
+  // ── Voice recording (MediaRecorder → Whisper) ──────────────────────
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      recChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) recChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        try {
+          const blob = new Blob(recChunksRef.current, { type: 'audio/webm' });
+          stream.getTracks().forEach((t) => t.stop());
+          if (blob.size < 200) {
+            toast.error('التسجيل قصير جداً');
+            return;
+          }
+          toast.info('⏳ يحوّل الصوت لنص...');
+          const fd = new FormData();
+          fd.append('audio', blob, 'voice.webm');
+          fd.append('language', 'ar');
+          const r = await fetch(`${API}/api/stt/transcribe`, {
+            method: 'POST', headers: authHeaders, body: fd,
+          });
+          if (!r.ok) throw new Error('STT failed');
+          const d = await r.json();
+          if (d.text) {
+            setInput((prev) => (prev ? `${prev} ${d.text}` : d.text));
+            toast.success('✅ تم النسخ');
+          }
+        } catch (err) {
+          toast.error('فشل تحويل الصوت');
+        }
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+      setRecElapsed(0);
+      recTimerRef.current = setInterval(() => setRecElapsed((s) => s + 1), 1000);
+    } catch (e) {
+      toast.error('ما قدرنا نوصل للمايكروفون');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && recording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+      setRecording(false);
+      if (recTimerRef.current) {
+        clearInterval(recTimerRef.current);
+        recTimerRef.current = null;
+      }
+    }
+  };
+
+  // Cleanup on unmount.
+  useEffect(() => {
+    return () => {
+      if (recTimerRef.current) clearInterval(recTimerRef.current);
+      if (mediaRecorderRef.current) {
+        try { mediaRecorderRef.current.stop(); } catch { /* ignored */ }
+      }
+    };
+  }, []);
+
   useEffect(() => {
     loadProjects();
     loadStats();
@@ -213,14 +309,22 @@ export default function OwnerEngineer({ user }) {
   // ── Send a chat message (SSE stream) ───────────────────────────────
   const send = async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if ((!text && !attachedFile) || busy) return;
     setBusy(true);
     setInput('');
-    setMessages((m) => [...m, { role: 'user', content: text }]);
+    const fileLabel = attachedFile ? `📎 ${attachedFile.name}` : '';
+    const composed = [text, fileLabel].filter(Boolean).join('\n');
+    setMessages((m) => [...m, { role: 'user', content: composed }]);
+    const fileSnapshot = attachedFile;
+    setAttachedFile(null);
 
     try {
       const form = new FormData();
-      form.append('message', text);
+      // If a file was attached, prepend a marker so the AI knows.
+      const fullMessage = fileSnapshot
+        ? `${text}\n\n[ملف مُرفق: ${fileSnapshot.name} (${(fileSnapshot.size / 1024).toFixed(1)} KB، نوع: ${fileSnapshot.type})]`
+        : text;
+      form.append('message', fullMessage || '(ملف فقط)');
       if (activeSession) form.append('session_id', activeSession);
       if (activeProject?.id) form.append('project_id', activeProject.id);
       const r = await fetch(`${BASE}/chat`, {
@@ -306,159 +410,293 @@ export default function OwnerEngineer({ user }) {
               {stats.total_projects} مشروع · {stats.published_projects} منشور · {stats.total_users} مستخدم
             </span>
           )}
+
+          {/* 📁 Projects dropdown (compact) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => { setShowProjectsMenu((v) => !v); setShowSessionsMenu(false); }}
+              data-testid="projects-dropdown-toggle"
+              className="text-xs bg-zinc-900 border border-zinc-700 hover:border-amber-400/40 text-zinc-300 hover:text-amber-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+            >
+              <FolderOpen className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">المشاريع</span>
+              <span className="text-[10px] text-zinc-500">({projects.length})</span>
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            {showProjectsMenu && (
+              <div className="absolute top-full mt-1 left-0 w-80 max-h-[420px] bg-zinc-950 border border-zinc-700 rounded-xl shadow-2xl z-30 overflow-hidden" data-testid="projects-menu">
+                <div className="p-2 border-b border-zinc-800">
+                  <div className="relative">
+                    <Search className="absolute right-2 top-2 w-3.5 h-3.5 text-zinc-500" />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="ابحث..."
+                      data-testid="project-search"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pr-7 pl-2 py-1 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400/50"
+                    />
+                  </div>
+                </div>
+                <div className="max-h-[340px] overflow-y-auto p-1">
+                  {projects.length === 0 ? (
+                    <p className="text-[11px] text-zinc-600 px-2 py-6 text-center">لا توجد مشاريع.</p>
+                  ) : (
+                    projects.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => { selectProject(p); setShowProjectsMenu(false); }}
+                        data-testid={`project-${p.id}`}
+                        className={`w-full text-right text-[11px] px-2 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+                          activeProject?.id === p.id
+                            ? 'bg-amber-500/15 text-amber-100'
+                            : 'hover:bg-zinc-900 text-zinc-300'
+                        }`}
+                      >
+                        {p.published_slug && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
+                        <span className="truncate flex-1">{p.name || '(بدون اسم)'}</span>
+                        <span className="text-[9px] text-zinc-500 shrink-0">{p.mode || '—'}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 📜 Sessions dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => { setShowSessionsMenu((v) => !v); setShowProjectsMenu(false); }}
+              data-testid="sessions-dropdown-toggle"
+              className="text-xs bg-zinc-900 border border-zinc-700 hover:border-violet-400/40 text-zinc-300 hover:text-violet-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">السابقات</span>
+              <span className="text-[10px] text-zinc-500">({sessions.length})</span>
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            {showSessionsMenu && (
+              <div className="absolute top-full mt-1 left-0 w-80 max-h-[420px] bg-zinc-950 border border-zinc-700 rounded-xl shadow-2xl z-30 overflow-hidden" data-testid="sessions-menu">
+                <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
+                  <span className="text-[11px] text-zinc-500 font-bold">المحادثات السابقة</span>
+                  <button
+                    type="button"
+                    onClick={() => { newChat(); setShowSessionsMenu(false); }}
+                    data-testid="new-chat-from-menu"
+                    className="text-[10px] text-emerald-300 hover:text-emerald-200 flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> جديدة
+                  </button>
+                </div>
+                <div className="max-h-[360px] overflow-y-auto p-1">
+                  {sessions.length === 0 ? (
+                    <p className="text-[11px] text-zinc-600 px-2 py-6 text-center">لا توجد محادثات سابقة بعد.</p>
+                  ) : (
+                    sessions.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => { openSession(s.id); setShowSessionsMenu(false); setActiveView('chat'); }}
+                        data-testid={`session-${s.id}`}
+                        className={`w-full text-right text-[11px] px-2 py-1.5 rounded-md ${
+                          activeSession === s.id
+                            ? 'bg-violet-500/15 text-violet-100'
+                            : 'hover:bg-zinc-900 text-zinc-300'
+                        }`}
+                      >
+                        <div className="truncate font-bold">{s.messages?.[0]?.content?.slice(0, 50) || 'محادثة'}</div>
+                        <div className="text-[9px] text-zinc-500 mt-0.5">{fmt(s.updated_at)}</div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={newChat}
             data-testid="new-chat-btn"
             className="text-xs bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-500/30"
           >
-            + محادثة جديدة
+            + جديدة
           </button>
         </div>
       </header>
 
-      {/* ─── Owner-Engineer Dashboard Strip ─────────────────────────── */}
-      <DashboardStrip
-        report={dailyReport}
-        errors={errorAnalysis}
-        maintenance={maintenance}
-        patches={patches}
-        loading={dashLoading}
-        onRefresh={loadDashboard}
-        onToggleMaintenance={toggleMaintenance}
-        onReviewPatch={reviewPatch}
-        onAskAI={(prompt) => { setInput(prompt); }}
-      />
-
-      <div className="grid lg:grid-cols-[300px,1fr,420px] md:grid-cols-[260px,1fr] gap-0 min-h-[calc(100vh-58px)]">
-        {/* Projects sidebar */}
-        <aside className="border-l border-zinc-800 bg-zinc-900/50 overflow-y-auto" data-testid="projects-sidebar">
-          <div className="p-3 sticky top-0 bg-zinc-900/95 backdrop-blur border-b border-zinc-800">
-            <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Layers className="w-3 h-3" /> كل المشاريع
-            </h3>
-            <div className="relative">
-              <Search className="absolute right-2 top-2.5 w-3.5 h-3.5 text-zinc-500" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="ابحث باسم المشروع..."
-                data-testid="project-search"
-                className="w-full bg-zinc-950 border border-zinc-800 focus:border-amber-400/50 rounded-lg pr-7 pl-2 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none"
-              />
-            </div>
+      {/* ─── Tab bar (chat / reports / live) ───────────────────────── */}
+      <nav className="border-b border-zinc-800 bg-zinc-950/60 backdrop-blur sticky top-[58px] z-10 px-4 flex items-center gap-1" data-testid="owner-view-tabs">
+        <ViewTab id="chat" current={activeView} setCurrent={setActiveView}
+          icon={MessageCircle} label="محادثة"
+          tone="amber" />
+        <ViewTab id="reports" current={activeView} setCurrent={setActiveView}
+          icon={BarChart3} label="تقارير فعلية"
+          tone="emerald" />
+        <ViewTab id="live" current={activeView} setCurrent={setActiveView}
+          icon={Tv2} label="لايف 📺"
+          tone="rose"
+          badge={activeProject?.published_slug ? null : '⚠️'} />
+        {activeProject && (
+          <div className="mr-auto flex items-center gap-2 text-xs">
+            <span className="text-amber-200 font-bold flex items-center gap-1">
+              <FolderOpen className="w-3 h-3" /> {activeProject.name}
+            </span>
             <button
               type="button"
-              onClick={() => { loadProjects(query); loadStats(); }}
-              className="mt-2 w-full text-[11px] text-zinc-400 hover:text-amber-300 flex items-center justify-center gap-1 py-1"
-              data-testid="refresh-projects"
+              onClick={() => { setActiveProject(null); setProjectDetail(null); }}
+              className="text-zinc-500 hover:text-rose-300 text-[10px]"
             >
-              <RefreshCw className={`w-3 h-3 ${projLoading ? 'animate-spin' : ''}`} /> تحديث
+              ✕ إلغاء
             </button>
           </div>
+        )}
+      </nav>
 
-          <div className="p-2">
-            {projects.length === 0 && !projLoading && (
-              <p className="text-xs text-zinc-600 px-2 py-6 text-center">لا توجد مشاريع.</p>
-            )}
-            <ul className="space-y-1">
-              {projects.map((p) => (
-                <li key={p.id}>
+      {/* ─── Main area: chat | reports | live ──────────────────────── */}
+      <main className="flex flex-col min-h-[calc(100vh-118px)]" data-testid={`view-${activeView}`}>
+        {activeView === 'chat' && (
+          <ChatView
+            messages={messages}
+            busy={busy}
+            input={input}
+            setInput={setInput}
+            send={send}
+            scrollerRef={scrollerRef}
+            activeProject={activeProject}
+            attachedFile={attachedFile}
+            setAttachedFile={setAttachedFile}
+            fileInputRef={fileInputRef}
+            onFileSelect={handleFileSelect}
+            recording={recording}
+            recElapsed={recElapsed}
+            startRecording={startRecording}
+            stopRecording={stopRecording}
+          />
+        )}
+
+        {activeView === 'reports' && (
+          <ReportsView
+            report={dailyReport}
+            errors={errorAnalysis}
+            maintenance={maintenance}
+            patches={patches}
+            loading={dashLoading}
+            onRefresh={loadDashboard}
+            onToggleMaintenance={toggleMaintenance}
+            onReviewPatch={reviewPatch}
+            onAskAI={(prompt) => { setInput(prompt); setActiveView('chat'); }}
+          />
+        )}
+
+        {activeView === 'live' && (
+          <LiveView
+            project={activeProject}
+            projectDetail={projectDetail}
+            messages={messages}
+            busy={busy}
+            input={input}
+            setInput={setInput}
+            send={send}
+            attachedFile={attachedFile}
+            setAttachedFile={setAttachedFile}
+            fileInputRef={fileInputRef}
+            onFileSelect={handleFileSelect}
+            recording={recording}
+            recElapsed={recElapsed}
+            startRecording={startRecording}
+            stopRecording={stopRecording}
+          />
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ViewTab — single tab pill in the view-tab bar.
+// ─────────────────────────────────────────────────────────────────
+function ViewTab({ id, current, setCurrent, icon: Icon, label, tone, badge }) {
+  const active = current === id;
+  const tones = {
+    amber: active ? 'text-amber-300 border-amber-400' : 'text-zinc-500 border-transparent hover:text-amber-200',
+    emerald: active ? 'text-emerald-300 border-emerald-400' : 'text-zinc-500 border-transparent hover:text-emerald-200',
+    rose: active ? 'text-rose-300 border-rose-400' : 'text-zinc-500 border-transparent hover:text-rose-200',
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => setCurrent(id)}
+      data-testid={`tab-${id}`}
+      className={`px-4 py-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-all ${tones[tone]}`}
+    >
+      <Icon className="w-4 h-4" />
+      <span>{label}</span>
+      {badge && <span className="text-[10px]">{badge}</span>}
+    </button>
+  );
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// ChatView — wide, centered chat with file/voice/send composer.
+// ═════════════════════════════════════════════════════════════════
+function ChatView({
+  messages, busy, input, setInput, send,
+  scrollerRef, activeProject,
+  attachedFile, setAttachedFile,
+  fileInputRef, onFileSelect,
+  recording, recElapsed, startRecording, stopRecording,
+}) {
+  const suggestions = activeProject
+    ? [
+        'اعطني ملخص هذا المشروع',
+        'اقرأ index.html واخبرني وش فيه',
+        'هل هذا المشروع منشور؟',
+        'مين صاحبه؟',
+      ]
+    : [
+        '🩺 أعطني تقرير اليوم الكامل',
+        '🐛 ليش الذكاء الصناعي يكرر نفس الخطأ؟ حلل آخر 24 ساعة',
+        '⚙️ شغّل وضع الصيانة على قسم الفيديوهات نص ساعة',
+        '📋 شو الاقتراحات المعلقة لإصلاح الـ AI؟',
+      ];
+
+  return (
+    <div className="flex flex-col flex-1 bg-zinc-950" data-testid="chat-view">
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-4">
+        <div className="max-w-4xl mx-auto w-full space-y-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-16">
+              <Wrench className="w-16 h-16 mx-auto mb-4 text-amber-400/30" />
+              <p className="text-zinc-200 font-bold text-lg mb-2">المهندس بانتظار أوامرك</p>
+              <p className="text-xs text-zinc-500 mb-8">
+                {activeProject
+                  ? `سؤالك مرتبط حالياً بمشروع: ${activeProject.name}`
+                  : 'اختر مشروعاً من قائمة المشاريع، أو اسأل سؤالاً عاماً.'}
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center max-w-2xl mx-auto">
+                {suggestions.map((q, i) => (
                   <button
+                    key={i}
                     type="button"
-                    onClick={() => selectProject(p)}
-                    data-testid={`project-${p.id}`}
-                    className={`w-full text-right text-xs px-3 py-2 rounded-lg transition-all ${
-                      activeProject?.id === p.id
-                        ? 'bg-amber-500/15 text-amber-100 border border-amber-400/40'
-                        : 'hover:bg-zinc-800/60 text-zinc-300 border border-transparent'
-                    }`}
+                    onClick={() => setInput(q)}
+                    data-testid={`suggest-${i}`}
+                    className="text-xs bg-zinc-900 border border-zinc-700 text-zinc-300 px-3 py-2 rounded-lg hover:border-amber-400/40 hover:text-amber-200"
                   >
-                    <div className="font-bold truncate flex items-center gap-1.5">
-                      {p.published_slug && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
-                      {p.name || '(بدون اسم)'}
-                    </div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center gap-1.5">
-                      <UserIcon className="w-2.5 h-2.5" />
-                      <span className="truncate">{p.owner_email || p.user_id?.slice(0, 8) || '—'}</span>
-                      <span className="text-zinc-600">·</span>
-                      <span>{p.mode || '—'}</span>
-                    </div>
-                    <div className="text-[10px] text-zinc-600 mt-0.5">{fmt(p.updated_at)}</div>
+                    {q}
                   </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </aside>
-
-        {/* Center: Chat */}
-        <main className="flex flex-col border-l border-zinc-800">
-          {/* Active project bar */}
-          {activeProject && (
-            <div className="bg-amber-500/5 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between text-xs" data-testid="active-project-bar">
-              <div className="flex items-center gap-2">
-                <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-amber-200 font-bold">{activeProject.name}</span>
-                <span className="text-zinc-500">·</span>
-                <span className="text-zinc-400">{activeProject.owner_email || '—'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {liveUrl && (
-                  <a href={liveUrl} target="_blank" rel="noreferrer" className="text-emerald-300 hover:text-emerald-200 flex items-center gap-1" data-testid="open-live">
-                    <ExternalLink className="w-3 h-3" /> فتح الموقع
-                  </a>
-                )}
-                <button type="button" onClick={() => { setActiveProject(null); setProjectDetail(null); }} className="text-zinc-500 hover:text-zinc-300">إلغاء التركيز</button>
+                ))}
               </div>
             </div>
-          )}
-
-          <div ref={scrollerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-            {messages.length === 0 && (
-              <div className="text-center py-10">
-                <Wrench className="w-14 h-14 mx-auto mb-3 text-amber-400/40" />
-                <p className="text-zinc-300 font-bold mb-1">المهندس بانتظار أوامرك</p>
-                <p className="text-xs text-zinc-500 mb-6">
-                  {activeProject
-                    ? `سؤالك مرتبط حالياً بمشروع: ${activeProject.name}`
-                    : 'اختر مشروعاً من الجانب، أو اسأل سؤالاً عاماً عن المنصة.'}
-                </p>
-                <div className="flex flex-wrap gap-2 justify-center max-w-xl mx-auto">
-                  {(activeProject
-                    ? [
-                        'اعطني ملخص هذا المشروع',
-                        'اقرأ index.html واخبرني وش فيه',
-                        'هل هذا المشروع منشور؟',
-                        'مين صاحبه؟',
-                      ]
-                    : [
-                        '🩺 أعطني تقرير اليوم الكامل',
-                        '🐛 ليش الذكاء الصناعي يكرر نفس الخطأ؟ حلل آخر 24 ساعة',
-                        '⚙️ شغّل وضع الصيانة على قسم الفيديوهات نص ساعة',
-                        '📋 شو الاقتراحات المعلقة لإصلاح الـ AI؟',
-                        'اعطني آخر 10 مشاريع منشورة',
-                        'كم مستخدم على المنصة؟',
-                      ]
-                  ).map((q, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setInput(q)}
-                      data-testid={`suggest-${i}`}
-                      className="text-xs bg-zinc-900 border border-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg hover:border-amber-400/40 hover:text-amber-200"
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {messages.map((m, i) => (
+          ) : (
+            messages.map((m, i) => (
               <div key={i} className={m.role === 'user' ? 'flex justify-start' : 'flex justify-end'} data-testid={`msg-${i}`}>
                 <div
-                  className={`max-w-[80%] rounded-xl px-4 py-3 text-sm whitespace-pre-wrap leading-7 ${
+                  className={`max-w-[85%] rounded-2xl px-5 py-4 text-sm whitespace-pre-wrap leading-7 ${
                     m.role === 'user'
                       ? 'bg-emerald-500/15 text-emerald-100 border border-emerald-400/30'
                       : 'bg-zinc-900 text-zinc-200 border border-zinc-800'
@@ -481,136 +719,321 @@ export default function OwnerEngineer({ user }) {
                   {m.content}
                 </div>
               </div>
-            ))}
+            ))
+          )}
 
-            {busy && (
-              <div className="flex justify-end">
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-500">
-                  <span className="animate-pulse">المهندس يفكّر...</span>
-                </div>
+          {busy && (
+            <div className="flex justify-end">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4 text-sm text-zinc-500">
+                <span className="animate-pulse">المهندس يفكّر...</span>
               </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Composer
+        input={input} setInput={setInput} send={send} busy={busy}
+        attachedFile={attachedFile} setAttachedFile={setAttachedFile}
+        fileInputRef={fileInputRef} onFileSelect={onFileSelect}
+        recording={recording} recElapsed={recElapsed}
+        startRecording={startRecording} stopRecording={stopRecording}
+        activeProject={activeProject}
+      />
+    </div>
+  );
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// Composer — text + 📎 file + 🎙️ voice + ▶ send.
+// ═════════════════════════════════════════════════════════════════
+function Composer({
+  input, setInput, send, busy,
+  attachedFile, setAttachedFile,
+  fileInputRef, onFileSelect,
+  recording, recElapsed, startRecording, stopRecording,
+  activeProject,
+}) {
+  return (
+    <div className="border-t border-zinc-800 p-3 sm:p-4 bg-zinc-950/90 backdrop-blur" data-testid="composer">
+      <div className="max-w-4xl mx-auto">
+        {/* Attached file preview */}
+        {attachedFile && (
+          <div className="mb-2 flex items-center gap-2 bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2 text-xs" data-testid="attached-file">
+            <Paperclip className="w-3.5 h-3.5 text-amber-300" />
+            <span className="text-amber-100 truncate flex-1">{attachedFile.name}</span>
+            <span className="text-zinc-500 text-[10px]">{(attachedFile.size / 1024).toFixed(1)} KB</span>
+            <button
+              type="button"
+              onClick={() => setAttachedFile(null)}
+              data-testid="remove-attached-file"
+              className="text-zinc-500 hover:text-rose-300 p-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Recording indicator */}
+        {recording && (
+          <div className="mb-2 flex items-center gap-2 bg-rose-500/10 border border-rose-400/30 rounded-lg px-3 py-2 text-xs" data-testid="recording-indicator">
+            <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+            <span className="text-rose-200 font-bold">يسجّل... {Math.floor(recElapsed / 60)}:{String(recElapsed % 60).padStart(2, '0')}</span>
+            <button
+              type="button"
+              onClick={stopRecording}
+              data-testid="stop-recording"
+              className="mr-auto text-[11px] bg-rose-500/30 hover:bg-rose-500/50 border border-rose-400/40 text-rose-100 px-2 py-0.5 rounded font-bold flex items-center gap-1"
+            >
+              <Square className="w-3 h-3" /> إيقاف
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={onFileSelect}
+            className="hidden"
+            data-testid="file-input"
+            accept="image/*,.pdf,.txt,.md,.json,.csv,.html,.js,.py,.zip"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            data-testid="attach-file-btn"
+            disabled={busy || recording}
+            className="p-3 rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-amber-200 hover:border-amber-400/40 disabled:opacity-40"
+            title="إرفاق ملف"
+          >
+            <Paperclip className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={recording ? stopRecording : startRecording}
+            data-testid={recording ? 'stop-voice-btn' : 'start-voice-btn'}
+            disabled={busy}
+            className={`p-3 rounded-xl border disabled:opacity-40 ${
+              recording
+                ? 'bg-rose-500/30 border-rose-400/50 text-rose-100 animate-pulse'
+                : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-rose-300 hover:border-rose-400/40'
+            }`}
+            title={recording ? 'إيقاف التسجيل' : 'تسجيل صوتي'}
+          >
+            {recording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </button>
+          <textarea
+            data-testid="owner-chat-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder={activeProject ? `اسأل عن "${activeProject.name}"...` : 'اكتب أمرك للمهندس...'}
+            rows={2}
+            className="flex-1 bg-zinc-900 border border-zinc-700 focus:border-amber-400/50 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={send}
+            disabled={busy || (!input.trim() && !attachedFile)}
+            data-testid="owner-chat-send"
+            className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <Send className="w-4 h-4" />
+            <span className="hidden sm:inline">إرسال</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// ReportsView — daily-report widgets + maintenance + patches inbox.
+// ═════════════════════════════════════════════════════════════════
+function ReportsView({ report, errors, maintenance, patches, loading, onRefresh, onToggleMaintenance, onReviewPatch, onAskAI }) {
+  return (
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6" data-testid="reports-view">
+      <DashboardStrip
+        report={report} errors={errors} maintenance={maintenance} patches={patches}
+        loading={loading} onRefresh={onRefresh}
+        onToggleMaintenance={onToggleMaintenance}
+        onReviewPatch={onReviewPatch}
+        onAskAI={onAskAI}
+      />
+
+      <div className="max-w-5xl mx-auto mt-6 grid md:grid-cols-2 gap-4">
+        {/* Recent published projects */}
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
+          <h3 className="text-sm font-bold text-cyan-300 mb-3 flex items-center gap-2">
+            <Sparkles className="w-4 h-4" /> آخر المشاريع المنشورة (24 ساعة)
+          </h3>
+          {!report?.recent_published?.length ? (
+            <p className="text-xs text-zinc-500 text-center py-6">لا يوجد منشور خلال 24 ساعة الماضية.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {report.recent_published.map((p) => (
+                <li key={p.id} data-testid={`recent-pub-${p.id}`} className="flex items-center gap-2 text-xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                  <span className="text-zinc-200 truncate flex-1">{p.name || p.id}</span>
+                  <span className="text-zinc-500 text-[10px]">v{p.published_version}</span>
+                  <span className="text-zinc-500 text-[10px]">{p.owner_email?.slice(0, 20) || '—'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Error patterns analysis */}
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
+          <h3 className="text-sm font-bold text-amber-300 mb-3 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" /> أنماط أخطاء الذكاء الصناعي (24 ساعة)
+          </h3>
+          {!errors?.patterns_with_repeats?.length ? (
+            <p className="text-xs text-emerald-400 text-center py-6">✅ ما فيه أنماط خطأ متكررة. الذكاء الصناعي يشتغل تمام.</p>
+          ) : (
+            <ul className="space-y-2">
+              {errors.patterns_with_repeats.map((p, i) => (
+                <li key={i} data-testid={`error-pattern-${i}`} className="bg-amber-500/5 border border-amber-400/30 rounded-lg p-2 text-xs">
+                  <div className="font-bold text-amber-200 flex items-center justify-between">
+                    <span>{p.pattern}</span>
+                    <span className="text-[10px] bg-amber-500/20 px-1.5 py-0.5 rounded">{p.occurrences}×</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-1">أول ظهور: {p.first_seen_project?.slice(0, 12) || '—'}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!!errors?.recommendations?.length && (
+            <div className="mt-3 pt-3 border-t border-zinc-800">
+              <p className="text-[10px] font-bold text-emerald-300 mb-1">💡 توصيات:</p>
+              <ul className="text-[11px] text-zinc-400 space-y-0.5">
+                {errors.recommendations.map((r, i) => (
+                  <li key={i}>· {r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Tool failure samples */}
+        {!!report?.tool_failure_samples?.length && (
+          <div className="bg-zinc-900/50 border border-rose-400/20 rounded-xl p-4 md:col-span-2">
+            <h3 className="text-sm font-bold text-rose-300 mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> عينات من فشل الأدوات (آخر 24 ساعة)
+            </h3>
+            <ul className="space-y-1.5">
+              {report.tool_failure_samples.map((s, i) => (
+                <li key={i} className="text-[11px] bg-rose-500/5 border border-rose-400/20 rounded p-2">
+                  <code className="text-rose-200">{s.project_id?.slice(0, 12) || '—'}</code>
+                  <span className="text-zinc-500 mx-2">·</span>
+                  <span className="text-zinc-400">{s.snippet?.slice(0, 200)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// LiveView — iframe preview of a project + chat side-by-side for
+// real-time troubleshooting with the owner.
+// ═════════════════════════════════════════════════════════════════
+function LiveView({
+  project, projectDetail, messages, busy, input, setInput, send,
+  attachedFile, setAttachedFile, fileInputRef, onFileSelect,
+  recording, recElapsed, startRecording, stopRecording,
+}) {
+  if (!project) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-zinc-950 p-6" data-testid="live-empty">
+        <div className="text-center max-w-md">
+          <Tv2 className="w-16 h-16 mx-auto mb-4 text-rose-400/30" />
+          <p className="text-zinc-200 font-bold text-lg mb-2">اختر مشروعاً أولاً</p>
+          <p className="text-xs text-zinc-500">
+            افتح قائمة «المشاريع» من الأعلى واختر مشروعاً عشان نشوفه لايف ونعالج أي مشكلة معاً.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const liveUrl = projectDetail?.live_url || (project?.published_slug ? `https://zenrex.ai/s/${project.published_slug}` : null);
+
+  return (
+    <div className="flex-1 grid lg:grid-cols-[1fr,460px] grid-cols-1 bg-zinc-950" data-testid="live-view">
+      {/* Live iframe */}
+      <div className="flex flex-col border-l border-zinc-800">
+        <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900/60 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-rose-200">
+            <Tv2 className="w-3.5 h-3.5" />
+            <span className="font-bold">{project.name}</span>
+            {projectDetail && (
+              <span className="text-zinc-500">· v{projectDetail.published_version || '—'} · {projectDetail.page_count || 0} صفحة</span>
             )}
           </div>
-
-          {/* Input */}
-          <div className="border-t border-zinc-800 p-3 sm:p-4 bg-zinc-950/80 backdrop-blur">
-            <div className="flex items-end gap-2 max-w-4xl mx-auto">
-              <textarea
-                data-testid="owner-chat-input"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-                placeholder={activeProject ? `اسأل عن "${activeProject.name}"...` : 'اكتب أمرك للمهندس...'}
-                rows={2}
-                className="flex-1 bg-zinc-900 border border-zinc-700 focus:border-amber-400/50 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={send}
-                disabled={busy || !input.trim()}
-                data-testid="owner-chat-send"
-                className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <Send className="w-4 h-4" />
-                <span>إرسال</span>
-              </button>
-            </div>
-          </div>
-        </main>
-
-        {/* Right: Preview + sessions */}
-        <aside className="hidden lg:flex flex-col border-r border-zinc-800 bg-zinc-900/30 overflow-hidden" data-testid="preview-pane">
-          {activeProject ? (
-            <>
-              <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                  <Eye className="w-3 h-3" /> معاينة حية
-                </div>
-                {projectDetail && (
-                  <span className="text-[10px] text-zinc-500">
-                    v{projectDetail.published_version || '—'} · {projectDetail.page_count || 0} صفحة
-                  </span>
-                )}
-              </div>
-              {liveUrl ? (
-                <iframe
-                  src={liveUrl}
-                  title="project-preview"
-                  className="flex-1 w-full bg-white"
-                  data-testid="project-preview-iframe"
-                />
-              ) : (
-                <div className="flex-1 flex items-center justify-center text-zinc-600 text-xs p-6 text-center">
-                  لم يُنشر هذا المشروع بعد — لا توجد معاينة حية.
-                </div>
-              )}
-              {projectDetail && (
-                <div className="border-t border-zinc-800 p-3 text-[11px] space-y-1 text-zinc-400 bg-zinc-950/60">
-                  <div><span className="text-zinc-600">ID:</span> <code className="text-zinc-300">{activeProject.id?.slice(0, 12)}</code></div>
-                  <div><span className="text-zinc-600">المالك:</span> {projectDetail.owner_email || '—'}</div>
-                  <div><span className="text-zinc-600">حجم HTML:</span> {projectDetail.html_size?.toLocaleString() || 0} حرف</div>
-                  <div><span className="text-zinc-600">آخر تحديث:</span> {fmt(projectDetail.updated_at)}</div>
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div className="px-3 py-2 border-b border-zinc-800 text-xs text-zinc-400 flex items-center gap-1.5">
-                <FolderOpen className="w-3 h-3" /> محادثاتي السابقة
-              </div>
-              <div className="flex-1 overflow-y-auto p-2">
-                {sessions.length === 0 ? (
-                  <p className="text-xs text-zinc-600 px-2 py-6 text-center">لا توجد محادثات بعد.</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {sessions.map((s) => (
-                      <li key={s.id}>
-                        <button
-                          type="button"
-                          onClick={() => openSession(s.id)}
-                          data-testid={`session-${s.id}`}
-                          className={`w-full text-right text-xs px-3 py-2 rounded-lg transition-all ${
-                            activeSession === s.id
-                              ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-400/30'
-                              : 'hover:bg-zinc-800/60 text-zinc-400 border border-transparent'
-                          }`}
-                        >
-                          <div className="font-bold truncate">{s.messages?.[0]?.content?.slice(0, 40) || 'محادثة'}</div>
-                          <div className="text-[10px] text-zinc-600 mt-0.5">{fmt(s.updated_at)}</div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div className="border-t border-zinc-800 p-3 bg-zinc-950/60">
-                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  <BarChart3 className="w-3 h-3" /> الأدوات (16)
-                </h4>
-                <ul className="text-[10px] text-zinc-500 space-y-0.5">
-                  <li className="text-zinc-400 font-bold mt-1">قراءة:</li>
-                  <li>· list_all_projects · search_projects</li>
-                  <li>· get_project_summary · read_project_page</li>
-                  <li>· read_full_html · get_project_owner</li>
-                  <li>· get_platform_stats · read_server_logs</li>
-                  <li className="text-amber-400 font-bold mt-1">🆕 تحليل ميداني:</li>
-                  <li>· get_daily_report · analyze_ai_errors</li>
-                  <li>· list_pending_patches · list_maintenance_modes</li>
-                  <li className="text-emerald-400 font-bold mt-1">🆕 تحكم:</li>
-                  <li>· propose_system_prompt_patch</li>
-                  <li>· enter/exit_maintenance_mode</li>
-                  <li>· apply_fix_to_project · republish_project</li>
-                  <li>· resume_project_ai · run_browser_audit</li>
-                </ul>
-              </div>
-            </>
+          {liveUrl && (
+            <a href={liveUrl} target="_blank" rel="noreferrer" className="text-emerald-300 hover:text-emerald-200 flex items-center gap-1 text-[11px]" data-testid="live-open-tab">
+              <ExternalLink className="w-3 h-3" /> فتح في تبويب جديد
+            </a>
           )}
-        </aside>
+        </div>
+        {liveUrl ? (
+          <iframe
+            src={liveUrl}
+            title="live-preview"
+            className="flex-1 w-full bg-white"
+            data-testid="live-iframe"
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm p-6 text-center">
+            هذا المشروع لم يُنشر بعد — لا توجد معاينة لايف. اطلب من المهندس فحصه عبر الشات.
+          </div>
+        )}
+      </div>
+
+      {/* Side chat (compact) */}
+      <div className="flex flex-col border-r border-zinc-800 bg-zinc-950/80">
+        <div className="px-3 py-2 border-b border-zinc-800 text-xs font-bold text-amber-300 flex items-center gap-2">
+          <Wrench className="w-3.5 h-3.5" /> شات معالجة مباشر
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {messages.length === 0 ? (
+            <p className="text-xs text-zinc-600 text-center py-8">
+              اكتب وش المشكلة وأنا أحلّلها وأقترح حل (أو أنفّذ مباشرة لو أمرتني).
+            </p>
+          ) : (
+            messages.slice(-15).map((m, i) => (
+              <div key={i} className={m.role === 'user' ? 'flex justify-start' : 'flex justify-end'}>
+                <div className={`max-w-[90%] rounded-lg px-3 py-2 text-[11px] leading-6 whitespace-pre-wrap ${
+                  m.role === 'user' ? 'bg-emerald-500/15 text-emerald-100' : 'bg-zinc-900 text-zinc-200'
+                }`}>
+                  {m.content?.slice(0, 800)}
+                </div>
+              </div>
+            ))
+          )}
+          {busy && <p className="text-xs text-zinc-500 animate-pulse text-left">المهندس يحلّل...</p>}
+        </div>
+        <Composer
+          input={input} setInput={setInput} send={send} busy={busy}
+          attachedFile={attachedFile} setAttachedFile={setAttachedFile}
+          fileInputRef={fileInputRef} onFileSelect={onFileSelect}
+          recording={recording} recElapsed={recElapsed}
+          startRecording={startRecording} stopRecording={stopRecording}
+          activeProject={project}
+        />
       </div>
     </div>
   );

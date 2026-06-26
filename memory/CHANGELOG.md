@@ -1,6 +1,33 @@
 # Zitex Changelog
 
 
+### 🎨 Feb 2026 — Owner Engineer Portal V3 — Tab Layout + Voice + File Upload + Live View
+
+User feedback (verbatim): "حط لها اختصار في الأعلى ... الشات واسع لا تخليه نازل للاسفل ... ضيف لي خاصية اضافة ملف. واضافة تسجيل ... حط لي كذلك خاصية اللايف ... المشاريع صغرها خليها اصغر بحيث ان الشات يكون اوسع ... حط لي لسان للمعاينة اللايف ... حط لي قسم للتقارير الفعلية".
+
+Complete UX rebuild of `/app/frontend/src/pages/OwnerEngineer.js`:
+
+**Topbar (compact, dropdowns):**
+- 📁 «المشاريع» dropdown — searchable list of every project (was a wide left sidebar — now collapses into a header-pinned 320px popover).
+- 📜 «السابقات» dropdown — past chat sessions (was right sidebar — now header-pinned popover with "+ جديدة" inline button).
+- `+ جديدة` quick-new-chat button + Independence badge + stats summary.
+
+**3 Tabs (under the topbar):**
+- 💬 «محادثة» — wide centered chat (max-w-4xl), full-screen.
+- 📊 «تقارير فعلية» — `DashboardStrip` + 2-column grid showing recent published projects + AI error patterns + tool failure samples + recommendations.
+- 📺 «لايف» — split-view: project iframe on left + compact side-chat on right, for real-time troubleshooting with the owner while watching the customer's site. Falls back to an empty-state if no project selected.
+
+**New Composer (used in both Chat tab + Live tab side-chat):**
+- 📎 **File upload** — `<input type=file>` accepts images/PDF/text/code/zip up to 10MB. Attached file shows as a chip with name/size/remove-button. Filename + size + type are appended to the message text so the AI knows.
+- 🎙️ **Voice recording** — `MediaRecorder` API records `audio/webm` → uploads to `/api/stt/transcribe` (Whisper) → transcribed text inserted into the composer. Recording indicator with mm:ss timer + stop button.
+- Textarea + Send button (Enter to send, Shift+Enter for newline).
+
+**Other tweaks:**
+- Service worker bumped to `v15-2026-06-26-engineer-redesign` to force PWA cache refresh.
+- Lint clean. Deployed to https://zenrex.ai. Health check 200.
+
+
+
 ### 🛠️ Feb 2026 — Owner Engineer Portal V2 + Anti-Stoppage Guard + Maintenance Mode
 
 **Three landmark capabilities shipped in one wave:**
