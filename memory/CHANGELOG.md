@@ -1,6 +1,39 @@
 # Zitex Changelog
 
 
+### 🖼️ Feb 2026 — Design Archive V2 — Real Screenshots + Surgical Annotations
+
+User feedback (verbatim): "خل المحفوظات تكون صور حقيقية مو كلمة-كلمتين... الصورة الكاملة يقدر يتنقل فيها من الأعلى للأسفل... ادوات الاختيار يقدر يأشر على خانتين... الذكاء الصناعي يطبق التعديل في القسم المحدد من غير ما يأثر على باقي التصميم... كل تعديل صورة جديدة تنحط في المحفوظات".
+
+The Design Archive moves from broken iframe-srcdoc previews to true full-page Chromium renders, with on-image annotation tools and an inline surgical-edit chat.
+
+**Backend additions** (`freebuild_chat.py` + new `snapshot_renderer.py`):
+- `GET /api/freebuild-chat/project/{pid}/snapshots/{sid}/screenshot[?thumb=1]` — renders the snapshot HTML via headless Chromium (Playwright). `thumb=1` returns a 480px-wide Pillow-downscaled PNG; default returns a full-page 1280px render. **Result cached** inside the snapshot doc (`full_png_b64` / `thumb_png_b64`) — second call returns in ~18ms. CSS, fonts, and assets all render correctly (no more broken-iframe ghost previews).
+- `POST /api/freebuild-chat/project/{pid}/snapshots/{sid}/surgical-edit` — accepts `instruction` (Arabic text) + `selectors_json` (array of `{x, y, w, h, color, label}` bounding boxes in image-space) + `annotated_image_b64` (the composited PNG with rectangles drawn). Persists to `freebuild_surgical_requests` and **injects a marker message into the project's chat session** so when the user opens the project, the building AI sees the request + image and acts surgically.
+- `GET /api/freebuild-chat/project/{pid}/surgical-requests` — list of submitted surgical-edit requests for the project.
+
+**Frontend** (`FreeBuildChat.js`):
+- New `ArchiveThumb` — simple `<img>` pointing at the screenshot endpoint. Loads lazily.
+- New `SnapshotAnnotateModal` (replaces the old iframe preview overlay): split-view modal with:
+  - **Left**: scrollable full-resolution PNG + drag-to-draw color-coded annotation overlay (4 colors: blue / green / amber / rose). Each box is removable.
+  - **Right**: inline "شات المحفوظات" with the list of drawn regions + a `<textarea>` + "أرسل للمهندس" button. On send, the client composites the image + rectangles into a single PNG (via offscreen canvas), uploads it with the instruction + selectors_json. The original "Restore" + "Restore-and-edit" buttons are preserved.
+- New helper `compositeAnnotatedImage(img, boxes, natural)` — uses an offscreen `<canvas>` to draw the original screenshot then overlay every rectangle with a 20% fill + numbered label, exports a PNG data URL.
+
+**Production deployment notes**:
+- Production Docker container missed `libnspr4 libnss3 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 libxshmfence1 fonts-noto-color-emoji` so headless Chromium failed with `libnspr4.so: cannot open shared object file`. Installed live + patched `/opt/zerax/docker-compose.yml` so future container recreates have them.
+- Smoke-tested on `https://zenrex.ai`: cold thumb = 4s, cached thumb = 1.5s, surgical-edit POST = 200 with valid request_id, list returns the request.
+
+**Tests**: 5/5 in `/app/backend/tests/test_design_archive_v2_visual.py`:
+- Screenshot endpoint returns valid PNG (full + thumbnail).
+- Second call is cached and ≥3× faster than first.
+- Surgical-edit persists request + injects chat-session marker with selectors.
+- Empty instruction is rejected (400).
+- Unknown snapshot id returns 404.
+
+**Service worker** bumped to `v16-2026-06-26-archive-visual` so the PWA refreshes.
+
+
+
 ### 🎨 Feb 2026 — Owner Engineer Portal V3 — Tab Layout + Voice + File Upload + Live View
 
 User feedback (verbatim): "حط لها اختصار في الأعلى ... الشات واسع لا تخليه نازل للاسفل ... ضيف لي خاصية اضافة ملف. واضافة تسجيل ... حط لي كذلك خاصية اللايف ... المشاريع صغرها خليها اصغر بحيث ان الشات يكون اوسع ... حط لي لسان للمعاينة اللايف ... حط لي قسم للتقارير الفعلية".

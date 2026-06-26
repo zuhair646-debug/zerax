@@ -1268,13 +1268,10 @@ function DesignArchiveTab({ projectId, onRestored, onPrefillChat, switchToChat, 
     return r.json();
   };
 
-  const openPreview = async (sid) => {
-    try {
-      const d = await fetchHtml(sid);
-      setPreviewing({ id: sid, html: d.html || '' });
-    } catch {
-      toast.error('فشلت المعاينة');
-    }
+  const openPreview = (sid) => {
+    // The new modal fetches the PNG directly via /screenshot endpoint, so we
+    // only need the snapshot id here (no need to pre-fetch HTML anymore).
+    setPreviewing({ id: sid });
   };
 
   const restore = async (sid, alsoPrefillChat = false) => {
@@ -1426,7 +1423,7 @@ function DesignArchiveTab({ projectId, onRestored, onPrefillChat, switchToChat, 
                   style={{ aspectRatio: '16 / 10' }}
                   title="معاينة بالحجم الكامل"
                 >
-                  <ArchiveThumb projectId={projectId} sid={s.id} fetchHtml={fetchHtml} />
+                  <ArchiveThumb projectId={projectId} sid={s.id} />
                   {s.is_baseline && (
                     <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-emerald-500 text-black text-[10px] font-black flex items-center gap-1">
                       <Pin className="w-3 h-3" /> الأساس
@@ -1481,80 +1478,410 @@ function DesignArchiveTab({ projectId, onRestored, onPrefillChat, switchToChat, 
         </div>
       )}
 
-      {/* Full-size preview overlay */}
+      {/* Full-size preview overlay (image + annotation + inline chat) */}
       {previewing && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setPreviewing(null)}
-          data-testid="archive-preview-overlay"
-        >
-          <div
-            className="bg-zinc-950 border border-amber-400/30 rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
-                <Eye className="w-4 h-4" /> معاينة النسخة بالحجم الكامل
-              </h3>
-              <button
-                type="button"
-                onClick={() => setPreviewing(null)}
-                className="text-zinc-400 hover:text-white p-1"
-                data-testid="archive-preview-close"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <iframe
-              title="archive-preview-large"
-              srcDoc={previewing.html}
-              sandbox=""
-              className="w-full h-[75vh] bg-white border-0"
-              data-testid="archive-preview-iframe"
-            />
-            <div className="px-4 py-3 border-t border-white/10 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => restore(previewing.id, false)}
-                disabled={busy}
-                data-testid={`archive-preview-restore-${previewing.id}`}
-                className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
-              >
-                <RotateCcw className="w-3.5 h-3.5" /> استرجاع كامل
-              </button>
-              <button
-                type="button"
-                onClick={() => restore(previewing.id, true)}
-                disabled={busy}
-                data-testid={`archive-preview-edit-${previewing.id}`}
-                className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-100 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
-              >
-                <Pencil className="w-3.5 h-3.5" /> استرجع وعدّل
-              </button>
-            </div>
-          </div>
-        </div>
+        <SnapshotAnnotateModal
+          projectId={projectId}
+          snapshot={previewing}
+          onClose={() => setPreviewing(null)}
+          onRestore={(alsoEdit) => restore(previewing.id, alsoEdit)}
+          busy={busy}
+          onSurgicalSent={() => { refresh(); }}
+        />
       )}
     </div>
   );
 }
 
-// Thumbnail (lazy-loaded HTML in an iframe scaled down so the grid stays fast)
-function ArchiveThumb({ projectId, sid, fetchHtml }) {
-  const [html, setHtml] = useState(null);
+// ─────────────────────────────────────────────────────────────
+// SnapshotAnnotateModal — Real PNG preview + canvas annotation
+// (draw colored rectangles) + inline AI chat for surgical edits.
+// User draws boxes around sections, types instruction, hits send.
+// Backend renders annotated image + injects surgical request into
+// the project's chat session.
+// ─────────────────────────────────────────────────────────────
+function SnapshotAnnotateModal({ projectId, snapshot, onClose, onRestore, busy, onSurgicalSent }) {
+  const [boxes, setBoxes] = useState([]);     // {x,y,w,h,color,label}
+  const [activeColor, setActiveColor] = useState('blue');
+  const [drawing, setDrawing] = useState(null); // {x,y,w,h} while dragging
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 });
+
+  const imgRef = useRef(null);
+  const containerRef = useRef(null);
+
+  const srcImg = `${API}/api/freebuild-chat/project/${projectId}/snapshots/${snapshot.id}/screenshot`;
+
+  // ─── Drawing handlers (image-space coordinates) ──────────────────
+  const startBox = (e) => {
+    if (!imgRef.current) return;
+    const rect = imgRef.current.getBoundingClientRect();
+    const scaleX = imgNatural.w / rect.width;
+    const scaleY = imgNatural.h / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    setDrawing({ x, y, w: 0, h: 0 });
+  };
+  const moveBox = (e) => {
+    if (!drawing || !imgRef.current) return;
+    const rect = imgRef.current.getBoundingClientRect();
+    const scaleX = imgNatural.w / rect.width;
+    const scaleY = imgNatural.h / rect.height;
+    const cx = (e.clientX - rect.left) * scaleX;
+    const cy = (e.clientY - rect.top) * scaleY;
+    setDrawing((d) => ({ ...d, w: cx - d.x, h: cy - d.y }));
+  };
+  const endBox = () => {
+    if (!drawing) return;
+    const b = { ...drawing };
+    if (b.w < 0) { b.x += b.w; b.w = -b.w; }
+    if (b.h < 0) { b.y += b.h; b.h = -b.h; }
+    if (b.w > 20 && b.h > 20) {
+      setBoxes((arr) => [...arr, {
+        x: Math.round(b.x), y: Math.round(b.y),
+        w: Math.round(b.w), h: Math.round(b.h),
+        color: activeColor, label: '',
+      }]);
+    }
+    setDrawing(null);
+  };
+
+  const clearBoxes = () => setBoxes([]);
+  const removeBox = (idx) => setBoxes((arr) => arr.filter((_, i) => i !== idx));
+
+  const sendSurgical = async () => {
+    if (sending) return;
+    if (!text.trim() && boxes.length === 0) {
+      toast.error('اكتب تعليمة أو حدد على الأقل منطقة واحدة');
+      return;
+    }
+    setSending(true);
+    try {
+      // 1) Composite annotated image (image + colored rectangles drawn) to PNG.
+      const annotatedDataUrl = await compositeAnnotatedImage(imgRef.current, boxes, imgNatural);
+      // 2) POST to backend.
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('instruction', text.trim() || '(تعليمة بصرية فقط — حدّد المناطق التي عليها)');
+      fd.append('selectors_json', JSON.stringify(boxes));
+      if (annotatedDataUrl) fd.append('annotated_image_b64', annotatedDataUrl);
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/snapshots/${snapshot.id}/surgical-edit`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل إرسال الطلب');
+      toast.success('✅ تم إرسال طلب التعديل الجراحي للمهندس');
+      setText('');
+      setBoxes([]);
+      if (onSurgicalSent) onSurgicalSent();
+      onClose();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex items-center justify-center p-3"
+      onClick={onClose}
+      data-testid="archive-preview-overlay"
+    >
+      <div
+        className="bg-zinc-950 border border-amber-400/30 rounded-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr,380px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Left: image with annotation canvas */}
+        <div className="flex flex-col border-l border-white/10 min-h-0">
+          {/* Header */}
+          <div className="px-4 py-2.5 border-b border-white/10 flex items-center justify-between flex-wrap gap-2">
+            <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
+              <Eye className="w-4 h-4" /> معاينة + أدوات تحديد
+            </h3>
+            {/* Toolbar */}
+            <div className="flex items-center gap-1 text-[11px]">
+              <span className="text-zinc-500 ml-2">قلم:</span>
+              <button
+                type="button"
+                onClick={() => setActiveColor('blue')}
+                data-testid="annotate-color-blue"
+                className={`px-2.5 py-1 rounded-md border font-bold flex items-center gap-1 ${activeColor === 'blue' ? 'bg-blue-500 text-white border-blue-300' : 'bg-zinc-900 text-blue-300 border-blue-400/40 hover:bg-blue-500/20'}`}
+              >
+                <span className="w-2.5 h-2.5 rounded-sm bg-blue-400" /> أزرق
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveColor('green')}
+                data-testid="annotate-color-green"
+                className={`px-2.5 py-1 rounded-md border font-bold flex items-center gap-1 ${activeColor === 'green' ? 'bg-emerald-500 text-white border-emerald-300' : 'bg-zinc-900 text-emerald-300 border-emerald-400/40 hover:bg-emerald-500/20'}`}
+              >
+                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400" /> أخضر
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveColor('amber')}
+                data-testid="annotate-color-amber"
+                className={`px-2.5 py-1 rounded-md border font-bold flex items-center gap-1 ${activeColor === 'amber' ? 'bg-amber-500 text-zinc-950 border-amber-300' : 'bg-zinc-900 text-amber-300 border-amber-400/40 hover:bg-amber-500/20'}`}
+              >
+                <span className="w-2.5 h-2.5 rounded-sm bg-amber-400" /> أصفر
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveColor('rose')}
+                data-testid="annotate-color-rose"
+                className={`px-2.5 py-1 rounded-md border font-bold flex items-center gap-1 ${activeColor === 'rose' ? 'bg-rose-500 text-white border-rose-300' : 'bg-zinc-900 text-rose-300 border-rose-400/40 hover:bg-rose-500/20'}`}
+              >
+                <span className="w-2.5 h-2.5 rounded-sm bg-rose-400" /> أحمر
+              </button>
+              <button
+                type="button"
+                onClick={clearBoxes}
+                disabled={boxes.length === 0}
+                data-testid="annotate-clear"
+                className="px-2 py-1 rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40 font-bold"
+              >
+                مسح ({boxes.length})
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                data-testid="archive-preview-close"
+                className="text-zinc-400 hover:text-white p-1 mr-2"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable image area */}
+          <div
+            ref={containerRef}
+            className="flex-1 overflow-auto bg-zinc-900"
+            style={{ cursor: 'crosshair' }}
+          >
+            <div className="relative inline-block min-w-full">
+              {!imgLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
+                  <Loader2 className="w-7 h-7 animate-spin text-amber-400" />
+                  <span className="text-xs text-zinc-400 mr-2">يولّد الصورة...</span>
+                </div>
+              )}
+              <img
+                ref={imgRef}
+                src={srcImg}
+                alt="snapshot full"
+                className="block max-w-full select-none"
+                draggable={false}
+                onLoad={(e) => {
+                  setImgLoaded(true);
+                  setImgNatural({ w: e.target.naturalWidth, h: e.target.naturalHeight });
+                }}
+                onMouseDown={startBox}
+                onMouseMove={moveBox}
+                onMouseUp={endBox}
+                onMouseLeave={() => drawing && endBox()}
+                data-testid="archive-preview-image"
+              />
+              {/* Render existing boxes (image-space → image-rendered-space). */}
+              {imgLoaded && imgRef.current && [...boxes, ...(drawing ? [{ ...drawing, color: activeColor, _live: true }] : [])].map((b, i) => {
+                const rect = imgRef.current.getBoundingClientRect();
+                const scaleX = rect.width / imgNatural.w;
+                const scaleY = rect.height / imgNatural.h;
+                const colors = {
+                  blue: 'border-blue-400 bg-blue-400/15',
+                  green: 'border-emerald-400 bg-emerald-400/15',
+                  amber: 'border-amber-400 bg-amber-400/15',
+                  rose: 'border-rose-400 bg-rose-400/15',
+                };
+                const w = Math.abs(b.w) * scaleX;
+                const h = Math.abs(b.h) * scaleY;
+                const x = (b.w < 0 ? b.x + b.w : b.x) * scaleX;
+                const y = (b.h < 0 ? b.y + b.h : b.y) * scaleY;
+                return (
+                  <div
+                    key={i}
+                    className={`absolute border-2 ${colors[b.color] || colors.blue} pointer-events-none`}
+                    style={{ left: x, top: y, width: w, height: h }}
+                    data-testid={b._live ? 'annotate-drawing' : `annotate-box-${i}`}
+                  >
+                    {!b._live && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); removeBox(i); }}
+                        className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-rose-500 text-white text-xs flex items-center justify-center pointer-events-auto hover:bg-rose-400 font-bold"
+                        title="حذف"
+                      >×</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Bottom: restore buttons */}
+          <div className="px-4 py-2 border-t border-white/10 flex items-center justify-between gap-2 bg-zinc-950">
+            <p className="text-[10px] text-zinc-500">
+              💡 اسحب على الصورة لرسم مربع. اختر لون. اكتب أمرك على اليمين.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onRestore(false)}
+                disabled={busy}
+                data-testid={`archive-preview-restore-${snapshot.id}`}
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 text-[11px] font-bold flex items-center gap-1 disabled:opacity-50"
+              >
+                <RotateCcw className="w-3 h-3" /> استرجاع كامل
+              </button>
+              <button
+                type="button"
+                onClick={() => onRestore(true)}
+                disabled={busy}
+                data-testid={`archive-preview-edit-${snapshot.id}`}
+                className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-100 text-[11px] font-bold flex items-center gap-1 disabled:opacity-50"
+              >
+                <Pencil className="w-3 h-3" /> استرجع وعدّل
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: inline surgical chat */}
+        <div className="flex flex-col border-r border-white/10 bg-zinc-950/80 min-h-0">
+          <div className="px-3 py-2 border-b border-white/10">
+            <h4 className="text-sm font-bold text-amber-200 flex items-center gap-1.5">
+              💬 شات المحفوظات
+            </h4>
+            <p className="text-[10px] text-zinc-500 leading-5 mt-1">
+              حدّد المناطق على الصورة (بألوان مختلفة)، ثم اكتب وش تبي تعدّل بالضبط. الذكاء الصناعي راح يطبّق التعديل على هالمناطق فقط بدون كسر باقي التصميم.
+            </p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {boxes.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-xs text-zinc-500 leading-6">
+                  ما حددت شي بعد.<br />ارسم مربع حول العنصر اللي تبي تعدّله.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">المناطق المحددة:</p>
+                {boxes.map((b, i) => {
+                  const colorDot = {
+                    blue: 'bg-blue-400', green: 'bg-emerald-400',
+                    amber: 'bg-amber-400', rose: 'bg-rose-400',
+                  }[b.color] || 'bg-zinc-400';
+                  return (
+                    <div key={i} className="bg-zinc-900/80 border border-white/10 rounded-lg p-2 flex items-center gap-2 text-xs">
+                      <span className={`w-2 h-2 rounded-full ${colorDot}`} />
+                      <span className="text-zinc-300 flex-1">منطقة #{i + 1}</span>
+                      <span className="text-zinc-600 text-[10px]">{b.w}×{b.h}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeBox(i)}
+                        className="text-zinc-500 hover:text-rose-300"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+
+          {/* Composer */}
+          <div className="p-3 border-t border-white/10 bg-zinc-950">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="مثال: غيّر لون قسم مكتبة الأفلام لأخضر فاتح، وكبّر العنوان..."
+              data-testid="surgical-chat-input"
+              rows={3}
+              dir="rtl"
+              className="w-full bg-zinc-900 border border-white/10 focus:border-amber-400/40 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none mb-2"
+            />
+            <button
+              type="button"
+              onClick={sendSurgical}
+              disabled={sending || (!text.trim() && boxes.length === 0)}
+              data-testid="surgical-chat-send"
+              className="w-full px-3 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              {sending ? 'يرسل...' : 'أرسل للمهندس'}
+            </button>
+            <p className="text-[10px] text-zinc-600 mt-1.5 text-center">
+              التعديل راح يصير في تصميمك اللايف، وراح ينحفظ snapshot جديد تلقائياً.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Composite the image + drawn rectangles into a single PNG data URL.
+// We render at the image's natural size to preserve quality, then draw
+// each box at its image-space coordinates so the AI sees exactly what
+// the user pointed at.
+async function compositeAnnotatedImage(imgEl, boxes, natural) {
+  try {
+    if (!imgEl || !natural?.w || !natural?.h) return '';
+    const canvas = document.createElement('canvas');
+    canvas.width = natural.w;
+    canvas.height = natural.h;
+    const ctx = canvas.getContext('2d');
+
+    // Re-fetch the image to ensure we have a clean (non-CORS-tainted) copy.
+    // The screenshot endpoint serves with same-origin so canvas export works.
+    const fresh = new Image();
+    fresh.crossOrigin = 'anonymous';
+    fresh.src = imgEl.src;
+    await new Promise((resolve, reject) => {
+      fresh.onload = resolve;
+      fresh.onerror = reject;
+    });
+    ctx.drawImage(fresh, 0, 0, natural.w, natural.h);
+
+    const palette = {
+      blue: '#60a5fa', green: '#34d399', amber: '#fbbf24', rose: '#fb7185',
+    };
+    ctx.lineWidth = Math.max(4, natural.w / 320);
+    boxes.forEach((b, i) => {
+      const stroke = palette[b.color] || palette.blue;
+      ctx.strokeStyle = stroke;
+      ctx.fillStyle = stroke + '33'; // 20% alpha overlay
+      const x = b.w < 0 ? b.x + b.w : b.x;
+      const y = b.h < 0 ? b.y + b.h : b.y;
+      const w = Math.abs(b.w);
+      const h = Math.abs(b.h);
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+      // Number label.
+      ctx.fillStyle = stroke;
+      ctx.fillRect(x, y - 28, 36, 28);
+      ctx.fillStyle = '#0a0a0a';
+      ctx.font = 'bold 20px system-ui';
+      ctx.fillText(String(i + 1), x + 10, y - 8);
+    });
+    // toDataURL on tainted canvas would throw; if so, return ''.
+    return canvas.toDataURL('image/png');
+  } catch {
+    return '';
+  }
+}
+
+// Thumbnail — uses the real PNG render endpoint (CSS + images + fonts).
+function ArchiveThumb({ projectId, sid }) {
   const [err, setErr] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const d = await fetchHtml(sid);
-        if (alive) setHtml(d.html || '');
-      } catch {
-        if (alive) setErr(true);
-      }
-    })();
-    return () => { alive = false; };
-  }, [projectId, sid, fetchHtml]);
+  const src = `${API}/api/freebuild-chat/project/${projectId}/snapshots/${sid}/screenshot?thumb=1`;
   if (err) {
     return (
       <div className="absolute inset-0 flex items-center justify-center text-zinc-400 text-xs">
@@ -1562,30 +1889,15 @@ function ArchiveThumb({ projectId, sid, fetchHtml }) {
       </div>
     );
   }
-  if (html === null) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center">
-        <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
-      </div>
-    );
-  }
-  // Use srcDoc with a scaled wrapper. Aspect-ratio container handles sizing;
-  // we render at 1280px wide and CSS scale it down to fit the card.
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none bg-white">
-      <iframe
-        title={`thumb-${sid}`}
-        srcDoc={html}
-        sandbox=""
-        scrolling="no"
-        style={{
-          width: '1280px',
-          height: '800px',
-          border: 0,
-          transformOrigin: 'top left',
-          transform: 'scale(0.28)',
-          pointerEvents: 'none',
-        }}
+    <div className="absolute inset-0 overflow-hidden bg-zinc-900">
+      <img
+        src={src}
+        alt="snapshot thumbnail"
+        loading="lazy"
+        onError={() => setErr(true)}
+        className="w-full h-full object-cover object-top"
+        crossOrigin="anonymous"
       />
     </div>
   );

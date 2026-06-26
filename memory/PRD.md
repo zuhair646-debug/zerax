@@ -13,21 +13,17 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **🗂️ Design Archive (المحفوظات)** — unlimited visual snapshot history per project, baseline-pinning, visual gallery + restore + restore-and-edit (2026-02). See CHANGELOG for details.
 - **Removed (2026-02):** `AdminAIMode` (3-model picker), `FreebuildLab`, hero "AI Command Center" + tiles for `autocoder / training / learning / ai-readiness` (replaced by the unified Owner Engineer).
 
-## Next Tasks (post-Owner-Engineer-V2)
-- 🔴 **P0** — إعادة بناء قسم المحفوظات (طلب المستخدم بعد إصلاح الـ stoppage):
-  - تقليل التكرار (hash-dedup للـ snapshots)
-  - thumbnails مرئية فعلية (CSS inline بدل iframe srcdoc)
-  - layout: شريط محفوظات يمين + preview كامل قابل للـ scroll + شات جانبي مدمج
-  - selection tool (نقرة على عنصر) → يظهر في الشات الجانبي → يُرسل للـ AI كـ reference
-- 🟡 **P1** — أقسام برمجية جديدة (طلب المستخدم في خطة الانطلاق):
+## Next Tasks (post-Archive-V2)
+- 🟡 **P1 — تكامل الذكاء الصناعي البنّاء مع طلبات surgical-edit**: حالياً الطلب يُحقن كرسالة في شات المشروع. الخطوة التالية: لما المستخدم يفتح المشروع، الـ AI يرى الـ marker + image تلقائياً ويطبّق التعديل على المنطقة المحددة فقط. هذا يحتاج تعديل في `freebuild_agent.py` ليقرأ `annotated_image_b64` من collection `freebuild_surgical_requests` ويمرره كـ `image` block للـ Claude.
+- 🟡 **P1 — أقسام برمجية جديدة** (خطة الانطلاق):
   - **إكمال تطبيق موجود** (GitHub repo / ZIP upload → AI يفهم ويكمل)
   - **إعادة تصميم موقع موجود** (URL → AI يحلل ويعيد البناء)
   - **Backend/API فقط** (بدون UI)
 - 🟡 **P1** — فصل AI #1 (Customer Brain / Receptionist) من AI #3 (Builder).
 - 🟢 **P2** — Email Verification on signup via Resend.
 - 🟢 **P2** — CI/CD pipeline (GitHub Actions) replacing manual `deploy.sh`.
-- 🟢 **P2** — Refactor monolithic `freebuild_agent.py` (10k+ lines) and `freebuild_chat.py` (7.6k lines).
-- 🟢 **P2** — Migrate Archive thumbnail fetching to a `html_preview` field in the list endpoint to avoid N round-trips for 300+ snapshot projects.
+- 🟢 **P2** — Refactor monolithic `freebuild_agent.py` (10k+ lines) and `freebuild_chat.py` (8k lines).
+- 🟢 **P2** — Background-render every new snapshot so the first archive view is instant (today it's ~4s cold).
 - 🟢 **P2** — Replace `window.confirm()` in Archive restore with a shadcn `AlertDialog`.
 - ⚪ **Earlier issue (P2)** — `ownedMoviesList` in `profile.html` shows 0 items despite localStorage data.
 

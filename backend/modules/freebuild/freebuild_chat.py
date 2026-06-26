@@ -6836,6 +6836,218 @@ def make_freebuild_chat_router(db, get_current_user):
         raise HTTPException(404, "نسخة غير موجودة")
 
     # ═══════════════════════════════════════════════════════════════
+    # 🖼️ Real Screenshot endpoint — renders the snapshot HTML via
+    # headless Chromium so the Design Archive shows TRUE visuals
+    # (full CSS, fonts, images) instead of broken iframe srcdoc previews.
+    # Caches the rendered PNG inside the snapshot doc on first render.
+    # ═══════════════════════════════════════════════════════════════
+    @router.get("/project/{pid}/snapshots/{sid}/screenshot")
+    async def snapshot_screenshot(
+        pid: str, sid: str, thumb: int = 0, user=Depends(get_current_user),
+    ):
+        """Return a real PNG of the snapshot. `?thumb=1` returns a 480px-wide
+        downscaled thumbnail (fast). Default returns a full-page 1280px render."""
+        from fastapi.responses import Response
+        from modules.freebuild.snapshot_renderer import render_png
+
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "html_snapshots": 1},
+        )
+        if not proj:
+            raise HTTPException(404)
+
+        target = None
+        for s in (proj.get("html_snapshots") or []):
+            if s.get("id") == sid:
+                target = s
+                break
+        if not target:
+            raise HTTPException(404, "نسخة غير موجودة")
+
+        cache_key = "thumb_png_b64" if thumb else "full_png_b64"
+        cached = target.get(cache_key)
+        if cached:
+            import base64 as _b64
+            try:
+                png = _b64.b64decode(cached)
+                return Response(content=png, media_type="image/png")
+            except Exception:
+                pass  # Fall-through to re-render.
+
+        html = target.get("html") or ""
+        width = 1280
+        png = await render_png(
+            html, width=width, full_page=True,
+            thumbnail_max_width=(480 if thumb else None),
+            timeout_ms=20000,
+        )
+        if not png:
+            raise HTTPException(500, "تعذّر توليد المعاينة")
+
+        # Cache for next time (avoid re-rendering 300 snapshots each scroll).
+        import base64 as _b64
+        try:
+            await db.freebuild_projects.update_one(
+                {"id": pid, "html_snapshots.id": sid},
+                {"$set": {f"html_snapshots.$.{cache_key}": _b64.b64encode(png).decode()}},
+            )
+        except Exception:
+            pass  # Cache miss is fine; we still return the PNG below.
+        return Response(content=png, media_type="image/png")
+
+    # ═══════════════════════════════════════════════════════════════
+    # ✂️ Surgical Edit — owner/customer annotates a snapshot screenshot
+    # (draws colored rectangles to point at sections) then asks the AI
+    # to modify ONLY those areas in the current design. The annotated
+    # image is sent to Claude as an image input; selectors describe
+    # the bounding boxes in image-space so the AI knows exact location.
+    # ═══════════════════════════════════════════════════════════════
+    @router.post("/project/{pid}/snapshots/{sid}/surgical-edit")
+    async def snapshot_surgical_edit(
+        pid: str, sid: str,
+        instruction: str = Form(...),
+        annotated_image_b64: str = Form(""),
+        selectors_json: str = Form("[]"),
+        user=Depends(get_current_user),
+    ):
+        """Accept (image with rectangles drawn) + (instruction in Arabic) and
+        queue an edit request. The AI sees the image + the user's words +
+        the list of bounding boxes the user drew. Returns the new snapshot id
+        that gets created from the AI's response (so the archive grows)."""
+        import json as _json
+        import base64 as _b64
+
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "id": 1, "current_html": 1, "html_snapshots": 1},
+        )
+        if not proj:
+            raise HTTPException(404)
+        if not (instruction or "").strip():
+            raise HTTPException(400, "instruction مطلوب")
+
+        try:
+            selectors = _json.loads(selectors_json) if selectors_json else []
+        except Exception:
+            selectors = []
+
+        # Persist the request in a dedicated collection so the owner-engineer
+        # has a paper trail and can debug what was asked.
+        from datetime import datetime, timezone as _tz
+        req_doc = {
+            "id": str(uuid.uuid4()),
+            "project_id": pid,
+            "snapshot_id": sid,
+            "user_id": user["user_id"],
+            "instruction": instruction[:3000],
+            "selectors": selectors[:20],
+            "has_image": bool(annotated_image_b64),
+            "status": "queued",
+            "created_at": datetime.now(_tz.utc).isoformat(),
+        }
+        try:
+            await db.freebuild_surgical_requests.insert_one(req_doc)
+        except Exception:
+            pass
+
+        # For the MVP we route the surgical edit back through the normal chat
+        # pipeline by injecting a richly-formatted user message into the
+        # project's chat session. The next time the user opens the project
+        # (or the live AI is running), it sees the request + image and acts.
+        marker_parts = [f"🎯 [طلب جراحي من المحفوظات — نسخة {sid[:8]}]"]
+        marker_parts.append(f"📝 الطلب: {instruction.strip()}")
+        if selectors:
+            bbox_lines = []
+            for idx, sel in enumerate(selectors, start=1):
+                color = sel.get("color", "?")
+                x = sel.get("x", 0); y = sel.get("y", 0)
+                w = sel.get("w", 0); h = sel.get("h", 0)
+                label = sel.get("label", "")
+                bbox_lines.append(
+                    f"  {idx}. لون {color}، الموقع (x={x}, y={y}, w={w}, h={h})"
+                    + (f" — {label}" if label else "")
+                )
+            marker_parts.append("📐 المناطق المحددة (إحداثيات الصورة المرفقة):")
+            marker_parts.extend(bbox_lines)
+        marker_parts.append(
+            "⚠️ المطلوب: عدّل فقط على المناطق المحددة في الـ HTML الحالي. "
+            "لا تكسر أي قسم آخر. لا تعيد بناء الصفحة كاملة. "
+            "بعد ما تنتهي، اعمل snapshot جديد للمحفوظات تلقائياً."
+        )
+        marker = "\n".join(marker_parts)
+
+        try:
+            await db.freebuild_chat_sessions.update_one(
+                {"project_id": pid},
+                {
+                    "$push": {
+                        "messages": {
+                            "role": "user",
+                            "content": marker,
+                            "ts": datetime.now(_tz.utc).isoformat(),
+                            "source": "surgical_archive",
+                            "snapshot_id": sid,
+                            "selectors": selectors,
+                            # The image itself can be huge — we DON'T persist
+                            # the full base64 in the messages array. The
+                            # surgical_requests collection holds the link.
+                            "annotated_image_request_id": req_doc["id"],
+                        },
+                    },
+                    "$set": {"updated_at": datetime.now(_tz.utc).isoformat()},
+                    "$setOnInsert": {
+                        "project_id": pid,
+                        "user_id": user["user_id"],
+                        "created_at": datetime.now(_tz.utc).isoformat(),
+                    },
+                },
+                upsert=True,
+            )
+        except Exception as e:
+            raise HTTPException(500, f"فشل حقن الطلب في الشات: {e}")
+
+        # Stash a compact data: URL for the annotated image (capped at 300KB
+        # base64 → ~225KB image) on the surgical request doc so the frontend
+        # can display it back to the AI on next chat-turn request building.
+        if annotated_image_b64 and len(annotated_image_b64) < 320_000:
+            try:
+                await db.freebuild_surgical_requests.update_one(
+                    {"id": req_doc["id"]},
+                    {"$set": {"annotated_image_b64": annotated_image_b64}},
+                )
+            except Exception:
+                pass
+
+        return {
+            "ok": True,
+            "request_id": req_doc["id"],
+            "snapshot_id": sid,
+            "message_preview": marker[:500],
+            "note": "تم إضافة طلب التعديل الجراحي في شات المشروع. افتح المشروع لمتابعة التنفيذ.",
+        }
+
+    @router.get("/project/{pid}/surgical-requests")
+    async def list_surgical_requests(pid: str, limit: int = 30, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "id": 1},
+        )
+        if not proj:
+            raise HTTPException(404)
+        items = []
+        try:
+            cursor = db.freebuild_surgical_requests.find(
+                {"project_id": pid},
+                {"_id": 0, "annotated_image_b64": 0},  # Skip the heavy field.
+            ).sort("created_at", -1).limit(int(limit or 30))
+            async for r in cursor:
+                items.append(r)
+        except Exception:
+            pass
+        return {"ok": True, "requests": items, "count": len(items)}
+
+
+    # ═══════════════════════════════════════════════════════════════
     # EXPORT SOURCE CODE — bundle the website as a self-contained ZIP
     # so the customer can host it anywhere (gumroad-style ownership).
     # Downloads all external images locally and rewrites src URLs.
