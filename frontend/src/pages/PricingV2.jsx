@@ -2,7 +2,7 @@
  * Pricing — credit packs only (no subscriptions).
  *   • 7 fixed packs ($9 → $1000) with progressive discount
  *   • Custom amount: user enters $ and gets 130 credits per dollar ($5–$10,000)
- *   • Each pack has PayPal + LemonSqueezy buttons
+ *   • PayPal is the sole payment processor (Lemon Squeezy removed Feb 2026)
  */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -116,17 +116,9 @@ function PackCard({ pack, onBuy, busy }) {
         onClick={() => onBuy(pack.id, 'paypal')}
         disabled={!!busy}
         data-testid={`buy-${pack.id}-paypal`}
-        className="w-full px-3 py-2 rounded-lg bg-[#0070ba] hover:bg-[#005ea6] text-white text-xs font-black mb-2 disabled:opacity-50"
+        className="w-full px-3 py-2 rounded-lg bg-[#0070ba] hover:bg-[#005ea6] text-white text-xs font-black disabled:opacity-50"
       >
         {busy === `${pack.id}-paypal` ? '...' : <><span className="font-extrabold">Pay</span>Pal</>}
-      </button>
-      <button
-        onClick={() => onBuy(pack.id, 'lemon')}
-        disabled={!!busy}
-        data-testid={`buy-${pack.id}-lemon`}
-        className="w-full px-3 py-2 rounded-lg bg-[#FFC233] hover:bg-[#fcd460] text-black text-xs font-black disabled:opacity-50"
-      >
-        {busy === `${pack.id}-lemon` ? '...' : 'LemonSqueezy'}
       </button>
     </div>
   );
@@ -142,10 +134,7 @@ export default function Pricing() {
     if (!isAuthed) { navigate('/login?return=/pricing'); return; }
     setBusy(`${pkgId}-${method}`);
     try {
-      const url = method === 'paypal'
-        ? `${API}/api/payments/paypal/create`
-        : `${API}/api/payments/lemonsqueezy/create`;
-      const r = await fetch(url, {
+      const r = await fetch(`${API}/api/payments/paypal/create-credits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authH() },
         body: JSON.stringify({ package_id: pkgId }),
@@ -327,7 +316,7 @@ export default function Pricing() {
         </div>
 
         <p className="text-center text-xs text-zinc-500 mt-8">
-          PayPal أو LemonSqueezy · المعاملات بالدولار الأمريكي · النقاط تُضاف فوراً بعد الدفع
+          PayPal · المعاملات بالدولار الأمريكي · النقاط تُضاف فوراً بعد الدفع
         </p>
       </main>
     </div>

@@ -25,7 +25,7 @@ const REASON_LABELS = {
   'admin_grant': 'منحة من الإدارة',
   'signup_bonus': 'هدية تسجيل',
   'referral_bonus': 'مكافأة دعوة',
-  'lemonsqueezy_purchase': 'شراء حزمة (LemonSqueezy)',
+  'lemonsqueezy_purchase': 'شراء حزمة (Lemon — Archived)',
   'paypal_purchase': 'شراء حزمة (PayPal)',
 };
 

@@ -1,17 +1,15 @@
 /**
- * Ready Sites — Step 2: Pay First (PayPal + LemonSqueezy)
+ * Ready Sites — Step 2: Pay First (PayPal only)
  *
  * Two USD plans:
  *   • Paid Trial — $9 / 7 days / 500 credits
  *   • Full Purchase — $79 / 5,000 credits / ownership
  *
- * Two payment methods (user choice per plan):
- *   • PayPal — direct redirect to PayPal approval page
- *   • LemonSqueezy — supports BNPL (Klarna / Afterpay) in many countries
+ * Payment processor: PayPal (Lemon Squeezy removed Feb 2026).
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowRight, Check, Sparkles, Clock, ShoppingCart, Info, Loader2 } from 'lucide-react';
+import { ArrowRight, Check, Clock, ShoppingCart, Info, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -68,7 +66,7 @@ export default function ReadySitesPurchase({ user }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [category, setCategory] = useState(null);
-  const [busy, setBusy] = useState(null); // 'trial-paypal' | 'trial-lemon' | …
+  const [busy, setBusy] = useState(null); // 'trial-paypal' | 'full-paypal'
 
   useEffect(() => {
     if (typeof window !== 'undefined') window.scrollTo(0, 0);
@@ -110,22 +108,8 @@ export default function ReadySitesPurchase({ user }) {
     } finally { setBusy(null); }
   };
 
-  const payLemon = async (planId) => {
-    if (!category || !requireAuth()) return;
-    setBusy(`${planId}-lemon`);
-    try {
-      const r = await fetch(`${API}/api/ready-sites/lemonsqueezy/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authH() },
-        body: JSON.stringify({ category_id: category.id, plan: planId }),
-      });
-      const d = await r.json();
-      if (!r.ok || !d.checkout_url) throw new Error(d.detail || 'فشل LemonSqueezy');
-      window.location.href = d.checkout_url;
-    } catch (e) {
-      toast.error(e.message || 'فشل الاتصال بـ LemonSqueezy');
-    } finally { setBusy(null); }
-  };
+  // payLemon kept as no-op stub to avoid breaking any cached references.
+  // Lemon Squeezy was fully removed in Feb 2026.
 
   if (!category) return null;
 
@@ -189,7 +173,7 @@ export default function ReadySitesPurchase({ user }) {
                 ))}
               </ul>
 
-              {/* Payment buttons — PayPal + LemonSqueezy side by side */}
+              {/* Payment button — PayPal only (Lemon Squeezy removed Feb 2026) */}
               <div className="space-y-2.5">
                 <button
                   onClick={() => payPayPal(plan.id)}
@@ -203,21 +187,8 @@ export default function ReadySitesPurchase({ user }) {
                     <><span className="font-extrabold">Pay</span><span className="italic font-bold">Pal</span><span className="text-xs opacity-80">— ${plan.price}</span></>
                   )}
                 </button>
-                <button
-                  onClick={() => payLemon(plan.id)}
-                  disabled={busy !== null}
-                  className="w-full py-3 rounded-xl font-black text-sm transition-all inline-flex items-center justify-center gap-2 bg-[#FFC233] hover:bg-[#fcd460] text-black disabled:opacity-50 disabled:cursor-wait"
-                  data-testid={`lemon-${plan.id}-btn`}
-                  title="يدعم البطاقات + Klarna + Afterpay (تقسيط في أوروبا/أمريكا)"
-                >
-                  {busy === `${plan.id}-lemon` ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> جاري التحويل...</>
-                  ) : (
-                    <><Sparkles className="w-4 h-4" /> LemonSqueezy — ${plan.price}</>
-                  )}
-                </button>
                 <p className="text-[10px] text-zinc-500 text-center">
-                  LemonSqueezy يدعم بطاقات + Klarna/Afterpay (تقسيط في باقي الدول)
+                  ادفع بأمان عبر PayPal (بطاقة أو رصيد PayPal)
                 </p>
               </div>
             </div>
@@ -227,7 +198,7 @@ export default function ReadySitesPurchase({ user }) {
         <div className="mt-8 bg-amber-500/5 border border-amber-500/20 rounded-xl px-5 py-4 flex items-start gap-3" data-testid="rs-purchase-disclaimer">
           <Info className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
           <div className="text-xs text-amber-100/80 leading-relaxed">
-            <b className="text-amber-300">آمن:</b> الدفع يتم مباشرة عبر PayPal أو LemonSqueezy. بعد إتمام الدفع
+            <b className="text-amber-300">آمن:</b> الدفع يتم مباشرة عبر PayPal. بعد إتمام الدفع
             بنجاح، يفتح AI تلقائياً ويبدأ ببناء موقعك.
           </div>
         </div>
