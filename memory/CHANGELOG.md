@@ -1,6 +1,77 @@
 # Zitex Changelog
 
 
+### 🔧 Feb 2026 — Independence Phase 3 — Backend Builder Agent (MVP)
+
+**Game-changer**: Zenrex no longer ships only static HTML. The Backend Builder Agent now generates a complete FastAPI + MongoDB backend from the Discovery blueprint and bundles it inside the Independence Kit ZIP.
+
+**New Backend Module** (`/app/backend/modules/freebuild/backend_builder.py` — ~590 lines):
+- `analyze_blueprint(blueprint) -> Dict` — calls Claude with a strict JSON schema prompt to extract:
+  - `entities[]` — name, plural, fields (str/int/float/bool/datetime/list[str]), endpoints (list/create/get/update/delete), public_read flag
+  - `auth` — user_fields, registration/login flags, roles
+  - `needs_backend` — false for marketing/brochure sites (then we skip backend generation entirely)
+- `build_backend_kit(project) -> Dict[str, str]` — generates a complete, syntactically-valid Python FastAPI project:
+  - `api/Dockerfile.api` — Python 3.11-slim + healthcheck
+  - `api/requirements.txt` — FastAPI 0.115, Motor 3.5, Pydantic 2.9, PyJWT, bcrypt
+  - `api/app/server.py` — CORS middleware + /api/health + auto-wires all routers
+  - `api/app/models.py` — Pydantic models for every entity + UserRegister/UserLogin/Token if auth
+  - `api/app/db.py` — async Motor MongoDB connection (reads MONGO_URL + DB_NAME from env)
+  - `api/app/auth.py` — full JWT auth (register, login, me) with bcrypt hashing
+  - `api/app/routes/<entity>.py` — one file per entity with CRUD endpoints; user_id auto-attached when auth + not public_read
+  - `api/README.md` — Arabic docs explaining the structure + how to extend
+  - `.env.example` — JWT_SECRET, MONGO_URL, CORS_ORIGINS
+  - `.github/workflows/deploy.yml` — GitHub Actions: on push to main → SSH into VPS → `docker compose up -d --build`
+  - `docker-compose.yml` — **overrides** the static-only compose with a full-stack version (web + api + mongo) connected via Docker network
+
+**New REST endpoints** in `freebuild_chat.py`:
+- `GET /project/{pid}/backend-preview` — returns cached analysis (entities, endpoints, auth scaffold) so the customer can review BEFORE committing.
+- `POST /project/{pid}/backend-preview/regenerate` — force a fresh Claude analysis call.
+- `/export-source` and `/kit-download/{token}` now auto-include backend files when `tier=full_independence` and `discovery.needs_backend=true`.
+
+**Independence Kit Integration**:
+- `independence_kit.build_independence_kit()` accepts `include_backend=True` (default) and merges `backend_builder.build_backend_kit()` output into the final ZIP.
+- Backend can be excluded for testing or for marketing sites (the analyzer auto-skips when `needs_backend=false`).
+
+**Frontend changes** (`/app/frontend/src/pages/FreeBuildChat.js`):
+- New `<BackendPreviewPanel>` component (~120 lines):
+  - Auto-fetches the analysis on open (cached server-side, instant on second open).
+  - Shows the auth section (POST /api/auth/register, /login, GET /me badges) when auth is required.
+  - Lists every entity with its route prefix, HTTP methods, and field types.
+  - "تحديث" button to force regeneration if customer added more Discovery answers.
+  - Honest fallback when the blueprint says no backend is needed.
+- `<IndependenceBanner>` now has **4 buttons**: 💎 Download Kit · 🐙 Push to GitHub · 🔧 Backend Preview · 🚀 Deploy to VPS.
+
+**Pytest** (`/app/backend/tests/test_backend_builder.py`):
+- `test_build_backend_kit_with_movie_entity` — locks in the 13 mandatory files for a backend project. **Parses every generated .py file with `ast.parse()`** to guarantee syntactic validity. Verifies `class Movie(`, `class UserRegister(`, `movies_router` wiring, `jwt.encode` in auth, `mongo:` service in compose, `VPS_HOST` secret in GitHub Actions.
+- `test_build_backend_kit_no_backend_path` — for a brochure site, only `api/README.md` is returned with an Arabic explanation.
+
+**Verified end-to-end on preview**:
+- ✅ Claude analyzed a "Movie App" project → identified `Movie` + `Rating` entities + JWT auth.
+- ✅ `/export-source` ZIP now contains **24 files** (up from 11):
+  - Static frontend (index.html + nginx kit)
+  - Full backend (api/Dockerfile.api, api/app/server.py, api/app/models.py, api/app/db.py, api/app/auth.py, api/app/routes/movies.py, api/app/routes/ratings.py)
+  - `.github/workflows/deploy.yml` for CI/CD
+  - Full-stack docker-compose.yml (web + api + mongo)
+- ✅ UI: clicking "🔧 Backend Preview" reveals the entity breakdown with route prefixes, HTTP methods, and field types in beautiful colored badges.
+- ✅ Service Worker bumped to `v21-2026-02-backend-builder`.
+- ✅ All 9 pytest tests passing across 3 modules.
+
+**What's actually delivered for $799 now**:
+- Static frontend (HTML/CSS/JS with Tailwind)
+- **Full FastAPI backend with JWT auth + CRUD APIs (NEW)**
+- MongoDB persistence (NEW)
+- Docker + docker-compose orchestration
+- GitHub Actions CI/CD pipeline (NEW)
+- One-click Hetzner VPS deployment (Phase 2)
+- One-click GitHub repo push with all 24 files (Phase 2)
+- ARCHITECTURE.md (Claude-generated, ~11KB Arabic)
+- HANDOVER.md formal delivery letter
+- 60-day support
+
+**The MVP is shippable as a real, full-stack app builder.** Phase 3 polish (apps mode PWA, real CI/CD provider auth via OAuth, multi-cloud) can be incremental.
+
+
+
 ### 🚀 Feb 2026 — Independence Phase 2 — One-click VPS + GitHub Transfer
 
 **Goal**: turn the $799 tier from "download the ZIP and figure it out yourself" into "click 2 buttons and your site is on your own VPS, in your own GitHub, fully owned".

@@ -61,7 +61,7 @@ async def test_kit_contains_all_required_files(monkeypatch):
         "description": "وصف للاختبار",
         "current_html": "<html><body>hi</body></html>",
     }
-    kit = await ik.build_independence_kit(project, owner_email="qa@zenrex.ai")
+    kit = await ik.build_independence_kit(project, owner_email="qa@zenrex.ai", include_backend=False)
     assert set(kit.keys()) == REQUIRED_FILES
     # All values are non-empty strings
     for name, content in kit.items():

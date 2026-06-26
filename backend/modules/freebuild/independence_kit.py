@@ -514,11 +514,15 @@ gzip مفعّل + caching headers لمدة سنة لكل الـ assets + cache �
 """
 
 
-async def build_independence_kit(project: Dict[str, Any], owner_email: str = "—") -> Dict[str, str]:
+async def build_independence_kit(project: Dict[str, Any], owner_email: str = "—", include_backend: bool = True) -> Dict[str, str]:
     """
     Build the full Independence Tier delivery bundle for a project.
     Returns a dict {filename: text_content} that the export endpoint
     will zip alongside the HTML + assets.
+
+    When `include_backend=True` and the Discovery blueprint indicates
+    a backend is needed, also bundles a complete FastAPI + MongoDB
+    server under `api/`, plus GitHub Actions CI/CD + full-stack compose.
     """
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     year = datetime.now(timezone.utc).year
@@ -528,7 +532,7 @@ async def build_independence_kit(project: Dict[str, Any], owner_email: str = "�
     # Architecture doc — async Claude call
     arch_md = await _generate_architecture_md(project, today)
 
-    return {
+    files = {
         "README.md": _generate_readme(project, slug, today),
         "ARCHITECTURE.md": arch_md,
         "HANDOVER.md": _generate_handover(project, slug, today, owner_email),
@@ -542,3 +546,18 @@ async def build_independence_kit(project: Dict[str, Any], owner_email: str = "�
         ".gitignore": _GITIGNORE,
         "LICENSE": _LICENSE_MIT.format(year=year, owner_name=owner_email),
     }
+
+    # 🔧 Phase 3 — Backend Builder. If the Discovery blueprint says
+    # this project needs a backend, generate it and merge into the kit.
+    # The backend builder may override `docker-compose.yml` with a
+    # full-stack version (web + api + mongo).
+    if include_backend:
+        try:
+            from modules.freebuild.backend_builder import build_backend_kit
+            backend_files = await build_backend_kit(project)
+            if backend_files:
+                files.update(backend_files)
+        except Exception as e:  # noqa: BLE001
+            _logger.warning("backend builder skipped (%s)", e)
+
+    return files

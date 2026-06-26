@@ -7830,6 +7830,52 @@ For questions: legal@zenrex.ai
         except ValueError as e:
             raise HTTPException(400, str(e))
 
+    # ═══════════════════════════════════════════════════════════════
+    # 🔧 PHASE 3 — Backend Builder preview + generate
+    # ═══════════════════════════════════════════════════════════════
+    @router.get("/project/{pid}/backend-preview")
+    async def backend_preview(pid: str, user=Depends(get_current_user)):
+        """Show the customer what backend will be generated — entities,
+        endpoints, auth scaffold — before they commit. Result is cached
+        on the project so a refresh doesn't re-call Claude."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404)
+        if proj.get("tier") != "full_independence":
+            raise HTTPException(402, "هذه الميزة لباقة الاستقلال الكامل فقط ($799).")
+
+        cached = proj.get("backend_analysis")
+        if cached:
+            return {"ok": True, "cached": True, "analysis": cached}
+
+        from modules.freebuild.backend_builder import analyze_blueprint
+        blueprint = proj.get("discovery") or {}
+        analysis = await analyze_blueprint(blueprint)
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {"backend_analysis": analysis, "updated_at": _now()}}
+        )
+        return {"ok": True, "cached": False, "analysis": analysis}
+
+    @router.post("/project/{pid}/backend-preview/regenerate")
+    async def backend_preview_regenerate(pid: str, user=Depends(get_current_user)):
+        """Force a fresh Claude call to rebuild the analysis (e.g. after
+        the customer added more answers in Discovery)."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "id": 1, "tier": 1, "discovery": 1}
+        )
+        if not proj:
+            raise HTTPException(404)
+        if proj.get("tier") != "full_independence":
+            raise HTTPException(402)
+        from modules.freebuild.backend_builder import analyze_blueprint
+        analysis = await analyze_blueprint(proj.get("discovery") or {})
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {"backend_analysis": analysis, "updated_at": _now()}}
+        )
+        return {"ok": True, "analysis": analysis}
+
     @router.post("/project/{pid}/snapshots/{sid}/restore")
     async def restore_snapshot(pid: str, sid: str, user=Depends(get_current_user)):
         proj = await db.freebuild_projects.find_one(

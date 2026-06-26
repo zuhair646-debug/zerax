@@ -2732,6 +2732,7 @@ function IndependenceBanner({ project, projectId }) {
   const [busy, setBusy] = useState(false);
   const [vpsOpen, setVpsOpen] = useState(false);
   const [gitBusy, setGitBusy] = useState(false);
+  const [backendOpen, setBackendOpen] = useState(false);
   const downloadKit = async () => {
     setBusy(true);
     try {
@@ -2834,6 +2835,14 @@ function IndependenceBanner({ project, projectId }) {
           </button>
           <button
             type="button"
+            onClick={() => setBackendOpen((v) => !v)}
+            data-testid="banner-backend-toggle-btn"
+            className="px-3 py-2 rounded-lg border border-emerald-400/40 bg-black/30 hover:bg-emerald-500/20 text-emerald-100 font-black text-xs flex items-center gap-2 whitespace-nowrap"
+          >
+            🔧 Backend Preview
+          </button>
+          <button
+            type="button"
             onClick={() => setVpsOpen((v) => !v)}
             data-testid="banner-vps-toggle-btn"
             className="px-3 py-2 rounded-lg border border-fuchsia-400/50 bg-black/30 hover:bg-fuchsia-500/20 text-fuchsia-100 font-black text-xs flex items-center gap-2 whitespace-nowrap"
@@ -2845,9 +2854,159 @@ function IndependenceBanner({ project, projectId }) {
           </button>
         </div>
       </div>
+      {backendOpen && (
+        <BackendPreviewPanel projectId={projectId} onClose={() => setBackendOpen(false)} />
+      )}
       {vpsOpen && (
         <VpsProvisionPanel project={project} projectId={projectId} onClose={() => setVpsOpen(false)} />
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 🔧 Backend Preview Panel — shows the customer what FastAPI
+// project will be bundled in their Independence Kit ZIP.
+// ─────────────────────────────────────────────────────────────
+function BackendPreviewPanel({ projectId, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [analysis, setAnalysis] = useState(null);
+  const [regenerating, setRegenerating] = useState(false);
+
+  const fetchPreview = useCallback(async (force = false) => {
+    if (force) setRegenerating(true);
+    else setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const url = force
+        ? `${API}/api/freebuild-chat/project/${projectId}/backend-preview/regenerate`
+        : `${API}/api/freebuild-chat/project/${projectId}/backend-preview`;
+      const r = await fetch(url, {
+        method: force ? 'POST' : 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل التحليل');
+      setAnalysis(d.analysis);
+      if (force) toast.success('🔄 تم تحديث التحليل');
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+      setRegenerating(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    fetchPreview(false);
+  }, [fetchPreview]);
+
+  if (loading) {
+    return (
+      <div className="rounded-lg border border-emerald-500/30 bg-black/40 p-4 text-center text-xs text-emerald-200" data-testid="backend-preview-loading">
+        <Loader2 className="w-4 h-4 animate-spin mx-auto mb-1" />
+        جاري تحليل المشروع وتوليد خطة الـBackend...
+      </div>
+    );
+  }
+
+  if (!analysis) return null;
+
+  if (!analysis.needs_backend) {
+    return (
+      <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 space-y-2" data-testid="backend-preview-no-backend">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-black text-amber-200">🛠️ هذا الموقع لا يحتاج Backend</h4>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-[11px] text-zinc-300 leading-relaxed">
+          بناءً على Discovery Brain، هذا موقع تعريفي/تسويقي. ما يحتاج خوادم أو قاعدة بيانات.
+          الـIndependence Kit بيحتوي على HTML/CSS/JS فقط (وهذا أفضل — أقل تكاليف وأسرع).
+        </p>
+      </div>
+    );
+  }
+
+  const entities = analysis.entities || [];
+  const auth = analysis.auth || {};
+
+  return (
+    <div className="rounded-lg border border-emerald-500/30 bg-black/40 p-4 space-y-3" data-testid="backend-preview-panel">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-black text-emerald-100 flex items-center gap-2">
+          🔧 خطة الـ Backend
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+            FastAPI + MongoDB
+          </span>
+        </h4>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fetchPreview(true)}
+            disabled={regenerating}
+            data-testid="backend-regenerate-btn"
+            className="text-[10px] text-cyan-300 hover:text-cyan-200 flex items-center gap-1 disabled:opacity-50"
+          >
+            {regenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3 rotate-180" />}
+            تحديث
+          </button>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Auth */}
+      {auth.registration && (
+        <div className="rounded-md bg-zinc-900/60 p-2.5 border border-emerald-500/20">
+          <p className="text-[11px] font-bold text-emerald-200 mb-1">🔐 نظام المصادقة</p>
+          <div className="flex flex-wrap gap-1 text-[10px]">
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">POST /api/auth/register</span>
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">POST /api/auth/login</span>
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">GET /api/auth/me</span>
+            <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">JWT</span>
+            <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">bcrypt</span>
+          </div>
+        </div>
+      )}
+
+      {/* Entities */}
+      <div className="space-y-2">
+        <p className="text-[11px] font-bold text-emerald-200">📦 Entities + CRUD endpoints ({entities.length})</p>
+        {entities.map((ent) => (
+          <div key={ent.name} className="rounded-md bg-zinc-900/60 p-2.5 border border-white/5">
+            <div className="flex items-center justify-between flex-wrap gap-1 mb-1.5">
+              <span className="text-sm font-black text-emerald-100">{ent.name}</span>
+              <span className="text-[10px] text-zinc-500 font-mono">/api/{ent.name_plural}</span>
+            </div>
+            <div className="flex flex-wrap gap-1 mb-1.5">
+              {(ent.endpoints || []).map((ep) => (
+                <span key={ep} className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-200 font-mono">
+                  {ep === 'list' && 'GET'}
+                  {ep === 'create' && 'POST'}
+                  {ep === 'get' && 'GET/:id'}
+                  {ep === 'update' && 'PATCH/:id'}
+                  {ep === 'delete' && 'DELETE/:id'}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {(ent.fields || []).filter((f) => !f.primary).slice(0, 8).map((f) => (
+                <span key={f.name} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono">
+                  {f.name}:{f.type}{f.required ? '*' : ''}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-[10px] text-zinc-500 text-center leading-relaxed">
+        ✨ هذا الـbackend بيتولّد تلقائياً ويُضاف لـ Independence Kit ZIP تحت مجلد <code className="text-cyan-300">api/</code>.
+        مع docker-compose يربط Mongo + Web + API و GitHub Actions للنشر التلقائي.
+      </p>
     </div>
   );
 }
