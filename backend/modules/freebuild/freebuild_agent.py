@@ -8901,6 +8901,25 @@ def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
 > - لو تحتاج تعدّل قسم، اقرأه أولاً ثم عدّل **داخل** نطاقه فقط.
 > - إذا طُلب منك "أصلح" أو "اصلاح bug"، **اقرأ الكود الحالي أولاً** ثم طبّق أصغر تعديل ممكن.
 > - "كان غير التصميم" من العميل = فشل خطير. تجنّبه.
+
+**🚫 منع الـ Hallucination على الأدوات (TOOL TRUST):**
+> إذا ذكر العميل اسم أداة (مثل `update_pages_theme` أو `batch_replace_in_pages`)، **استدعها مباشرة**.
+> - ممنوع تقول "الأداة غير متوفرة" أو "غير موجودة" قبل ما تجرّب.
+> - الـ dispatcher يرجّع خطأ واضح لو الأداة فعلاً مفقودة.
+> - افترض دائماً إن العميل صادق وكلمته صحيحة.
+> - لو فعلاً ما عرفت أداة، استدع `workflow_tools` بدون args — يرجّع قائمة الأدوات الفعلية.
+
+**🔁 منع التكرار (NO LOOPS):**
+> ممنوع تستدعي نفس الأداة بنفس الـ args أكثر من مرتين متتاليتين.
+> - لو ما اشتغلت بعد محاولتين، **بدّل الأسلوب** (e.g. apply_section → write_full_html).
+> - لو ما عرفت ايش الأنسب، اقرأ الكود الحالي (`read_full_html`) أولاً، ثم نفّذ.
+> - تكرار نفس الخطأ 3 مرات = استنزاف نقاط العميل = فشل.
+
+**🔬 التحقق الإلزامي بعد التنفيذ (POST-EXECUTION CHECK):**
+> بعد أي `write_full_html` أو `apply_section` أو `update_pages_theme` أو `remove_section`:
+> - استدع `list_all_pages_summary` أو `audit_html` **في نفس الجولة** للتأكد إن التغيير وصل فعلاً.
+> - لو الـ summary يقول إن التغيير ما طبّق، **بدّل الأسلوب فوراً** ولا تكرر.
+> - ممنوع تقول "تم بنجاح" لو ما تحقّقت بـ tool.
 ══════════════════════════════════════════════════════════════
 """
 
@@ -9081,6 +9100,13 @@ async def _run_anthropic_agent(
     iterations = 0
     model_used = model
 
+    # Anti-loop guard (2026-02): track last N tool-call signatures so the
+    # dispatcher can refuse a third identical call and force the AI to
+    # switch tactics. This protects user credits from spinning loops where
+    # the AI repeats the same write_full_html / apply_section over and over.
+    import hashlib as _hashlib_loop
+    _recent_tool_sigs: List[str] = []
+
     # ── Auto-inject long-term memories + engineering docs into the system prompt ──
     base_prompt = get_system_prompt(project, is_owner=is_owner)
     try:
@@ -9163,6 +9189,27 @@ async def _run_anthropic_agent(
                 tool_results.append({"type": "tool_result", "tool_use_id": tu["id"], "content": "finished"})
                 finished = True
             else:
+                # Anti-loop guard: refuse 3rd identical call in a row.
+                try:
+                    _input_str = json.dumps(tu["input"] or {}, sort_keys=True, ensure_ascii=False)[:400]
+                    _sig = _hashlib_loop.md5((tu["name"] + ":" + _input_str).encode("utf-8")).hexdigest()
+                    _recent_tool_sigs.append(_sig)
+                    _recent_tool_sigs = _recent_tool_sigs[-6:]
+                    if _recent_tool_sigs.count(_sig) >= 3 and tu["name"] not in ("read_full_html", "list_all_pages_summary", "audit_html", "workflow_tools"):
+                        result = {
+                            "ok": False,
+                            "error": "loop_detected",
+                            "message": (
+                                f"رفضت استدعاء `{tu['name']}` بنفس الـ args للمرة الثالثة. "
+                                "بدّل الأسلوب: اقرأ الكود أولاً بـ read_full_html ثم نفّذ تعديل مختلف، "
+                                "أو اسأل العميل لو السياق غير واضح. ممنوع تكرار نفس المحاولة."
+                            ),
+                        }
+                        ctx.log(tu["name"], tu["input"], result)
+                        tool_results.append({"type": "tool_result", "tool_use_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)})
+                        continue
+                except Exception:
+                    pass
                 result = await _dispatch_tool(ctx, tu["name"], tu["input"])
                 ctx.log(tu["name"], tu["input"], result)
                 tool_results.append({"type": "tool_result", "tool_use_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)[:6000]})
