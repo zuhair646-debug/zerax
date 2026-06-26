@@ -1,6 +1,36 @@
 # Zitex Changelog
 
 
+### 🎨 Feb 2026 — Clean Chat UI (Independence Actions Inline)
+
+**User feedback verbatim**: "اللي امتلك الكود مدري شنو اللي فوق الشات واللي يمين الشات انك تلغيهم تماما وخلاص نعتمد على اللي بيكون داخل الشات اللي بيظهر ضمن الخيارات".
+
+**What was removed** (set to `{false && ...}` so the components stay in source but never render):
+1. `<IndependenceBanner>` at the top of the chat tab — the persistent 4-button row (Download Kit / Push GitHub / Backend Preview / Deploy VPS) is GONE.
+2. Persistent "Push to GitHub" button in the chat top toolbar (`chat-github-deploy-btn`) — GONE.
+3. `<CodeActions>` panel in the website live-preview placeholder — GONE.
+4. `<CodeActions>` panel in the app preview area — GONE.
+
+**What was added** — inline action chip system:
+- New `<InlineActionChips>` component (~100 lines in FreeBuildChat.js) that parses `[ACTION:xxx]` markers in any AI message and renders them as clickable, brand-colored chips below the message body.
+- New `stripActionMarkers()` helper hides the raw markers from the rendered text + from copied text — the customer sees a natural message with beautiful buttons, never the marker syntax.
+- Supported markers: `[ACTION:download_kit]` (fuchsia), `[ACTION:backend_preview]` (emerald), `[ACTION:push_github]` (black), `[ACTION:deploy_vps]` (purple).
+- Each chip hits the relevant endpoint directly — Download triggers `/export-source` ZIP, Push GitHub triggers `/push-independence-to-github` with prompt for repo name, etc.
+
+**AI system prompt update** (`freebuild_chat.py`):
+- The `full_independence` tier context block now instructs the AI: "بدلاً من أزرار دائمة فوق أو يمين الشات (تم إلغاؤها بطلب العميل)، أنت بتعرض الأكشن داخل رسالتك في الشات كـaction chips. لتفعيل chip، ضمّن في ردك marker بالشكل `[ACTION:download_kit]`..." with a worked example showing how to chain multiple markers in one message.
+
+**Verified on preview**:
+- ✅ Banner removed — `independence-banner` testid not visible.
+- ✅ Seeded a sample chat with a single AI message containing all 4 action markers.
+- ✅ Rendered output: clean natural Arabic message + 4 colorful chips below it ("Download Independence Kit", "View Backend plan", "Push to GitHub", "Deploy to VPS (Hetzner)").
+- ✅ Markers stripped from visible text + copyable text.
+- ✅ Service Worker bumped to `v22-2026-02-clean-chat-ui`.
+
+**Outcome**: The chat is now the single point of interaction for Independence customers. The AI naturally decides when to surface each action based on conversation context (e.g. "خلصنا البناء" → offers all 4 actions; "ابي backend فقط" → offers only backend_preview). This is a much cleaner UX that matches the principle of "AI-first interaction over permanent UI shortcuts."
+
+
+
 ### 🔧 Feb 2026 — Independence Phase 3 — Backend Builder Agent (MVP)
 
 **Game-changer**: Zenrex no longer ships only static HTML. The Backend Builder Agent now generates a complete FastAPI + MongoDB backend from the Discovery blueprint and bundles it inside the Independence Kit ZIP.

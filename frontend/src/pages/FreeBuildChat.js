@@ -770,6 +770,111 @@ const MarkdownText = React.memo(function MarkdownText({ children }) {
 // pills that brighten on hover. Three actions: copy raw text, quote
 // the message into the input box, share via Web Share API (mobile).
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Inline Action Chips — parses [ACTION:xxx] markers in an AI message
+// and renders them as clickable chips. Used so the AI can surface
+// independence actions naturally in the chat without a permanent UI.
+// ─────────────────────────────────────────────────────────────
+function InlineActionChips({ content, project, projectId }) {
+  const [busy, setBusy] = useState('');
+  const text = String(content || '');
+  // Find all [ACTION:xxx] markers
+  const matches = [...text.matchAll(/\[ACTION:([a-z_]+)\]/gi)];
+  if (matches.length === 0) return null;
+  const uniq = Array.from(new Set(matches.map((m) => m[1].toLowerCase())));
+
+  const handle = async (action) => {
+    if (busy) return;
+    setBusy(action);
+    try {
+      const token = localStorage.getItem('token');
+      if (action === 'download_kit') {
+        const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/export-source`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail || 'فشل التحضير');
+        }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const cd = r.headers.get('Content-Disposition') || '';
+        const m = cd.match(/filename="?([^"]+)"?/);
+        a.href = url;
+        a.download = m ? m[1] : `zenrex-independence-${project.name || 'site'}.zip`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        const n = r.headers.get('X-Kit-Files') || '0';
+        toast.success(`💎 تم تحميل Kit (${n} ملف)`);
+      } else if (action === 'push_github') {
+        const repoName = window.prompt('اسم المستودع على GitHub:', (project.name || 'my-site').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'my-site');
+        if (!repoName) { setBusy(''); return; }
+        const fd = new FormData();
+        fd.append('repo_name', repoName.trim());
+        fd.append('private', 'false');
+        const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/push-independence-to-github`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        const d = await r.json();
+        if (!r.ok) {
+          if ((d.detail || '').includes('اربط GitHub')) {
+            toast.error('اربط GitHub أولاً من الاتصالات');
+            return;
+          }
+          throw new Error(d.detail || 'فشل الدفع');
+        }
+        toast.success(`🐙 رُفع ${d.pushed_count} ملف على GitHub`);
+        window.open(d.repo_url, '_blank', 'noopener,noreferrer');
+      } else if (action === 'backend_preview' || action === 'deploy_vps') {
+        // These actions trigger modals — we dispatch a custom event the
+        // parent ChatWorkspace listens to and toggles its state.
+        window.dispatchEvent(new CustomEvent('zenrex:independence-action', { detail: { action, projectId } }));
+      }
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const chipMeta = {
+    download_kit: { icon: '💎', label: 'تحميل Independence Kit', cls: 'from-fuchsia-500 to-purple-600 hover:from-fuchsia-400 hover:to-purple-500 text-white' },
+    backend_preview: { icon: '🔧', label: 'عرض خطة الـBackend', cls: 'from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black' },
+    push_github: { icon: '🐙', label: 'ادفع لـ GitHub', cls: 'from-zinc-800 to-black hover:from-zinc-700 hover:to-zinc-900 text-white border border-zinc-700' },
+    deploy_vps: { icon: '🚀', label: 'نشر على VPS (Hetzner)', cls: 'from-fuchsia-500 via-purple-500 to-violet-600 hover:from-fuchsia-400 hover:to-violet-500 text-white' },
+  };
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2" data-testid="inline-action-chips">
+      {uniq.map((act) => {
+        const meta = chipMeta[act];
+        if (!meta) return null;
+        return (
+          <button
+            key={act}
+            type="button"
+            onClick={() => handle(act)}
+            disabled={busy === act}
+            data-testid={`inline-action-${act}`}
+            className={`px-3 py-2 rounded-lg bg-gradient-to-r ${meta.cls} disabled:opacity-50 font-black text-xs flex items-center gap-2 whitespace-nowrap shadow-md`}
+          >
+            {busy === act ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>{meta.icon}</span>}
+            <span>{meta.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Strip the [ACTION:xxx] markers from a message body before rendering.
+function stripActionMarkers(text) {
+  return String(text || '').replace(/\[ACTION:[a-z_]+\]/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function MessageActions({ content, onQuote }) {
   const [copied, setCopied] = useState(false);
   const text = String(content || '');
@@ -5795,7 +5900,9 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               <span>استدعِ المهندس</span>
             </button>
             )}
-            {!isVideoMode && (
+            {/* Persistent "Push to GitHub" CTA removed by UX request.
+                The AI surfaces this action inline via chat now. */}
+            {false && !isVideoMode && (
             <button
               type="button"
               onClick={() => {
@@ -5845,10 +5952,8 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
           {/* Tab Content */}
           {activeTab === 'chat' && (
             <div ref={chatScrollRef} onScroll={onChatScroll} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" data-testid="chat-messages">
-              {/* 💎 Independence Tier — premium banner with one-click kit download. */}
-              {project.tier === 'full_independence' && (
-                <IndependenceBanner project={project} projectId={projectId} />
-              )}
+              {/* Independence banner removed by UX request — actions surface
+                  inline via AI chat messages instead of a permanent banner. */}
               {/* 🧠 Discovery Brain — only in website-from-scratch mode.
                   Renders roadmap + progressive Q&A above the chat until
                   the customer confirms `ready_to_build`. */}
@@ -5976,14 +6081,24 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                           Previously we kept the live_text bubbles forever and
                           they remained incomplete. */}
                       {!(m.role === 'assistant' && m.agent_streaming) && (
-                        <MarkdownText>{m.content}</MarkdownText>
+                        <MarkdownText>{stripActionMarkers(m.content)}</MarkdownText>
+                      )}
+                      {/* Independence action chips — only on finished assistant
+                          messages for full_independence customers. The AI
+                          embeds [ACTION:xxx] tokens; we render clickable chips. */}
+                      {m.role === 'assistant' && !m.agent_streaming && project.tier === 'full_independence' && (
+                        <InlineActionChips
+                          content={m.content}
+                          project={project}
+                          projectId={projectId}
+                        />
                       )}
                     </div>
 
                     {/* Clean copy/quote toolbar — only on finished assistant messages with content */}
                     {m.role === 'assistant' && !m.agent_streaming && (m.content || '').trim().length > 0 && (
                       <MessageActions
-                        content={m.content}
+                        content={stripActionMarkers(m.content)}
                         onQuote={(text) => {
                           const quoted = String(text)
                             .split('\n')
@@ -6566,10 +6681,11 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                           ← ارجع للمحادثة واطلب النشر
                         </button>
                       </div>
-                      {/* Premium tier owners see the Independence Kit / Code
-                          download tools here even before publishing — they
-                          paid, they should have access immediately. */}
-                      {project.code_unlocked && (
+                      {/* CodeActions panel removed by UX request — actions
+                          surface inline via AI chat instead of a persistent
+                          panel. The customer asks "أعطني الكود" and the AI
+                          replies with action chips. */}
+                      {false && project.code_unlocked && (
                         <div className="max-w-2xl mx-auto" data-testid="code-actions-wrapper-website">
                           <CodeActions
                             project={project}
@@ -6660,7 +6776,8 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                 </div>
               </div>
               <div className="flex-1 overflow-auto p-4 flex items-start justify-center flex-col gap-3">
-                {project.code_unlocked && (
+                {/* CodeActions removed by UX request — actions surface inline via AI chat. */}
+                {false && project.code_unlocked && (
                   <CodeActions
                     project={project}
                     projectId={projectId}
