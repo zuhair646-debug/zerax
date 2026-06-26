@@ -4491,6 +4491,16 @@ try:
 except Exception as _cg_err:
     logging.getLogger(__name__).warning(f"Credits Guard middleware failed to load: {_cg_err}")
 
+# Maintenance Mode middleware — gives the Owner Engineer a kill-switch per
+# section (images / videos / games / global) so updates won't disrupt the
+# whole site. Reads the `zenrex_maintenance` collection (cached 15s).
+try:
+    from modules.freebuild.maintenance_middleware import install_maintenance_middleware
+    install_maintenance_middleware(app, db)
+    logging.getLogger(__name__).info("✅ Maintenance Mode middleware armed (per-section kill-switch)")
+except Exception as _mm_err:
+    logging.getLogger(__name__).warning(f"Maintenance middleware failed to load: {_mm_err}")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'

@@ -10,11 +10,13 @@
  * Visually inherits FreeBuildChat's dark + amber/emerald palette but is a
  * dedicated single-purpose console — no design tweaks to existing apps.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Send, ArrowRight, Sparkles, Wrench, FolderOpen, BarChart3, Search,
   RefreshCw, ExternalLink, Layers, User as UserIcon, Eye,
+  Activity, AlertTriangle, Power, ShieldCheck, X, Check, ListChecks,
+  Image as ImageIcon, Film, Gamepad2, Globe,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -51,6 +53,13 @@ export default function OwnerEngineer({ user }) {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const scrollerRef = useRef(null);
+
+  // ── Owner-Engineer dashboard state ─────────────────────────────────
+  const [dailyReport, setDailyReport] = useState(null);
+  const [errorAnalysis, setErrorAnalysis] = useState(null);
+  const [maintenance, setMaintenance] = useState([]); // [{section, active, ...}]
+  const [patches, setPatches] = useState([]);
+  const [dashLoading, setDashLoading] = useState(false);
 
   const authHeaders = useMemo(() => {
     const token = localStorage.getItem('token');
@@ -94,6 +103,66 @@ export default function OwnerEngineer({ user }) {
         setSessions(d.sessions || []);
       }
     } catch { /* non-critical */ }
+  };
+
+  // ── Owner-Engineer dashboard loaders ───────────────────────────────
+  const loadDashboard = useCallback(async () => {
+    setDashLoading(true);
+    try {
+      const [r1, r2, r3, r4] = await Promise.all([
+        fetch(`${BASE}/daily-report?hours=24`, { headers: authHeaders }),
+        fetch(`${BASE}/error-analysis?period_hours=24&min_repeats=2`, { headers: authHeaders }),
+        fetch(`${BASE}/maintenance`, { headers: authHeaders }),
+        fetch(`${BASE}/patches`, { headers: authHeaders }),
+      ]);
+      if (r1.ok) setDailyReport(await r1.json());
+      if (r2.ok) setErrorAnalysis(await r2.json());
+      if (r3.ok) {
+        const d = await r3.json();
+        setMaintenance(d.modes || []);
+      }
+      if (r4.ok) {
+        const d = await r4.json();
+        setPatches(d.patches || []);
+      }
+    } catch (e) {
+      // non-critical
+    } finally {
+      setDashLoading(false);
+    }
+  }, [authHeaders]);
+
+  const toggleMaintenance = async (section, currentlyActive) => {
+    try {
+      const url = currentlyActive
+        ? `${BASE}/maintenance/exit`
+        : `${BASE}/maintenance/enter`;
+      const fd = new FormData();
+      fd.append('section', section);
+      if (!currentlyActive) {
+        fd.append('duration_minutes', '30');
+        fd.append('banner_ar', `⚙️ قسم «${section}» في تحديث جزئي — راح يرجع خلال 30 دقيقة.`);
+      }
+      const r = await fetch(url, { method: 'POST', headers: authHeaders, body: fd });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      toast.success(currentlyActive ? `✅ تم تشغيل قسم ${section}` : `🔧 قسم ${section} في وضع الصيانة`);
+      await loadDashboard();
+    } catch (e) {
+      toast.error('فشل تغيير حالة الصيانة');
+    }
+  };
+
+  const reviewPatch = async (patchId, action /* 'approve'|'reject' */) => {
+    try {
+      const r = await fetch(`${BASE}/patches/${patchId}/${action}`, {
+        method: 'POST', headers: authHeaders,
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      toast.success(action === 'approve' ? '✅ تم اعتماد الاقتراح' : '❌ تم رفض الاقتراح');
+      await loadDashboard();
+    } catch (e) {
+      toast.error('فشل تحديث الاقتراح');
+    }
   };
 
   useEffect(() => {
@@ -248,6 +317,19 @@ export default function OwnerEngineer({ user }) {
         </div>
       </header>
 
+      {/* ─── Owner-Engineer Dashboard Strip ─────────────────────────── */}
+      <DashboardStrip
+        report={dailyReport}
+        errors={errorAnalysis}
+        maintenance={maintenance}
+        patches={patches}
+        loading={dashLoading}
+        onRefresh={loadDashboard}
+        onToggleMaintenance={toggleMaintenance}
+        onReviewPatch={reviewPatch}
+        onAskAI={(prompt) => { setInput(prompt); }}
+      />
+
       <div className="grid lg:grid-cols-[300px,1fr,420px] md:grid-cols-[260px,1fr] gap-0 min-h-[calc(100vh-58px)]">
         {/* Projects sidebar */}
         <aside className="border-l border-zinc-800 bg-zinc-900/50 overflow-y-auto" data-testid="projects-sidebar">
@@ -351,10 +433,12 @@ export default function OwnerEngineer({ user }) {
                         'مين صاحبه؟',
                       ]
                     : [
+                        '🩺 أعطني تقرير اليوم الكامل',
+                        '🐛 ليش الذكاء الصناعي يكرر نفس الخطأ؟ حلل آخر 24 ساعة',
+                        '⚙️ شغّل وضع الصيانة على قسم الفيديوهات نص ساعة',
+                        '📋 شو الاقتراحات المعلقة لإصلاح الـ AI؟',
                         'اعطني آخر 10 مشاريع منشورة',
                         'كم مستخدم على المنصة؟',
-                        'دور لي مشروع فيه يوتيوب',
-                        'وش وضع المنصة هالأسبوع؟',
                       ]
                   ).map((q, i) => (
                     <button
@@ -506,15 +590,22 @@ export default function OwnerEngineer({ user }) {
               </div>
               <div className="border-t border-zinc-800 p-3 bg-zinc-950/60">
                 <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  <BarChart3 className="w-3 h-3" /> الأدوات
+                  <BarChart3 className="w-3 h-3" /> الأدوات (16)
                 </h4>
                 <ul className="text-[10px] text-zinc-500 space-y-0.5">
-                  <li>· list_all_projects</li>
-                  <li>· search_projects</li>
-                  <li>· get_project_summary</li>
-                  <li>· read_project_page</li>
-                  <li>· get_project_owner</li>
-                  <li>· get_platform_stats</li>
+                  <li className="text-zinc-400 font-bold mt-1">قراءة:</li>
+                  <li>· list_all_projects · search_projects</li>
+                  <li>· get_project_summary · read_project_page</li>
+                  <li>· read_full_html · get_project_owner</li>
+                  <li>· get_platform_stats · read_server_logs</li>
+                  <li className="text-amber-400 font-bold mt-1">🆕 تحليل ميداني:</li>
+                  <li>· get_daily_report · analyze_ai_errors</li>
+                  <li>· list_pending_patches · list_maintenance_modes</li>
+                  <li className="text-emerald-400 font-bold mt-1">🆕 تحكم:</li>
+                  <li>· propose_system_prompt_patch</li>
+                  <li>· enter/exit_maintenance_mode</li>
+                  <li>· apply_fix_to_project · republish_project</li>
+                  <li>· resume_project_ai · run_browser_audit</li>
                 </ul>
               </div>
             </>
@@ -522,5 +613,195 @@ export default function OwnerEngineer({ user }) {
         </aside>
       </div>
     </div>
+  );
+}
+
+
+// ═════════════════════════════════════════════════════════════════
+// DashboardStrip — Top band with 4 status cards + maintenance
+// toggles + pending patches inbox. Refreshes every 30s automatically.
+// ═════════════════════════════════════════════════════════════════
+function DashboardStrip({
+  report, errors, maintenance, patches, loading,
+  onRefresh, onToggleMaintenance, onReviewPatch, onAskAI,
+}) {
+  const newCount = report?.projects_created_in_window ?? 0;
+  const pubCount = report?.projects_published_in_window ?? 0;
+  const summonsCount = report?.engineer_summons_in_window ?? 0;
+  const errorPatternsCount = errors?.patterns_with_repeats?.length ?? 0;
+  const pendingPatches = report?.pending_system_prompt_patches ?? 0;
+
+  const activeMaintCount = (maintenance || []).filter((m) => m.active).length;
+
+  const sections = [
+    { key: 'images', label: 'الصور', icon: ImageIcon, color: 'from-fuchsia-500 to-pink-500' },
+    { key: 'videos', label: 'الفيديوهات', icon: Film, color: 'from-rose-500 to-red-500' },
+    { key: 'games', label: 'الألعاب', icon: Gamepad2, color: 'from-violet-500 to-indigo-500' },
+    { key: 'global', label: 'كل الموقع', icon: Globe, color: 'from-amber-500 to-orange-500' },
+  ];
+
+  const findMaint = (key) => (maintenance || []).find((m) => m.section === key && m.active);
+
+  return (
+    <div className="border-b border-zinc-800 bg-gradient-to-l from-zinc-950 via-zinc-900/30 to-zinc-950" data-testid="owner-dashboard-strip">
+      <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        {/* Today's report cards */}
+        <StatCard
+          icon={Activity}
+          label="مشاريع جديدة اليوم"
+          value={newCount}
+          tone="emerald"
+          testId="stat-new-projects"
+          onClick={() => onAskAI('اعطني تفاصيل المشاريع اللي اتفتحت اليوم')}
+        />
+        <StatCard
+          icon={Sparkles}
+          label="نُشِرَت اليوم"
+          value={pubCount}
+          tone="cyan"
+          testId="stat-published-today"
+          onClick={() => onAskAI('قائمة المشاريع اللي نُشرت اليوم')}
+        />
+        <StatCard
+          icon={AlertTriangle}
+          label={summonsCount > 0 ? "🚨 استدعاءات للمهندس" : "استدعاءات للمهندس"}
+          value={summonsCount}
+          tone={summonsCount > 0 ? "rose" : "zinc"}
+          testId="stat-engineer-summons"
+          onClick={() => onAskAI(`الـ AI استدعى المهندس ${summonsCount} مرة اليوم — حلل السبب`)}
+        />
+        <StatCard
+          icon={AlertTriangle}
+          label={errorPatternsCount > 0 ? "⚠️ أخطاء متكررة" : "أنماط أخطاء"}
+          value={errorPatternsCount}
+          tone={errorPatternsCount > 0 ? "amber" : "zinc"}
+          testId="stat-error-patterns"
+          onClick={() => onAskAI('حلل آخر الأخطاء المتكررة في الذكاء الصناعي وقدم لي اقتراحات إصلاح')}
+        />
+        <StatCard
+          icon={ListChecks}
+          label="اقتراحات إصلاح معلقة"
+          value={pendingPatches}
+          tone={pendingPatches > 0 ? "violet" : "zinc"}
+          testId="stat-pending-patches"
+          onClick={() => onAskAI('اعرض لي الاقتراحات المعلقة لإصلاح الذكاء الصناعي')}
+        />
+      </div>
+
+      {/* Maintenance toolbar */}
+      <div className="px-4 pb-3 flex items-center gap-2 flex-wrap" data-testid="maintenance-toolbar">
+        <span className="text-[11px] text-zinc-500 font-bold flex items-center gap-1">
+          <Power className="w-3 h-3" /> عزل أقسام:
+        </span>
+        {sections.map(({ key, label, icon: Icon, color }) => {
+          const active = !!findMaint(key);
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onToggleMaintenance(key, active)}
+              data-testid={`maint-toggle-${key}`}
+              className={`text-[11px] px-3 py-1.5 rounded-full border font-bold flex items-center gap-1.5 transition-all ${
+                active
+                  ? `bg-gradient-to-r ${color} text-white border-transparent shadow-md scale-105`
+                  : 'bg-zinc-900/60 text-zinc-400 border-zinc-700 hover:border-amber-400/40 hover:text-amber-200'
+              }`}
+              title={active ? `قسم ${label} في وضع الصيانة الآن — اضغط للتفعيل` : `اضغط لإيقاف قسم ${label} مؤقتاً`}
+            >
+              <Icon className="w-3 h-3" />
+              <span>{label}</span>
+              {active && <span className="text-[9px] bg-white/20 px-1 rounded">معطّل</span>}
+            </button>
+          );
+        })}
+        {activeMaintCount > 0 && (
+          <span className="text-[10px] text-amber-200 bg-amber-500/10 border border-amber-400/30 px-2 py-0.5 rounded-md font-bold ml-auto">
+            🔧 {activeMaintCount} قسم في الصيانة
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onRefresh}
+          data-testid="dashboard-refresh"
+          className="text-[11px] text-zinc-500 hover:text-amber-300 mr-auto flex items-center gap-1"
+          title="تحديث التقرير"
+        >
+          <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> تحديث
+        </button>
+      </div>
+
+      {/* Pending patches inbox */}
+      {(patches || []).length > 0 && (
+        <div className="border-t border-zinc-800 bg-violet-500/5 px-4 py-2" data-testid="patches-inbox">
+          <div className="flex items-center gap-2 mb-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-violet-300" />
+            <span className="text-[11px] text-violet-200 font-bold">
+              📋 اقتراحات إصلاح للذكاء الصناعي ({patches.length})
+            </span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {patches.slice(0, 8).map((p) => (
+              <div
+                key={p.id}
+                data-testid={`patch-${p.id}`}
+                className="min-w-[280px] max-w-[320px] bg-zinc-900/80 border border-violet-400/30 rounded-lg p-2.5 text-[11px]"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-violet-200 font-bold">🎯 {p.target}</span>
+                  <span className="text-[9px] text-zinc-500">{fmt(p.created_at)}</span>
+                </div>
+                <p className="text-zinc-300 text-[11px] leading-5 line-clamp-2" dir="rtl">{p.observation}</p>
+                <div className="flex gap-1 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => onReviewPatch(p.id, 'approve')}
+                    data-testid={`patch-approve-${p.id}`}
+                    className="flex-1 px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 font-bold flex items-center justify-center gap-1"
+                  >
+                    <Check className="w-3 h-3" /> اعتماد
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onReviewPatch(p.id, 'reject')}
+                    data-testid={`patch-reject-${p.id}`}
+                    className="flex-1 px-2 py-1 rounded bg-zinc-800 hover:bg-rose-500/20 border border-zinc-700 hover:border-rose-400/40 text-zinc-400 hover:text-rose-200 flex items-center justify-center gap-1"
+                  >
+                    <X className="w-3 h-3" /> رفض
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ icon: Icon, label, value, tone, testId, onClick }) {
+  const tones = {
+    emerald: 'border-emerald-400/30 bg-emerald-500/5 text-emerald-200 hover:bg-emerald-500/10',
+    cyan: 'border-cyan-400/30 bg-cyan-500/5 text-cyan-200 hover:bg-cyan-500/10',
+    rose: 'border-rose-400/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15',
+    amber: 'border-amber-400/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15',
+    violet: 'border-violet-400/40 bg-violet-500/10 text-violet-200 hover:bg-violet-500/15',
+    zinc: 'border-zinc-700 bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800/60',
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      className={`text-right p-3 rounded-xl border transition-all flex items-center justify-between gap-2 ${tones[tone]}`}
+      title="اضغط لتسأل المهندس عن هذا الرقم"
+    >
+      <div>
+        <div className="text-[10px] uppercase tracking-wider opacity-70 font-bold">{label}</div>
+        <div className="text-2xl font-black mt-0.5 leading-none" data-testid={`${testId}-value`}>
+          {value ?? '—'}
+        </div>
+      </div>
+      <Icon className="w-7 h-7 opacity-30" />
+    </button>
   );
 }

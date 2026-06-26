@@ -94,49 +94,75 @@ def _extract_first_json_object(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-_OWNER_SYSTEM_PROMPT = """أنت "مهندس Zenrex الشخصي" — وكيل ذكاء اصطناعي يساعد مالك المنصة في الإدارة والصيانة (وليس عميلاً عادياً).
+_OWNER_SYSTEM_PROMPT = """أنت "مهندس Zenrex الداخلي" — وكيل ذكاء اصطناعي خاص بمالك المنصة فقط.
 
 **هويتك:**
-- اسمك: مهندس Zenrex.
-- لغتك: العربية الفصحى السعودية. مباشر، تقني، صريح، بدون مجاملات.
-- منظورك: تعرف منصة Zenrex من الداخل — قواعد البيانات، الـ AI orchestrator، كل المشاريع لكل المستخدمين، التقارير، الـ logs.
+- اسمك: مهندس Zenrex الداخلي.
+- مالكك الوحيد: محمد (مالك Zenrex). أنت لا تتعامل مع عملاء أبداً.
+- لغتك: العربية السعودية الفصحى. مباشر، تقني، حازم، صريح، بدون مجاملات أو رموز إيموجي زائدة.
+- منظورك: ترى منصة Zenrex من الداخل — DB، AI orchestrator، كل المشاريع، التقارير، الـ logs.
 
-**صلاحياتك:** أنت ترى **كل المشاريع على السيرفر** وتقدر **تعدّل أي مشروع** نيابة عن المالك. كل تعديل يمر عبر Code Reviewer قبل الحفظ وتُسجَّل في `owner_engineer_audit`.
+**حدودك الأمنية الإلزامية (لا تنتهكها أبداً):**
+- ❌ ممنوع تعديل كود `zenrex.ai` الإنتاجي (الـ repo).
+- ❌ ممنوع التحدث مع أي عميل أو نشر شي علني.
+- ❌ ممنوع تعديل مشروع عميل ما لم يطلب المالك ذلك صراحةً + يذكر PID.
+- ❌ ممنوع كتابة ملفات على disk دون أمر مباشر.
+- ✅ مسموح: قراءة بيانات Zenrex DB، التحليل، اقتراح patches للـ system prompts برمجياً، عزل أقسام عبر Maintenance Mode، تدخل محدد في مشاريع عميل بأمر صريح من المالك.
 
-**ما تستطيع فعله:**
-*قراءة (read-only):*
-1. `list_all_projects` — كل المشاريع على المنصة
-2. `get_project_summary` — تفاصيل أي مشروع
-3. `search_projects` — بحث بالاسم
-4. `read_project_page` — أول 6KB من صفحة
-5. `read_full_html` — كل HTML الصفحة (للتشخيص العميق)
-6. `get_project_owner` — معلومات صاحب المشروع
-7. `get_platform_stats` — إحصائيات المنصة
-8. `read_server_logs` — آخر أسطر من backend.err.log (للتشخيص)
+**مهمتك الأساسية (ركّز عليها دائماً):**
+1. **مراقبة الذكاء الصناعي البنّاء** (freebuild_agent) — هل يصير عنده أخطاء متكررة؟ هل يعلق؟ هل يدمّر تصاميم؟
+2. **إعطاء تقارير دورية للمالك** عند الطلب — تقرير اليوم، الأخطاء المتكررة، حالة الصحة.
+3. **اقتراح تصحيحات برمجية** للذكاء الصناعي البنّاء عبر `propose_system_prompt_patch` (المالك يراجع ويوافق).
+4. **عزل أقسام للصيانة** لما تسوي تعديل، عبر `enter_maintenance_mode` (الأقسام: صور، فيديو، ألعاب، global) — بدون ما يتعطل باقي الموقع.
+5. **تدخل محدود ومدروس** في مشروع عميل لو المالك طلب — صحح، وثبّت، وارجّع الـ AI البنّاء يكمل عبر `resume_project_ai`.
 
-*تعديل (write — يمر على Code Reviewer):*
-9. `apply_fix_to_project` — استبدل HTML صفحة بصياغة جديدة + سبب التغيير (مطلوب)
-10. `republish_project` — أعد نشر المشروع (يبني نسخة جديدة v2, v3, ...)
+**ما تستطيع فعله (كل أدواتك):**
+*قراءة:*
+- list_all_projects, get_project_summary, search_projects, read_project_page,
+  read_full_html, get_project_owner, get_platform_stats, read_server_logs
+
+*تحليل ميداني (الأهم لمهمتك):*
+- get_daily_report — تقرير شامل لآخر N ساعة
+- analyze_ai_errors — يدوّر على أخطاء متكررة من الـ AI البنّاء
+- list_pending_patches — قائمة اقتراحات الإصلاح المعلقة
+- list_maintenance_modes — حالة الصيانة الحالية
+
+*تحكم (يلزم أمر صريح من المالك):*
+- propose_system_prompt_patch — يحفظ اقتراح إصلاح للذكاء الصناعي (لا يطبّق تلقائياً)
+- enter_maintenance_mode / exit_maintenance_mode — عزل قسم أو إعادته
+- apply_fix_to_project — تعديل صفحة في مشروع عميل (يمر عبر Code Reviewer)
+- republish_project — نشر نسخة جديدة
+- resume_project_ai — حقن رسالة في شات مشروع لإعادة تشغيل الـ AI البنّاء
 
 *فحص حي:*
-11. `run_browser_audit` — Playwright يفتح الموقع ويرجّع issues (يستغرق دقيقة تقريباً)
+- run_browser_audit — Playwright يفتح موقع منشور ويرجّع issues
 
-**سير العمل المثالي عند طلب إصلاح:**
-1. اقرأ المشروع (`get_project_summary` → `read_full_html`).
-2. اشخّص المشكلة، اشرحها للمالك بإيجاز.
-3. اقترح التعديل ك diff واضح.
-4. لو المالك وافق، نفّذ `apply_fix_to_project` (Code Reviewer سيوافق/يصلح/يرفض).
-5. إذا approved، نفّذ `republish_project` لينشر النسخة الجديدة.
-6. (اختياري) شغّل `run_browser_audit` للتأكد إن المشكلة اختفت.
+**سير العمل المثالي للحالات الشائعة:**
+
+🅰️ المالك يقول "أعطني تقرير اليوم":
+→ get_daily_report(24) → اعرض ملخصاً منظّماً (مشاريع، أخطاء، صيانة، patches، credits).
+
+🅱️ المالك يقول "ليش الـ AI يكرر نفس الخطأ؟":
+→ analyze_ai_errors(24) → اعرض الأنماط مع التوصيات → إن وجدت سبباً واضحاً، استخدم
+  propose_system_prompt_patch لاقتراح إصلاح.
+
+🅲️ المالك يقول "ادخل مشروع <PID> صحح <X> ورجّع الـ AI يكمل":
+→ get_project_summary → read_full_html → اشخّص → apply_fix_to_project (مع reason واضح) →
+  republish_project → resume_project_ai برسالة مختصرة للـ AI البنّاء يكمل.
+
+🅳️ المالك يقول "اوقف قسم الفيديوهات نص ساعة عشان أحدّث":
+→ enter_maintenance_mode("videos", 30, "...") → اعرض مدة الإيقاف ووقت العودة.
 
 **قواعد إلزامية:**
 - لا تخترع بيانات. كل سؤال يحتاج بيانات → استدع الـ tool.
-- لا تطبّق تعديل بدون قراءة الـ HTML الحالي أولاً.
-- اشرح السبب في حقل `reason` لكل `apply_fix_to_project` — هذا يُسجَّل في الـ audit log.
-- لو Code Reviewer رفض، لا تعيد المحاولة أكثر من مرتين — أبلغ المالك.
-- بعد كل `apply_fix_to_project` ناجحة، اقترح `republish_project` أو وضّح أن النشر يدوي.
+- كل اقتراح تصحيح للذكاء الصناعي يجب أن يكون مرتكزاً على `observation` ميداني فعلي
+  (من analyze_ai_errors أو get_daily_report).
+- لو المالك ما حدد PID صراحةً، لا تتدخل في مشروع.
+- بعد تدخّل في مشروع، **استخدم resume_project_ai** برسالة موجزة للـ AI البنّاء — لا تترك المشروع
+  ميتاً.
+- كن مختصر وحاد. أنت أداة عمل، لست chatbot ودود.
 
-كن ذكي، مختصر، تقني. أنت مع المالك — تكلم كأنك co-founder + Senior SRE.
+أنت مع مالك المنصة. تكلم كأنك CTO + Senior SRE — حاد، عملي، بدون حشو.
 """
 
 
@@ -256,6 +282,66 @@ def _tools_schema() -> List[Dict[str, Any]]:
                 },
                 "required": ["project_id"],
             },
+        },
+        # 🆕 Owner-Engineer specialized tools.
+        {
+            "name": "get_daily_report",
+            "description": "Comprehensive ops report for the owner: new + published projects, engineer summons, tool failures, active maintenance, pending patches, credits used.",
+            "input_schema": {"type": "object", "properties": {
+                "hours": {"type": "integer", "description": "Lookback window in hours (1..168, default 24)."},
+            }},
+        },
+        {
+            "name": "analyze_ai_errors",
+            "description": "Scans recent chat sessions for repeated AI failure patterns (announce-and-stop, placeholder leaks, tool loops, code-reviewer rejections) and gives recommendations.",
+            "input_schema": {"type": "object", "properties": {
+                "period_hours": {"type": "integer", "description": "Lookback window (default 24)."},
+                "min_repeats": {"type": "integer", "description": "Minimum occurrences to flag (default 2)."},
+            }},
+        },
+        {
+            "name": "propose_system_prompt_patch",
+            "description": "Save a proposal to amend an AI system prompt (e.g. freebuild_agent). Owner reviews + applies manually — this tool does NOT auto-edit files.",
+            "input_schema": {"type": "object", "properties": {
+                "observation": {"type": "string", "description": "What you noticed wrong with the AI's behavior."},
+                "suggested_change": {"type": "string", "description": "Exact rewrite or addition to the system prompt."},
+                "rationale": {"type": "string", "description": "Why this change should help."},
+                "target": {"type": "string", "description": "Which AI to patch (default freebuild_agent)."},
+            }, "required": ["observation", "suggested_change"]},
+        },
+        {
+            "name": "list_pending_patches",
+            "description": "List pending system-prompt patch proposals awaiting the owner's review.",
+            "input_schema": {"type": "object", "properties": {"limit": {"type": "integer"}}},
+        },
+        {
+            "name": "enter_maintenance_mode",
+            "description": "Activate maintenance for one section (images/videos/games/global) for N minutes. The middleware returns 503 + a friendly Arabic banner on matching API paths. Other sections stay live.",
+            "input_schema": {"type": "object", "properties": {
+                "section": {"type": "string", "description": "One of: images, videos, games, global"},
+                "duration_minutes": {"type": "integer", "description": "5..1440 (default 30)"},
+                "banner_ar": {"type": "string", "description": "Optional custom Arabic banner."},
+            }, "required": ["section"]},
+        },
+        {
+            "name": "exit_maintenance_mode",
+            "description": "End maintenance for a section immediately.",
+            "input_schema": {"type": "object", "properties": {
+                "section": {"type": "string"},
+            }, "required": ["section"]},
+        },
+        {
+            "name": "list_maintenance_modes",
+            "description": "List all maintenance entries (active + ended) for the dashboard.",
+            "input_schema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "resume_project_ai",
+            "description": "Inject a 'مهندس Zenrex الداخلي' note into a specific project's chat session so the building AI sees it on the next turn and resumes work after the owner intervened.",
+            "input_schema": {"type": "object", "properties": {
+                "project_id": {"type": "string"},
+                "message": {"type": "string", "description": "Arabic note for the building AI (≤ 1000 chars)."},
+            }, "required": ["project_id", "message"]},
         },
     ]
 
@@ -676,6 +762,300 @@ async def _tool_run_browser_audit(db, project_id: str, max_pages: int = 6) -> Di
     }
 
 
+# ─────────────────────────────────────────────────────────────────────
+# 🆕 Daily Report — comprehensive snapshot of the last N hours.
+# ─────────────────────────────────────────────────────────────────────
+async def _tool_get_daily_report(db, hours: int = 24) -> Dict[str, Any]:
+    """Comprehensive ops report for the owner: projects, AI behavior, errors, credits."""
+    from datetime import timedelta as _td
+    hours = max(1, min(int(hours or 24), 168))  # 1h..7d
+    since = (datetime.now(timezone.utc) - _td(hours=hours))
+    since_iso = since.isoformat()
+
+    # Projects created / published in window.
+    projects_total = await db.freebuild_projects.count_documents({}) if hasattr(db.freebuild_projects, "count_documents") else 0
+    projects_new = await db.freebuild_projects.count_documents({"created_at": {"$gte": since_iso}})
+    projects_published_today = await db.freebuild_projects.count_documents(
+        {"published_at": {"$gte": since_iso}}
+    )
+
+    # Recent published projects (top 10 newest).
+    recent_pub_cursor = db.freebuild_projects.find(
+        {"published_at": {"$gte": since_iso}},
+        {"_id": 0, "id": 1, "name": 1, "user_id": 1, "published_slug": 1,
+         "published_version": 1, "published_at": 1, "mode": 1},
+    ).sort("published_at", -1).limit(10)
+    recent_pub = [doc async for doc in recent_pub_cursor]
+    for p in recent_pub:
+        p["owner_email"] = await _resolve_owner_email(db, p.get("user_id"))
+
+    # Engineer summons (when the AI ASKED for help itself — a sign of trouble).
+    engineer_summons_count = 0
+    try:
+        engineer_summons_count = await db.engineer_summon_log.count_documents(
+            {"created_at": {"$gte": since_iso}}
+        )
+    except Exception:
+        engineer_summons_count = 0
+
+    # Tool failures in the window (scan recent chat sessions for tool_result errors).
+    tool_failure_samples: List[Dict[str, Any]] = []
+    try:
+        sess_cursor = db.freebuild_chat_sessions.find(
+            {"updated_at": {"$gte": since_iso}},
+            {"_id": 0, "project_id": 1, "messages": 1, "updated_at": 1},
+        ).sort("updated_at", -1).limit(50)
+        async for s in sess_cursor:
+            for m in (s.get("messages") or [])[-30:]:
+                content = m.get("content") or ""
+                if isinstance(content, str) and ("ERROR" in content or "error" in content.lower()) and len(tool_failure_samples) < 10:
+                    tool_failure_samples.append({
+                        "project_id": s.get("project_id"),
+                        "snippet": content[:160],
+                        "when": m.get("ts") or s.get("updated_at"),
+                    })
+    except Exception:
+        pass
+
+    # Active maintenance modes.
+    maint_active = []
+    try:
+        async for m in db.zenrex_maintenance.find(
+            {"active": True},
+            {"_id": 0, "section": 1, "banner_ar": 1, "ends_at": 1, "started_at": 1, "user_id": 1},
+        ):
+            maint_active.append(m)
+    except Exception:
+        pass
+
+    # Pending system-prompt patches awaiting owner approval.
+    pending_patches = 0
+    try:
+        pending_patches = await db.engineer_patch_proposals.count_documents({"status": "pending"})
+    except Exception:
+        pending_patches = 0
+
+    # Credits used (best-effort — table may not exist on dev).
+    credits_used = None
+    try:
+        cursor = db.credits_ledger.aggregate([
+            {"$match": {"created_at": {"$gte": since_iso}, "delta": {"$lt": 0}}},
+            {"$group": {"_id": None, "total": {"$sum": "$delta"}}},
+        ])
+        async for row in cursor:
+            credits_used = abs(row.get("total") or 0)
+            break
+    except Exception:
+        credits_used = None
+
+    return {
+        "ok": True,
+        "window_hours": hours,
+        "since": since_iso,
+        "projects_total_all_time": projects_total,
+        "projects_created_in_window": projects_new,
+        "projects_published_in_window": projects_published_today,
+        "recent_published": recent_pub,
+        "engineer_summons_in_window": engineer_summons_count,
+        "tool_failure_samples": tool_failure_samples,
+        "active_maintenance_modes": maint_active,
+        "pending_system_prompt_patches": pending_patches,
+        "credits_used_in_window": credits_used,
+    }
+
+
+async def _tool_analyze_ai_errors(db, period_hours: int = 24, min_repeats: int = 2) -> Dict[str, Any]:
+    """Scan recent chat sessions for repeated AI failure patterns (token stalls,
+    placeholder leaks, loop hits, code reviewer rejections)."""
+    from datetime import timedelta as _td
+    import re as _re
+    hours = max(1, min(int(period_hours or 24), 168))
+    since = (datetime.now(timezone.utc) - _td(hours=hours)).isoformat()
+
+    patterns = {
+        "anti_announce_and_stop": _re.compile(r"Anti.?Announce.?and.?Stop|انتظر دقيقة|سأبدأ التنفيذ"),
+        "placeholder_leak": _re.compile(r"\[placeholder|placeholder.text|TODO:|TBD|XXX", _re.IGNORECASE),
+        "tool_loop_blocked": _re.compile(r"NO_LOOPS|tool.loop|repeated.tool", _re.IGNORECASE),
+        "code_reviewer_reject": _re.compile(r"code.reviewer.rejected|REJECTED|قد رفض", _re.IGNORECASE),
+        "404_published": _re.compile(r"published.404|slug.not.found", _re.IGNORECASE),
+        "design_changed_arbitrarily": _re.compile(r"changed.design|بدّل التصميم|غير التصميم", _re.IGNORECASE),
+    }
+    hits: Dict[str, List[Dict[str, Any]]] = {k: [] for k in patterns}
+
+    try:
+        cursor = db.freebuild_chat_sessions.find(
+            {"updated_at": {"$gte": since}},
+            {"_id": 0, "project_id": 1, "messages": 1, "updated_at": 1},
+        ).sort("updated_at", -1).limit(200)
+        async for s in cursor:
+            for m in (s.get("messages") or [])[-50:]:
+                text = m.get("content") or ""
+                if not isinstance(text, str):
+                    continue
+                for key, rx in patterns.items():
+                    if rx.search(text) and len(hits[key]) < 20:
+                        hits[key].append({
+                            "project_id": s.get("project_id"),
+                            "ts": m.get("ts") or s.get("updated_at"),
+                            "snippet": text[:200],
+                        })
+    except Exception as e:
+        return {"ok": False, "error": f"scan_failed: {e}"}
+
+    # Convert to summary.
+    summary = []
+    for key, items in hits.items():
+        if len(items) >= min_repeats:
+            summary.append({
+                "pattern": key,
+                "occurrences": len(items),
+                "first_seen_project": items[0].get("project_id"),
+                "samples": items[:3],
+            })
+    summary.sort(key=lambda x: x["occurrences"], reverse=True)
+
+    recommendations: List[str] = []
+    if any(s["pattern"] == "anti_announce_and_stop" for s in summary):
+        recommendations.append("الـ Anti-Stoppage Guard يتم تشغيله — تحقق من system prompt Rule 11.")
+    if any(s["pattern"] == "placeholder_leak" for s in summary):
+        recommendations.append("الـ Code Reviewer يجب أن يرفض أي HTML يحوي placeholder/TODO.")
+    if any(s["pattern"] == "tool_loop_blocked" for s in summary):
+        recommendations.append("الـ NO_LOOPS guard يحجب tool calls متكررة — راجع لماذا الـ AI يكررها.")
+    if any(s["pattern"] == "design_changed_arbitrarily" for s in summary):
+        recommendations.append("احرص على قاعدة 'الحفاظ على التصميم' (Design Preservation) في system prompt.")
+
+    return {
+        "ok": True,
+        "window_hours": hours,
+        "patterns_with_repeats": summary,
+        "recommendations": recommendations,
+        "scanned_min_repeats": min_repeats,
+    }
+
+
+async def _tool_propose_system_prompt_patch(
+    db, observation: str, suggested_change: str, rationale: str, target: str = "freebuild_agent",
+    actor_user_id: str = "",
+) -> Dict[str, Any]:
+    """Saves a system-prompt-improvement proposal. The owner reviews + applies manually
+    via the UI (we do NOT auto-write the file — this is a safety boundary)."""
+    if not observation or not suggested_change:
+        return {"ok": False, "error": "observation and suggested_change are required"}
+    proposal = {
+        "id": str(uuid.uuid4()),
+        "target": (target or "freebuild_agent")[:60],
+        "observation": observation[:2000],
+        "suggested_change": suggested_change[:4000],
+        "rationale": (rationale or "")[:1000],
+        "status": "pending",  # pending | approved | rejected | applied
+        "created_at": _now_iso(),
+        "proposed_by_user_id": actor_user_id,
+    }
+    await db.engineer_patch_proposals.insert_one(proposal)
+    proposal.pop("_id", None)
+    return {"ok": True, "proposal": proposal, "note": "اقتراح محفوظ. راجعه من تبويب «اقتراحات الإصلاح» وطبّقه يدوياً عبر «تطبيق» (لن يُكتب أوتوماتيكياً على ملفات السيرفر)."}
+
+
+async def _tool_list_pending_patches(db, limit: int = 20) -> Dict[str, Any]:
+    items = []
+    try:
+        cursor = db.engineer_patch_proposals.find(
+            {"status": "pending"}, {"_id": 0}
+        ).sort("created_at", -1).limit(int(limit or 20))
+        async for p in cursor:
+            items.append(p)
+    except Exception:
+        pass
+    return {"ok": True, "patches": items, "count": len(items)}
+
+
+async def _tool_enter_maintenance_mode(
+    db, section: str, duration_minutes: int = 30, banner_ar: str = "", actor_user_id: str = "",
+) -> Dict[str, Any]:
+    """Activates maintenance mode for a section. The middleware reads this on each
+    request and returns 503 + JSON banner for matching API paths. Sections:
+    'images' | 'videos' | 'games' | 'global'."""
+    from datetime import timedelta as _td
+    sec = (section or "").strip().lower()
+    if sec not in {"images", "videos", "games", "global"}:
+        return {"ok": False, "error": "section must be one of: images, videos, games, global"}
+    duration_minutes = max(5, min(int(duration_minutes or 30), 24 * 60))
+    ends_at = (datetime.now(timezone.utc) + _td(minutes=duration_minutes)).isoformat()
+    default_banner = (
+        f"⚙️ قسم «{sec}» في تحديث جزئي حالياً — راح يعود خلال {duration_minutes} دقيقة. "
+        "باقي الموقع شغّال طبيعي."
+    )
+    doc = {
+        "section": sec,
+        "active": True,
+        "banner_ar": (banner_ar or default_banner)[:300],
+        "started_at": _now_iso(),
+        "ends_at": ends_at,
+        "user_id": actor_user_id,
+    }
+    await db.zenrex_maintenance.update_one(
+        {"section": sec},
+        {"$set": doc},
+        upsert=True,
+    )
+    return {"ok": True, "maintenance": doc}
+
+
+async def _tool_exit_maintenance_mode(db, section: str, actor_user_id: str = "") -> Dict[str, Any]:
+    sec = (section or "").strip().lower()
+    if not sec:
+        return {"ok": False, "error": "section is required"}
+    await db.zenrex_maintenance.update_one(
+        {"section": sec},
+        {"$set": {"active": False, "ended_at": _now_iso(), "ended_by": actor_user_id}},
+    )
+    return {"ok": True, "section": sec, "active": False}
+
+
+async def _tool_list_maintenance_modes(db) -> Dict[str, Any]:
+    items = []
+    try:
+        async for m in db.zenrex_maintenance.find({}, {"_id": 0}):
+            items.append(m)
+    except Exception:
+        pass
+    return {"ok": True, "modes": items}
+
+
+async def _tool_resume_project_ai(
+    db, project_id: str, message: str, actor_user_id: str = "",
+) -> Dict[str, Any]:
+    """Inject a system-as-owner message into a project's chat session so the
+    next time the user opens it, the AI sees a fresh instruction (e.g.
+    'مهندس Zenrex Internal: عدّلت قسم hero يدوياً — كمل العمل من حيث وقفت')."""
+    proj = await _find_project(db, project_id)
+    if not proj:
+        return {"ok": False, "error": "project not found"}
+    note = (message or "").strip()
+    if not note:
+        return {"ok": False, "error": "message is required"}
+    try:
+        await db.freebuild_chat_sessions.update_one(
+            {"project_id": project_id},
+            {
+                "$push": {
+                    "messages": {
+                        "role": "system",
+                        "content": f"[🛠️ مهندس Zenrex الداخلي تدخّل]: {note[:1000]}",
+                        "ts": _now_iso(),
+                        "actor": actor_user_id,
+                    },
+                },
+                "$set": {"updated_at": _now_iso()},
+                "$setOnInsert": {"project_id": project_id, "created_at": _now_iso()},
+            },
+            upsert=True,
+        )
+    except Exception as e:
+        return {"ok": False, "error": f"chat_session_write_failed: {e}"}
+    return {"ok": True, "project_id": project_id, "injected": True, "note_preview": note[:200]}
+
+
 async def _dispatch_owner_tool(db, name: str, args: Dict[str, Any], actor_user_id: str = "") -> Dict[str, Any]:
     try:
         if name == "list_all_projects" or name == "list_my_projects":  # back-compat alias
@@ -706,6 +1086,36 @@ async def _dispatch_owner_tool(db, name: str, args: Dict[str, Any], actor_user_i
             return await _tool_republish_project(db, args.get("project_id", ""), actor_user_id)
         if name == "run_browser_audit":
             return await _tool_run_browser_audit(db, args.get("project_id", ""), args.get("max_pages", 6))
+        # 🆕 Owner-Engineer specialized tools (daily ops, maintenance, patches).
+        if name == "get_daily_report":
+            return await _tool_get_daily_report(db, args.get("hours", 24))
+        if name == "analyze_ai_errors":
+            return await _tool_analyze_ai_errors(
+                db, args.get("period_hours", 24), args.get("min_repeats", 2),
+            )
+        if name == "propose_system_prompt_patch":
+            return await _tool_propose_system_prompt_patch(
+                db, args.get("observation", ""), args.get("suggested_change", ""),
+                args.get("rationale", ""), args.get("target", "freebuild_agent"),
+                actor_user_id,
+            )
+        if name == "list_pending_patches":
+            return await _tool_list_pending_patches(db, args.get("limit", 20))
+        if name == "enter_maintenance_mode":
+            return await _tool_enter_maintenance_mode(
+                db, args.get("section", ""), args.get("duration_minutes", 30),
+                args.get("banner_ar", ""), actor_user_id,
+            )
+        if name == "exit_maintenance_mode":
+            return await _tool_exit_maintenance_mode(
+                db, args.get("section", ""), actor_user_id,
+            )
+        if name == "list_maintenance_modes":
+            return await _tool_list_maintenance_modes(db)
+        if name == "resume_project_ai":
+            return await _tool_resume_project_ai(
+                db, args.get("project_id", ""), args.get("message", ""), actor_user_id,
+            )
         return {"ok": False, "error": f"unknown_tool: {name}"}
     except Exception as e:
         logger.exception(f"[owner-tool] {name} failed: {e}")
@@ -1082,3 +1492,91 @@ def setup_owner_engineer_routes(router: APIRouter, db, get_current_user):
                 else "🚨 ANTHROPIC_API_KEY غير موجود! الذكاء معطّل."
             ),
         }
+
+    # ─────────────────────────────────────────────────────────────────
+    # 🆕 Dashboard REST endpoints (used by the new OwnerEngineer UI for
+    # cards/widgets — NOT the chat. The chat uses the streaming endpoint.)
+    # ─────────────────────────────────────────────────────────────────
+    @router.get("/owner/engineer/daily-report")
+    async def owner_daily_report(hours: int = 24, user=Depends(get_current_user)):
+        _ensure_owner(user)
+        return await _tool_get_daily_report(db, hours)
+
+    @router.get("/owner/engineer/error-analysis")
+    async def owner_error_analysis(
+        period_hours: int = 24, min_repeats: int = 2, user=Depends(get_current_user),
+    ):
+        _ensure_owner(user)
+        return await _tool_analyze_ai_errors(db, period_hours, min_repeats)
+
+    @router.get("/owner/engineer/patches")
+    async def owner_list_patches(user=Depends(get_current_user)):
+        _ensure_owner(user)
+        return await _tool_list_pending_patches(db, 50)
+
+    @router.post("/owner/engineer/patches/{pid}/approve")
+    async def owner_approve_patch(pid: str, user=Depends(get_current_user)):
+        _ensure_owner(user)
+        res = await db.engineer_patch_proposals.update_one(
+            {"id": pid},
+            {"$set": {"status": "approved", "approved_by": user["user_id"], "approved_at": _now_iso()}},
+        )
+        if res.matched_count == 0:
+            raise HTTPException(404, "patch not found")
+        return {"ok": True, "id": pid, "status": "approved"}
+
+    @router.post("/owner/engineer/patches/{pid}/reject")
+    async def owner_reject_patch(pid: str, user=Depends(get_current_user)):
+        _ensure_owner(user)
+        res = await db.engineer_patch_proposals.update_one(
+            {"id": pid},
+            {"$set": {"status": "rejected", "rejected_by": user["user_id"], "rejected_at": _now_iso()}},
+        )
+        if res.matched_count == 0:
+            raise HTTPException(404, "patch not found")
+        return {"ok": True, "id": pid, "status": "rejected"}
+
+    @router.get("/owner/engineer/maintenance")
+    async def owner_list_maintenance(user=Depends(get_current_user)):
+        _ensure_owner(user)
+        return await _tool_list_maintenance_modes(db)
+
+    @router.post("/owner/engineer/maintenance/enter")
+    async def owner_enter_maintenance(
+        section: str = Form(...),
+        duration_minutes: int = Form(30),
+        banner_ar: str = Form(""),
+        user=Depends(get_current_user),
+    ):
+        _ensure_owner(user)
+        return await _tool_enter_maintenance_mode(
+            db, section, duration_minutes, banner_ar, user["user_id"],
+        )
+
+    @router.post("/owner/engineer/maintenance/exit")
+    async def owner_exit_maintenance(
+        section: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        _ensure_owner(user)
+        return await _tool_exit_maintenance_mode(db, section, user["user_id"])
+
+    # Public read of active maintenance (no auth) so frontend banners can show.
+    @router.get("/maintenance/active")
+    async def public_active_maintenance():
+        items: List[Dict[str, Any]] = []
+        try:
+            now_iso = _now_iso()
+            async for m in db.zenrex_maintenance.find(
+                {"active": True}, {"_id": 0, "section": 1, "banner_ar": 1, "ends_at": 1, "started_at": 1},
+            ):
+                # Auto-expire if ends_at passed.
+                if m.get("ends_at") and m["ends_at"] < now_iso:
+                    await db.zenrex_maintenance.update_one(
+                        {"section": m["section"]}, {"$set": {"active": False, "auto_ended": True}},
+                    )
+                    continue
+                items.append(m)
+        except Exception:
+            pass
+        return {"active": items}

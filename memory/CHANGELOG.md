@@ -1,6 +1,58 @@
 # Zitex Changelog
 
 
+### 🛠️ Feb 2026 — Owner Engineer Portal V2 + Anti-Stoppage Guard + Maintenance Mode
+
+**Three landmark capabilities shipped in one wave:**
+
+#### 1. Anti-Stoppage Guard (إصلاح "AI يوقف فجأة")
+- **Root cause found**: `freebuild_agent.py` line 10201 — when AI returned text-only with phrases like "راح أسوي فحص ... انتظر دقيقة ⌛" without a tool_use, the orchestrator broke the loop and gave the empty promise to the user as a final answer.
+- **Fix (3 layers)**:
+  1. **Server-side regex guard** in both streaming + non-streaming paths. Detects 17 stoppage patterns (Arabic + English). If found without a tool_use, server pushes a strict system reminder + flips `tool_choice={"type": "any"}` to force the AI to call a tool. Up to 3 retries before accepting the silence.
+  2. **System prompt Rule 11 rewritten** — explicitly warns the AI that the server detects "promise without execution" and rejects the turn; long tasks must be split per-step instead of posting a full checklist then stalling.
+  3. **Unit tests**: 19/19 cases in `/app/backend/tests/test_anti_stoppage_guard.py`.
+
+#### 2. Owner Engineer Portal V2 — Internal AI for the Owner
+- The portal at `/admin/engineer` is now the **internal command console** for the platform owner. The AI here is "مهندس Zenrex الداخلي" and is STRICTLY scoped:
+  - ❌ Cannot edit `zenrex.ai` production code.
+  - ❌ Cannot talk to customers.
+  - ❌ Cannot modify customer projects without the owner's explicit PID.
+  - ✅ Can read all DB data, analyze AI patterns, propose system-prompt patches (saved to `engineer_patch_proposals`, owner reviews + approves manually).
+  - ✅ Can intervene in a specific project + resume the building AI via `resume_project_ai(pid, message)`.
+- **7 new tools** added to the existing 11:
+  - `get_daily_report(hours)` — projects new/published, engineer summons, tool failures, active maintenance, pending patches, credits used.
+  - `analyze_ai_errors(period_hours, min_repeats)` — scans recent chat sessions for repeated failure patterns (announce-and-stop, placeholder leaks, tool loops, code-reviewer rejections) and gives Arabic recommendations.
+  - `propose_system_prompt_patch(observation, suggested_change, rationale, target)` — saved to `engineer_patch_proposals` with `status=pending`. The owner approves via UI.
+  - `list_pending_patches(limit)` — pending proposals.
+  - `enter_maintenance_mode(section, duration_minutes, banner_ar)` — activates a per-section kill-switch.
+  - `exit_maintenance_mode(section)` — clears it.
+  - `list_maintenance_modes()` — current state.
+  - `resume_project_ai(pid, message)` — injects a "مهندس Zenrex الداخلي" note into a project's chat session so the building AI resumes work after the owner intervened.
+- **New REST endpoints** (under `/api/freebuild-chat/owner/engineer/*`): daily-report, error-analysis, patches (list + approve + reject), maintenance (list + enter + exit). All owner-gated.
+- **System prompt rewritten** to make the safety boundaries explicit + workflow patterns for the 4 common cases (daily report, AI error analysis, project intervention, section maintenance).
+- **Frontend redesign** (`/app/frontend/src/pages/OwnerEngineer.js`):
+  - New `DashboardStrip` band at the top with 5 stat cards (new projects, published, engineer summons, error patterns, pending patches). Each card is clickable → seeds the chat input with a relevant question.
+  - 4-button maintenance toolbar (images/videos/games/global) — one-click toggle with confirmation toast.
+  - Patches inbox row — pending proposals with Approve/Reject buttons, horizontally scrollable.
+  - Auto-refresh every 30s.
+  - Tools sidebar updated to show all 16 tools (8 read, 4 analytical, 4 control).
+
+#### 3. Maintenance Mode Middleware (per-section kill-switch)
+- New module: `/app/backend/modules/freebuild/maintenance_middleware.py`.
+- Reads `zenrex_maintenance` collection (cached 15s). When a section is active, returns HTTP 503 + `{maintenance: true, section, banner_ar, ends_at}` to matching API paths.
+- **Section→path map**:
+  - `images` → `/api/images/*`, `/api/fal/*`, `/api/flux/*`
+  - `videos` → `/api/videos/*`, `/api/sora/*`, `/api/cinema/*`, `/api/sora2/*`
+  - `games` → `/api/games/*`, `/api/game_runtime/*`, `/api/game_toolkit/*`
+  - `global` → ALL `/api/*`
+- **Always-allowed** (never blocked, even in `global`): `/api/auth/*`, `/api/admin/*`, `/api/health`, `/api/freebuild-chat/owner/engineer/*`, `/api/freebuild-chat/maintenance/active` — so the owner can ALWAYS recover.
+- Public endpoint `GET /api/freebuild-chat/maintenance/active` for the customer-facing banner (no auth).
+- **5/5 integration tests** in `/app/backend/tests/test_owner_engineer_new_tools.py` cover the full lifecycle including global-mode-still-lets-owner-in.
+
+**Deployed**: All three landmark changes live at https://zenrex.ai. Daily report at `/admin/engineer` shows live production data (3 new + 2 published in last 24h at deploy time).
+
+
+
 ### 🗂️ Feb 2026 — Design Archive (المحفوظات) — Unlimited Visual Version Control
 
 User feedback (verbatim): "بعد ما يكون عنده اول تصميم ممتاز يكون كل شي والعميل كمل يعدل عليه ... يحط صور جديدة ما يمحي السابقات يضيف جدد حتى لو وصل 300 صورة عادي ... ما يقدر كل دقيقة ذكاء صناعي مثلا فجأة يبدل الصور".
