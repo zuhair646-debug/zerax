@@ -2112,7 +2112,10 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onU
       return;
     }
     // Paid tiers: unlock (MOCKED — Lemon Squeezy wiring later)
-    const tier = pathId === 'take_code_guided' ? 'guided' : 'code_only';
+    const tier =
+      pathId === 'take_code_guided' ? 'guided' :
+      pathId === 'full_independence' ? 'full_independence' :
+      'code_only';
     setBusy(pathId);
     try {
       const token = localStorage.getItem('token');
@@ -2176,9 +2179,10 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onU
               <p className="text-sm">جاري التحميل...</p>
             </div>
           ) : (
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
               {paths.map((p, i) => {
                 const isFree = p.price_usd === 0;
+                const isIndependence = p.id === 'full_independence';
                 return (
                   <div
                     key={p.id}
@@ -2186,6 +2190,8 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onU
                     className={`relative rounded-xl border p-5 flex flex-col transition-all hover:scale-[1.02] ${
                       isFree
                         ? 'border-emerald-400/60 bg-gradient-to-b from-emerald-500/15 to-zinc-900'
+                        : isIndependence
+                        ? 'border-fuchsia-400/60 bg-gradient-to-b from-fuchsia-500/15 via-purple-500/10 to-zinc-900 shadow-lg shadow-fuchsia-500/10'
                         : i === 2
                         ? 'border-amber-400/40 bg-gradient-to-b from-amber-500/10 to-zinc-900'
                         : 'border-cyan-400/40 bg-gradient-to-b from-cyan-500/10 to-zinc-900'
@@ -2196,7 +2202,12 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onU
                         ✨ الأنسب
                       </div>
                     )}
-                    {i === 2 && (
+                    {isIndependence && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white text-[10px] font-black flex items-center gap-1 whitespace-nowrap">
+                        💎 استقلال كامل
+                      </div>
+                    )}
+                    {i === 2 && !isIndependence && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-amber-500 text-black text-[10px] font-black flex items-center gap-1">
                         <Crown className="w-3 h-3" /> الأكثر طلباً
                       </div>
@@ -2226,6 +2237,8 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onU
                       className={`w-full py-2.5 rounded-lg font-black text-sm transition-all ${
                         isFree
                           ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black'
+                          : isIndependence
+                          ? 'bg-gradient-to-r from-fuchsia-500 via-purple-500 to-violet-600 hover:from-fuchsia-400 hover:to-violet-500 text-white shadow-lg shadow-fuchsia-500/30'
                           : i === 2
                           ? 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black'
                           : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black'
@@ -2648,6 +2661,459 @@ function CodeActions({ project, projectId, onOpenConnections }) {
         <p className="mt-2 text-[11px] text-emerald-400">
           ✓ آخر دفعة: <a href={project.github_repo_url} target="_blank" rel="noreferrer" className="underline hover:text-emerald-300">{project.github_repo_url.replace('https://github.com/', '')}</a>
         </p>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 🧠 Discovery Brain Panel (AI #1.5)
+//
+// Renders a phased Roadmap + progressive Q&A above the chat
+// while the project is in the discovery stage. Once the user
+// confirms `ready_to_build`, we POST /discovery/start-build
+// which injects a kickoff message into the chat session, and
+// this panel collapses to a thin summary banner.
+// ─────────────────────────────────────────────────────────────
+function DiscoveryPanel({ projectId, project, onReadyToBuild }) {
+  const [blueprint, setBlueprint] = useState(null);
+  const [started, setStarted] = useState(null); // null = loading
+  const [initIdea, setInitIdea] = useState('');
+  const [initBusy, setInitBusy] = useState(false);
+  const [answers, setAnswers] = useState({}); // qid -> string
+  const [submitting, setSubmitting] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Fetch status on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/discovery/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok || cancelled) return;
+        const d = await r.json();
+        if (cancelled) return;
+        setStarted(!!d.started);
+        if (d.blueprint) setBlueprint(d.blueprint);
+        if (!d.started && project?.description) {
+          setInitIdea(project.description);
+        }
+      } catch (_) { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [projectId, project?.description]);
+
+  const startDiscovery = useCallback(async () => {
+    if (!initIdea.trim()) {
+      toast.error('اكتب فكرتك أولاً');
+      return;
+    }
+    setInitBusy(true);
+    try {
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('idea', initIdea.trim());
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/discovery/init`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      // Handle proxy gateway timeouts (HTML body / 504) by polling status —
+      // the backend often finishes Claude even if the edge proxy 504s.
+      let d = null;
+      try {
+        d = await r.json();
+      } catch (_) {
+        d = null;
+      }
+      if (!r.ok || !d) {
+        // Poll status for up to 30s in case backend finished after timeout
+        toast.info('جاري التحليل... (قد يأخذ ٣٠-٦٠ ثانية)');
+        const start = Date.now();
+        while (Date.now() - start < 40000) {
+          await new Promise((res) => setTimeout(res, 3000));
+          try {
+            const sr = await fetch(`${API}/api/freebuild-chat/project/${projectId}/discovery/status`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (sr.ok) {
+              const sd = await sr.json();
+              if (sd.started && sd.blueprint) {
+                setBlueprint(sd.blueprint);
+                setStarted(true);
+                toast.success('✨ تم بناء خارطة الطريق — جاوب على الأسئلة');
+                return;
+              }
+            }
+          } catch (_) { /* retry */ }
+        }
+        throw new Error('انتهت مهلة التحليل — حاول مرة ثانية');
+      }
+      setBlueprint(d.blueprint);
+      setStarted(true);
+      toast.success('✨ تم بناء خارطة الطريق — جاوب على الأسئلة');
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setInitBusy(false);
+    }
+  }, [initIdea, projectId]);
+
+  const submitAnswers = useCallback(async () => {
+    const cleaned = {};
+    Object.entries(answers).forEach(([k, v]) => {
+      if (v && String(v).trim()) cleaned[k] = String(v).trim();
+    });
+    if (Object.keys(cleaned).length === 0) {
+      toast.error('جاوب على سؤال واحد على الأقل');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('answers_json', JSON.stringify(cleaned));
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/discovery/answer`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      let d = null;
+      try { d = await r.json(); } catch (_) { d = null; }
+      // Edge timeouts: poll status until the saved answers appear in the
+      // blueprint (backend often finishes after the proxy 504s).
+      if (!r.ok || !d) {
+        toast.info('جاري حفظ الإجابات وتوليد الدفعة التالية...');
+        const start = Date.now();
+        while (Date.now() - start < 40000) {
+          await new Promise((res) => setTimeout(res, 3000));
+          try {
+            const sr = await fetch(`${API}/api/freebuild-chat/project/${projectId}/discovery/status`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (sr.ok) {
+              const sd = await sr.json();
+              const ans = (sd.blueprint && sd.blueprint.answers) || {};
+              const allSaved = Object.keys(cleaned).every((k) => ans[k]);
+              if (allSaved) {
+                setBlueprint(sd.blueprint);
+                setAnswers({});
+                if (sd.blueprint.status === 'ready_to_build') {
+                  toast.success('🎯 الخطة مكتملة — جاهز للبناء!');
+                }
+                return;
+              }
+            }
+          } catch (_) { /* retry */ }
+        }
+        throw new Error('انتهت مهلة الحفظ — حاول مرة ثانية');
+      }
+      setBlueprint(d.blueprint);
+      setAnswers({});
+      if (d.summary_for_customer_ar) toast.success(d.summary_for_customer_ar);
+      if (d.ready_to_build) toast.success('🎯 الخطة مكتملة — جاهز للبناء!');
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [answers, projectId]);
+
+  const confirmStartBuild = useCallback(async () => {
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/discovery/start-build`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل بدء البناء');
+      toast.success('🚀 الذكاء بدأ البناء — راقب الشات!');
+      setBlueprint((bp) => bp ? { ...bp, status: 'building' } : bp);
+      onReadyToBuild?.();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [projectId, onReadyToBuild]);
+
+  // Still loading status
+  if (started === null) {
+    return (
+      <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-center text-cyan-300/70 text-xs" data-testid="discovery-loading">
+        <Loader2 className="w-4 h-4 animate-spin mx-auto mb-1" /> جاري تحميل خارطة المشروع...
+      </div>
+    );
+  }
+
+  // Discovery not started — show idea input
+  if (!started) {
+    return (
+      <div className="rounded-xl border border-cyan-400/40 bg-gradient-to-br from-cyan-500/10 via-sky-500/5 to-zinc-900 p-5" data-testid="discovery-init">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="w-5 h-5 text-cyan-300" />
+          <h3 className="text-base font-black text-cyan-100">🧠 مستشار Zenrex — قبل ما نبني</h3>
+        </div>
+        <p className="text-xs text-zinc-300 leading-relaxed mb-3">
+          قبل ما يكتب الذكاء أي سطر كود، خلينا نسوي تحليل سريع لفكرتك: نحدد نوع المشروع، نطلع خارطة طريق من المراحل،
+          ونطرح عليك ١٥-٢٥ سؤال على دفعات (٥ كل دفعة) عشان نبني اللي تبيه بالضبط.
+        </p>
+        <textarea
+          value={initIdea}
+          onChange={(e) => setInitIdea(e.target.value)}
+          rows={3}
+          placeholder="مثلاً: أبي موقع لعرض أفلامي المفضلة مع نظام تقييم وتسجيل دخول..."
+          data-testid="discovery-idea-input"
+          className="w-full bg-black/40 border border-cyan-500/30 rounded-lg px-3 py-2.5 text-sm text-cyan-50 placeholder:text-zinc-500 outline-none focus:border-cyan-300"
+        />
+        <div className="flex items-center justify-end gap-2 mt-3">
+          <button
+            type="button"
+            onClick={startDiscovery}
+            disabled={initBusy || !initIdea.trim()}
+            data-testid="discovery-init-btn"
+            className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-400 hover:to-sky-500 disabled:opacity-50 text-black font-black text-sm flex items-center gap-2"
+          >
+            {initBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            ابدأ التحليل
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!blueprint) return null;
+
+  const status = blueprint.status || 'in_discovery';
+  const phases = blueprint.phases || [];
+  const answeredSet = blueprint.answers || {};
+  const allQuestions = blueprint.questions || [];
+  // Pending = not yet answered
+  const pendingQuestions = allQuestions.filter((q) => !answeredSet[q.id]);
+  // Active batch = lowest unanswered batch number
+  const activeBatch = pendingQuestions.length
+    ? Math.min(...pendingQuestions.map((q) => q.batch || 1))
+    : null;
+  const activeQuestions = pendingQuestions.filter((q) => (q.batch || 1) === activeBatch);
+  const progress = Math.max(0, Math.min(100, blueprint.progress_pct || 0));
+
+  // Building / done → collapsed banner
+  if (status === 'building' || status === 'done') {
+    return (
+      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 flex items-center justify-between gap-3" data-testid="discovery-building-banner">
+        <div className="flex items-center gap-2 min-w-0">
+          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-emerald-200 truncate">
+              ✅ خارطة الطريق معتمدة — {blueprint.vertical_name_ar || blueprint.vertical}
+            </p>
+            <p className="text-[10px] text-zinc-400 truncate">
+              {phases.length} مراحل · {(blueprint.essentials || []).length} ميزة أساسية · {Object.keys(answeredSet).length} إجابة محفوظة
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        data-testid="discovery-expand-btn"
+        className="w-full rounded-xl border border-cyan-500/30 bg-cyan-500/5 hover:bg-cyan-500/10 p-3 flex items-center justify-between gap-2 text-cyan-200 text-xs"
+      >
+        <span className="flex items-center gap-2">
+          <Sparkles className="w-3.5 h-3.5" />
+          🧠 خارطة المشروع — اضغط للتوسيع
+        </span>
+        <span className="text-[10px] font-bold">{progress}%</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/8 via-sky-500/5 to-zinc-900 p-4 space-y-4" data-testid="discovery-panel">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-base font-black text-cyan-100 flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-cyan-300" />
+            <span className="truncate">{blueprint.vertical_name_ar || 'مشروعك'}</span>
+          </h3>
+          {blueprint.vertical_summary_ar && (
+            <p className="text-[11px] text-zinc-400 leading-relaxed mt-1">{blueprint.vertical_summary_ar}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed(true)}
+          data-testid="discovery-collapse-btn"
+          className="text-zinc-500 hover:text-zinc-200 p-1 shrink-0"
+          title="طي اللوحة"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Progress bar */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-[10px] text-zinc-400">
+          <span>تقدم التحليل</span>
+          <span className="font-bold text-cyan-300">{progress}%</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-black/40 overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-cyan-400 to-sky-500 transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Roadmap phases */}
+      {phases.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold text-cyan-200 mb-2">📋 مراحل المشروع</p>
+          <div className="flex flex-wrap gap-1.5" data-testid="discovery-phases">
+            {phases.map((ph) => (
+              <span
+                key={ph.id}
+                className={`text-[10px] px-2 py-1 rounded-full border ${
+                  ph.essential
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                    : 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                }`}
+                title={ph.desc_ar}
+              >
+                {ph.essential ? '✅' : '🟡'} {ph.name_ar}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Ready to build CTA */}
+      {status === 'ready_to_build' && (
+        <div className="rounded-lg border border-emerald-400/50 bg-gradient-to-r from-emerald-500/15 to-teal-500/10 p-4" data-testid="discovery-ready">
+          <p className="text-sm font-bold text-emerald-100 mb-2 flex items-center gap-2">
+            <Check className="w-4 h-4 text-emerald-400" /> الخطة جاهزة — نبدأ البناء؟
+          </p>
+          <p className="text-[11px] text-zinc-300 mb-3 leading-relaxed">
+            جمعنا كل اللي نحتاجه. الذكاء بيبني المشروع مرحلة-بمرحلة حسب الخطة. تقدر دائماً تعدّل من الشات بعدين.
+          </p>
+          <button
+            type="button"
+            onClick={confirmStartBuild}
+            disabled={submitting}
+            data-testid="discovery-start-build-btn"
+            className="w-full py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black font-black text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
+            ابدأ البناء الآن 🚀
+          </button>
+        </div>
+      )}
+
+      {/* Active batch of questions */}
+      {status === 'in_discovery' && activeQuestions.length > 0 && (
+        <div className="space-y-3" data-testid="discovery-questions">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-cyan-200">
+              💬 أسئلة الدفعة {activeBatch} ({activeQuestions.length} من {allQuestions.length})
+            </p>
+          </div>
+          <div className="space-y-3">
+            {activeQuestions.map((q, qi) => (
+              <DiscoveryQuestion
+                key={q.id}
+                q={q}
+                idx={qi}
+                value={answers[q.id] || ''}
+                onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={submitAnswers}
+            disabled={submitting || Object.values(answers).filter((v) => String(v || '').trim()).length === 0}
+            data-testid="discovery-submit-batch-btn"
+            className="w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-400 hover:to-sky-500 text-black font-black text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            احفظ الإجابات وكمّل
+          </button>
+        </div>
+      )}
+
+      {/* No more questions but not ready_to_build → wait state */}
+      {status === 'in_discovery' && activeQuestions.length === 0 && (
+        <div className="text-center text-zinc-400 text-xs py-3">
+          <Loader2 className="w-4 h-4 animate-spin mx-auto mb-1" />
+          نولّد الدفعة التالية من الأسئلة...
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One question row — supports single/multi choice + free text
+function DiscoveryQuestion({ q, idx, value, onChange }) {
+  const opts = Array.isArray(q.options) ? q.options : [];
+  const isChoice = (q.answer_type === 'single_choice' || q.answer_type === 'multi_choice') && opts.length > 0;
+  return (
+    <div className="rounded-lg bg-black/30 border border-white/5 p-3" data-testid={`discovery-q-${q.id}`}>
+      <div className="flex items-start gap-2 mb-2">
+        <span className="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 rounded px-1.5 py-0.5 shrink-0">
+          Q{idx + 1}
+        </span>
+        <p className="text-xs font-bold text-zinc-100 leading-relaxed flex-1">{q.question_ar}</p>
+      </div>
+      {isChoice ? (
+        <div className="flex flex-wrap gap-1.5">
+          {opts.map((opt, i) => {
+            const optLabel = typeof opt === 'string' ? opt : (opt.label || String(opt));
+            const selected = value === optLabel;
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onChange(optLabel)}
+                data-testid={`discovery-opt-${q.id}-${i}`}
+                className={`text-[11px] px-2.5 py-1.5 rounded-lg border transition-all ${
+                  selected
+                    ? 'bg-cyan-500/30 border-cyan-300 text-cyan-50 font-bold'
+                    : 'bg-zinc-800/40 border-white/10 text-zinc-300 hover:border-cyan-500/40'
+                }`}
+              >
+                {optLabel}
+              </button>
+            );
+          })}
+          <input
+            type="text"
+            value={opts.some((o) => (typeof o === 'string' ? o : o.label) === value) ? '' : value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="أو اكتب جوابك..."
+            data-testid={`discovery-q-free-${q.id}`}
+            className="flex-1 min-w-[140px] bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-cyan-400"
+          />
+        </div>
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="اكتب جوابك..."
+          data-testid={`discovery-q-input-${q.id}`}
+          className="w-full bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-cyan-400"
+        />
       )}
     </div>
   );
@@ -4773,6 +5239,20 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
           {/* Tab Content */}
           {activeTab === 'chat' && (
             <div ref={chatScrollRef} onScroll={onChatScroll} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" data-testid="chat-messages">
+              {/* 🧠 Discovery Brain — only in website-from-scratch mode.
+                  Renders roadmap + progressive Q&A above the chat until
+                  the customer confirms `ready_to_build`. */}
+              {isWebsiteMode && (
+                <DiscoveryPanel
+                  projectId={projectId}
+                  project={project}
+                  onReadyToBuild={() => {
+                    // Refresh project so polling picks up the kickoff
+                    // message that was injected on the backend.
+                    refreshProject();
+                  }}
+                />
+              )}
               {messages.length === 0 && (
                 <div className="text-center py-12 max-w-2xl mx-auto">
                   <Sparkles className="w-12 h-12 mx-auto mb-4 text-emerald-400/60" />

@@ -1,6 +1,62 @@
 # Zitex Changelog
 
 
+### 🧠 Feb 2026 (continued) — Discovery Brain UI + $200 Independence Path
+
+**Frontend (`/app/frontend/src/pages/FreeBuildChat.js`)** — Discovery Brain now renders end-to-end in the chat tab:
+- New `<DiscoveryPanel>` component (~330 lines) — shown above the chat in website mode while `discovery.status !== 'building'`.
+- Flow: status check on mount → if not started, captures the idea (pre-filled from project description) → POST `/discovery/init` → renders phased roadmap chips (✅ essentials / 🟡 optional) + progress bar + first batch of 5 questions.
+- Each question supports single/multi-choice option chips OR free-text fallback. `<DiscoveryQuestion>` sub-component reused per row.
+- "احفظ الإجابات وكمّل" → POST `/discovery/answer` → backend returns next batch or `ready_to_build`. Edge-proxy timeouts handled by polling `/discovery/status` for up to 40s (Claude calls can exceed CDN limits).
+- When `ready_to_build`, a green CTA card appears: "ابدأ البناء الآن 🚀" → POST `/discovery/start-build` → injects kickoff message into chat session.
+- Panel collapses to a thin banner once `status === 'building'` or `done`.
+
+**$200 Full Independence Tier** added to `finalize-options` and `unlock` endpoints:
+- 4 paths now: 🏠 Host on Zenrex (free), 💻 Code only ($49), 🎓 Code + Guided ($99), **💎 Full Independence ($200)**.
+- Backend: `tier=full_independence` flips `independence_unlocked: true` + `independence_at` timestamp on the project.
+- Frontend: 4-column grid layout with distinctive fuchsia/purple gradient + "💎 استقلال كامل" badge on the Independence card.
+
+**Service Worker bumped** to `v18-2026-02-discovery-ui` to force cache invalidation on production.
+
+**Verified end-to-end on preview**:
+- Discovery init → blueprint with 7 phases for a "موقع لعرض أفلامي" idea
+- Submit batch 1 → progress 15% → Batch 2 questions appeared (Q1 trailers, Q2 categorization)
+- Finalize modal shows all 4 unlock tiers including the $200 Independence card
+
+
+
+### 🧠 Feb 2026 — Discovery Brain (AI #1.5) — Universal Product Consultant
+
+User insight (verbatim): "المفترض الذكاء الصناعي يصير عنده قواعد لكل شي ... يبحث عن الفكرة نفسها ... موقع افلام يحتاج لوحة تحكم، إعلانات بين الفيديوات ... يبني خارطة طريق ... ويسأل العميل 15 سؤال موزّعين مو دفعة وحدة".
+
+A new AI layer sits between the Receptionist (AI #1) and the Builder (AI #3): **Discovery Brain (AI #1.5)** — turns a vague idea like "أبي موقع أفلام" into a full project blueprint BEFORE any code is written.
+
+**Backend** (`/app/backend/modules/freebuild/discovery_brain.py` + 4 new endpoints in `freebuild_chat.py`):
+- `classify_and_plan(idea_text)` — calls Claude with a strict JSON system prompt. Returns: `{vertical, vertical_name_ar, phases[], essentials[], optional_modules[], questions[], estimated_total_pages, estimated_build_minutes, complexity}`.
+- `advance_discovery(blueprint, new_answers)` — after each question batch, updates module statuses + emits the next batch of 5 questions, or flags `ready_to_build`.
+- `render_blueprint_for_builder(blueprint)` — Arabic system-prompt snippet the Builder later receives so phase-by-phase execution replaces "guessing the scope".
+
+**4 new REST endpoints**:
+- `POST /api/freebuild-chat/project/{pid}/discovery/init` (Form `idea`) — first classification. Idempotent: returns existing blueprint with `reused=true` if already started.
+- `POST /api/freebuild-chat/project/{pid}/discovery/answer` (Form `answers_json`) — submits a batch of answers, advances to the next batch.
+- `GET /api/freebuild-chat/project/{pid}/discovery/status` — returns the current blueprint + progress.
+- `POST /api/freebuild-chat/project/{pid}/discovery/start-build` — flips status to `building` + injects an Arabic "kickoff" message into the project's chat session so the Builder picks up the blueprint on the next turn.
+
+**Production test results** (live calls to Claude):
+- `"متجر إلكتروني للملابس"` → vertical=`ecommerce` · **10 phases** (auth → catalog → cart → payment → shipping → admin → reviews → coupons → recommendations) · **7 essentials + 12 optional modules** (incl. Saudi-specific: Moyasar/Tap, Tabby/Tamara BNPL) · **25 questions across 5 batches** with priorities (high/medium/low).
+- `"موقع لحجز مواعيد عيادة أسنان"` → vertical=`booking` · **9 phases** · **23 questions**.
+- Cold call ~60s (Claude needs time for a 10KB structured blueprint). Result persisted in `project.discovery`.
+
+**Tests**: 3/3 quick tests pass in `/app/backend/tests/test_discovery_brain.py` (status for project without discovery, init requires idea, answer requires started discovery). 4 slow tests (live Claude calls) excluded from CI but verified manually on prod.
+
+**Bug fix during this work**: `find_one(...projection)` returns `{}` (empty dict) instead of `None` when the queried field doesn't exist. The status endpoint used `if not proj` which incorrectly raised 404 for empty docs — changed to `if proj is None`.
+
+**Service worker**: `v17-2026-06-26-discovery-brain` to force PWA refresh.
+
+**Next iteration**: Frontend UI for Discovery (modal flow on new-project create + roadmap visualization + question batch UI) and Builder integration (auto-inject `render_blueprint_for_builder` output into Builder system prompt when `project.discovery.status === 'building'`).
+
+
+
 ### 🖼️ Feb 2026 — Design Archive V2 — Real Screenshots + Surgical Annotations
 
 User feedback (verbatim): "خل المحفوظات تكون صور حقيقية مو كلمة-كلمتين... الصورة الكاملة يقدر يتنقل فيها من الأعلى للأسفل... ادوات الاختيار يقدر يأشر على خانتين... الذكاء الصناعي يطبق التعديل في القسم المحدد من غير ما يأثر على باقي التصميم... كل تعديل صورة جديدة تنحط في المحفوظات".

@@ -1,4 +1,4 @@
-# Zenrex Farm — PRD (Updated 2026-02 — Owner Engineer = Full Maintenance Console)
+# Zenrex Farm — PRD (Updated 2026-02 — Discovery Brain UI + $200 Independence)
 
 ## Problem Statement
 Arabic-first AI builder for websites/apps/images/videos with credits-based pricing, Stripe payments, background-task persistence, and exportable codebase. Deployed on Hetzner VPS (zenrex.ai).
@@ -6,26 +6,20 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 ## Current Status — Healthy, Production Live ✅
 - Domain: https://zenrex.ai (HTTP 200 / api/health → healthy)
 - Backend: Docker compose, MongoDB local (+ Atlas for prod data)
-- Frontend: React PWA, Service Worker v9
+- Frontend: React PWA, Service Worker v18 (2026-02-discovery-ui)
 - Stripe: Official `stripe` SDK with proxy support
 - **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
 - **Owner Engineer Portal** (`/admin/engineer`) — read + write + browser-audit, the single AI console for the owner (2026-02).
-- **🗂️ Design Archive (المحفوظات)** — unlimited visual snapshot history per project, baseline-pinning, visual gallery + restore + restore-and-edit (2026-02). See CHANGELOG for details.
-- **Removed (2026-02):** `AdminAIMode` (3-model picker), `FreebuildLab`, hero "AI Command Center" + tiles for `autocoder / training / learning / ai-readiness` (replaced by the unified Owner Engineer).
+- **🗂️ Design Archive (المحفوظات)** — unlimited visual snapshot history per project, baseline-pinning, visual gallery + restore + restore-and-edit (2026-02).
+- **🧠 Discovery Brain (AI #1.5)** — backend + frontend LIVE (2026-02). Renders a phased roadmap + 15-25 progressive questions before the Builder writes any code. End-to-end tested via Claude Sonnet 4.5 on preview.
+- **💎 $200 Full Independence path** — added to `finalize-options` (4 unlock tiers now: Free Host, $49 Code, $99 Guided, $200 Independence). Unlock endpoint accepts `tier=full_independence`.
 
-## Next Tasks (post-Archive-V2)
-- 🟡 **P1 — تكامل الذكاء الصناعي البنّاء مع طلبات surgical-edit**: حالياً الطلب يُحقن كرسالة في شات المشروع. الخطوة التالية: لما المستخدم يفتح المشروع، الـ AI يرى الـ marker + image تلقائياً ويطبّق التعديل على المنطقة المحددة فقط. هذا يحتاج تعديل في `freebuild_agent.py` ليقرأ `annotated_image_b64` من collection `freebuild_surgical_requests` ويمرره كـ `image` block للـ Claude.
-- 🟡 **P1 — أقسام برمجية جديدة** (خطة الانطلاق):
-  - **إكمال تطبيق موجود** (GitHub repo / ZIP upload → AI يفهم ويكمل)
-  - **إعادة تصميم موقع موجود** (URL → AI يحلل ويعيد البناء)
-  - **Backend/API فقط** (بدون UI)
-- 🟡 **P1** — فصل AI #1 (Customer Brain / Receptionist) من AI #3 (Builder).
-- 🟢 **P2** — Email Verification on signup via Resend.
-- 🟢 **P2** — CI/CD pipeline (GitHub Actions) replacing manual `deploy.sh`.
-- 🟢 **P2** — Refactor monolithic `freebuild_agent.py` (10k+ lines) and `freebuild_chat.py` (8k lines).
-- 🟢 **P2** — Background-render every new snapshot so the first archive view is instant (today it's ~4s cold).
-- 🟢 **P2** — Replace `window.confirm()` in Archive restore with a shadcn `AlertDialog`.
-- ⚪ **Earlier issue (P2)** — `ownedMoviesList` in `profile.html` shows 0 items despite localStorage data.
+## Next Tasks (post-Discovery-Brain-UI)
+- 🟡 **P1 — Builder Integration**: ensure `freebuild_agent.py` injects `render_blueprint_for_builder()` into the system prompt whenever `project.discovery.status === 'building'`, so the Builder follows the roadmap instead of guessing.
+- 🟡 **P1 — Independence Workflow (server side)**: wire the $200 Stripe checkout product + post-payment deployment guide (DigitalOcean/Hetzner/AWS), GitHub repo ownership transfer, secrets handover doc.
+- 🟡 P1 — Surgical-edit integration with annotated images from المحفوظات.
+- 🟡 P1 — New build modes: Finish-Existing-App (GitHub/ZIP import), Redesign-Website, Backend-Only Builder.
+- 🟢 P2 — Email verification via Resend / CI/CD GitHub Actions / Refactor `freebuild_agent.py` monolith.
 
 
 

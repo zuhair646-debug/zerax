@@ -3291,6 +3291,20 @@ def make_freebuild_chat_router(db, get_current_user):
                     ],
                     "cta": "اشترِ الإرشاد الكامل بـ $99",
                 },
+                {
+                    "id": "full_independence",
+                    "title": "💎 الاستقلال الكامل",
+                    "price_usd": 200,
+                    "subtitle": "ملكية كاملة — سيرفر مستقل، نقل ملكية المستودع، فك الارتباط بـ Zenrex نهائياً",
+                    "features": [
+                        "كل ملفات Frontend + Backend + قاعدة البيانات",
+                        "نقل ملكية GitHub repo لاسمك",
+                        "نشر على VPS مستقل (Hetzner / DigitalOcean)",
+                        "تسليم بيانات الـ secrets + شرح كامل للبنية",
+                        "بدون أي اعتماد على Zenrex بعد التسليم",
+                    ],
+                    "cta": "اشترِ الاستقلال الكامل بـ $200",
+                },
             ],
         }
 
@@ -3477,19 +3491,23 @@ def make_freebuild_chat_router(db, get_current_user):
     @router.post("/project/{pid}/unlock")
     async def unlock_independence(
         pid: str,
-        tier: str = Form(...),  # "code_only" ($49) | "guided" ($99)
+        tier: str = Form(...),  # "code_only" ($49) | "guided" ($99) | "full_independence" ($200)
         user=Depends(get_current_user),
     ):
-        if tier not in ("code_only", "guided"):
+        if tier not in ("code_only", "guided", "full_independence"):
             raise HTTPException(400, "tier غير صالح")
+        update = {
+            "code_unlocked": True,
+            "tier": tier,
+            "unlocked_at": _now(),
+            "updated_at": _now(),
+        }
+        if tier == "full_independence":
+            update["independence_unlocked"] = True
+            update["independence_at"] = _now()
         r = await db.freebuild_projects.update_one(
             {"id": pid, "user_id": user["user_id"]},
-            {"$set": {
-                "code_unlocked": True,
-                "tier": tier,
-                "unlocked_at": _now(),
-                "updated_at": _now(),
-            }},
+            {"$set": update},
         )
         if r.matched_count == 0:
             raise HTTPException(404)
@@ -7045,6 +7063,127 @@ def make_freebuild_chat_router(db, get_current_user):
         except Exception:
             pass
         return {"ok": True, "requests": items, "count": len(items)}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🧠 Discovery Brain — turns a vague idea into a phased Roadmap +
+    # 15-25 progressive questions. AI #1.5 between Receptionist and
+    # Builder. Stops the Builder from "guessing" the scope.
+    # ═══════════════════════════════════════════════════════════════
+    @router.post("/project/{pid}/discovery/init")
+    async def discovery_init(
+        pid: str,
+        idea: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "id": 1, "discovery": 1},
+        )
+        if not proj:
+            raise HTTPException(404)
+        # Refuse to overwrite an existing in-progress discovery unless explicitly reset.
+        if proj.get("discovery") and proj["discovery"].get("status") != "done":
+            return {"ok": True, "blueprint": proj["discovery"], "reused": True}
+        from modules.freebuild.discovery_brain import classify_and_plan
+        result = await classify_and_plan(idea)
+        if not result.get("ok"):
+            raise HTTPException(500, result.get("error") or "discovery_failed")
+        bp = result["blueprint"]
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {"discovery": bp, "discovery_idea_seed": (idea or "")[:500]}},
+        )
+        return {"ok": True, "blueprint": bp, "reused": False}
+
+    @router.post("/project/{pid}/discovery/answer")
+    async def discovery_answer(
+        pid: str,
+        answers_json: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "id": 1, "discovery": 1},
+        )
+        if not proj or not proj.get("discovery"):
+            raise HTTPException(404, "Discovery لم يبدأ لهذا المشروع")
+        import json as _json
+        try:
+            answers = _json.loads(answers_json) if answers_json else {}
+        except Exception:
+            raise HTTPException(400, "answers_json invalid")
+        if not isinstance(answers, dict):
+            raise HTTPException(400, "answers_json must be an object {qid: answer}")
+        from modules.freebuild.discovery_brain import advance_discovery
+        result = await advance_discovery(proj["discovery"], answers)
+        if not result.get("ok"):
+            raise HTTPException(500, result.get("error") or "advance_failed")
+        bp = result["blueprint"]
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {"discovery": bp}},
+        )
+        return {
+            "ok": True,
+            "blueprint": bp,
+            "ready_to_build": result.get("ready_to_build", False),
+            "summary_for_customer_ar": result.get("summary_for_customer_ar", ""),
+        }
+
+    @router.get("/project/{pid}/discovery/status")
+    async def discovery_status(pid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "discovery": 1},
+        )
+        if proj is None:
+            raise HTTPException(404)
+        bp = proj.get("discovery")
+        if not bp:
+            return {"ok": True, "started": False, "blueprint": None}
+        return {"ok": True, "started": True, "blueprint": bp}
+
+    @router.post("/project/{pid}/discovery/start-build")
+    async def discovery_start_build(pid: str, user=Depends(get_current_user)):
+        """Customer confirms 'ready to build' — flips status and injects a
+        kickoff message into the chat session so the Builder picks up the
+        blueprint on the next turn."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "id": 1, "discovery": 1},
+        )
+        if not proj or not proj.get("discovery"):
+            raise HTTPException(404)
+        bp = proj["discovery"]
+        bp["status"] = "building"
+        bp["progress_pct"] = 100
+        from modules.freebuild.discovery_brain import render_blueprint_for_builder
+        builder_brief = render_blueprint_for_builder(bp)
+        kickoff = (
+            "✅ [العميل اعتمد خارطة الطريق من Discovery Brain — ابدأ البناء الآن]\n\n"
+            + builder_brief
+        )
+        try:
+            from datetime import datetime, timezone as _tz
+            await db.freebuild_chat_sessions.update_one(
+                {"project_id": pid},
+                {
+                    "$push": {"messages": {
+                        "role": "user",
+                        "content": kickoff,
+                        "ts": datetime.now(_tz.utc).isoformat(),
+                        "source": "discovery_kickoff",
+                    }},
+                    "$set": {"updated_at": datetime.now(_tz.utc).isoformat()},
+                    "$setOnInsert": {
+                        "project_id": pid,
+                        "user_id": user["user_id"],
+                        "created_at": datetime.now(_tz.utc).isoformat(),
+                    },
+                },
+                upsert=True,
+            )
+        except Exception:
+            pass
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {"discovery": bp}},
+        )
+        return {"ok": True, "kickoff_preview": kickoff[:300], "blueprint_status": bp["status"]}
 
 
     # ═══════════════════════════════════════════════════════════════
