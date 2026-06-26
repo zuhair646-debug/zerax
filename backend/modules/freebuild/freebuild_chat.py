@@ -1466,29 +1466,35 @@ def make_freebuild_chat_router(db, get_current_user):
     async def storage_usage(user=Depends(get_current_user)):
         """Compute user's storage footprint + subscription status.
 
-        Unified across every content type (websites/apps/games/images/videos)
-        — quota is based on MB only (no project count limit). Subscription
-        status (active/past_due/archived) comes from `storage_subscriptions`.
+        Uses the new linear-pricing storage system (Feb 2026 v2):
+        10MB trial → starter10 ($3) → s50 ($5) → s100 ($10) → ... → s1000 ($100).
+        Old 'free'/'starter'/'plus'/'pro'/'studio' plans are auto-migrated
+        on read by falling back to 'trial' (10 MB) state.
         """
         uid = user["user_id"]
         bytes_used = await _user_total_bytes(db, uid)
         used_mb = bytes_used / (1024 * 1024)
 
-        # ── Read subscription record (single source of truth for the plan) ──
-        sub = await db.storage_subscriptions.find_one({"user_id": uid}, {"_id": 0}) or {}
-        plan_id = sub.get("plan_id") or "free"
-        sub_status = sub.get("status") or "active"
+        # ── Use the new storage_billing helpers (auto-suspension etc.) ─
+        try:
+            from modules.storage_billing import (
+                _evaluate_subscription_state, _quota_for_subscription, GRACE_DAYS,
+            )
+            sub = await _evaluate_subscription_state(db, uid)
+            info = _quota_for_subscription(sub)
+        except Exception as e:
+            log.warning(f"[storage/usage] fallback to legacy: {e}")
+            sub = await db.storage_subscriptions.find_one({"user_id": uid}, {"_id": 0}) or {}
+            info = {
+                "plan_id": "trial", "label_ar": "تجريبية",
+                "quota_mb": 10, "status": "trial",
+                "locked": False, "locked_reason": None, "price_usd": 0,
+            }
+            GRACE_DAYS = 10  # noqa
 
-        # NEW plan catalogue (unified GB-only). Project count limits removed.
-        TIER_DEFAULTS = {
-            "free":    {"quota_mb": 250,           "label": "مجاني"},
-            "starter": {"quota_mb": 3 * 1024,      "label": "Starter"},
-            "plus":    {"quota_mb": 15 * 1024,     "label": "Plus"},
-            "pro":     {"quota_mb": 75 * 1024,     "label": "Pro"},
-            "studio":  {"quota_mb": 300 * 1024,    "label": "Studio"},
-        }
-        defaults = TIER_DEFAULTS.get(plan_id, TIER_DEFAULTS["free"])
-        quota_mb = defaults["quota_mb"]
+        plan_id = info["plan_id"]
+        sub_status = info["status"]
+        quota_mb = info["quota_mb"]
 
         # Grace countdown
         grace_days_left = None
@@ -1496,13 +1502,14 @@ def make_freebuild_chat_router(db, get_current_user):
             try:
                 started = datetime.fromisoformat(sub["grace_started_at"])
                 elapsed = (datetime.now(timezone.utc) - started).days
-                grace_days_left = max(0, 10 - elapsed)
+                grace_days_left = max(0, GRACE_DAYS - elapsed)
             except Exception:
                 pass
 
-        over_storage = used_mb > quota_mb
-        # `needs_upgrade` is now PURELY about storage % (or subscription health)
-        needs_upgrade = bool(over_storage) or sub_status in ("past_due", "archived")
+        over_storage = used_mb >= quota_mb
+        # locked = archive/cancelled. over_storage / past_due / trial-expired → upgrade needed.
+        locked = bool(info.get("locked"))
+        needs_upgrade = bool(over_storage) or locked or sub_status in ("past_due",)
 
         # Project count is INFORMATIONAL only — no longer triggers a paywall.
         try:
@@ -1514,18 +1521,18 @@ def make_freebuild_chat_router(db, get_current_user):
 
         return {
             "tier": plan_id,
-            "tier_label": defaults["label"],
-            "used_mb": round(used_mb, 2),
+            "tier_label": info["label_ar"],
+            "used_mb": round(used_mb, 3),
             "quota_mb": quota_mb,
-            "used_pct": round((used_mb / quota_mb) * 100, 1) if quota_mb > 0 else 0,
+            "used_pct": round((used_mb / quota_mb) * 100, 1) if quota_mb > 0 else 100,
             "project_count": project_count,
-            # legacy field kept so the frontend doesn't break, but always
-            # reports the same number → over_projects is always False now.
             "quota_projects": 99999,
             "over_quota": bool(over_storage),
             "over_storage": bool(over_storage),
             "over_projects": False,
             "needs_upgrade": needs_upgrade,
+            "locked": locked,
+            "locked_reason": info.get("locked_reason"),
             "subscription_status": sub_status,
             "grace_days_left": grace_days_left,
             "archived": sub_status == "archived",
@@ -1609,6 +1616,38 @@ def make_freebuild_chat_router(db, get_current_user):
                     "message_ar": "رصيدك غير كافٍ لمتابعة المحادثة. اشحن نقاطك ثم اضغط (إكمل) لمواصلة الذكاء من حيث توقف.",
                 },
             )
+
+        # ── Hard STORAGE gate (Feb 2026 v2) ────────────────────────────
+        # Block any write/save action when user is over quota, archived, or
+        # past_due. They must subscribe / pay the recovery fee to continue.
+        try:
+            from modules.storage_billing import (
+                _evaluate_subscription_state, _quota_for_subscription,
+            )
+            _sub = await _evaluate_subscription_state(db, user["user_id"])
+            _info = _quota_for_subscription(_sub)
+            _used_mb = await _user_total_bytes(db, user["user_id"]) / (1024 * 1024)
+            _over = _used_mb >= _info["quota_mb"]
+            if _info["locked"] or _over:
+                _reason = _info["locked_reason"] or "امتلأت مساحتك التخزينية. ادفع لتفك القفل."
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "error": "storage_locked",
+                        "locked": _info["locked"],
+                        "over_quota": _over,
+                        "used_mb": round(_used_mb, 2),
+                        "quota_mb": _info["quota_mb"],
+                        "status": _info["status"],
+                        "plan_id": _info["plan_id"],
+                        "message_ar": _reason,
+                        "cta_url": "/billing/storage",
+                    },
+                )
+        except HTTPException:
+            raise
+        except Exception as _se:
+            logger.warning(f"[chat] storage gate skipped: {_se}")
 
         # ═════════════════════════════════════════════════════════════════════
         # 🛡️ ZENREX GUARDIAN — silent supervisor pass on prior conversation.
@@ -8055,6 +8094,36 @@ For questions: legal@zenrex.ai
         history = proj.get("messages") or []
         # Owner check — only the platform owner gets access to local_browser_*, desktop_*, run_shell, etc.
         is_platform_owner_stream = (user.get("role") or "").lower() in ("owner", "admin", "superuser")
+
+        # ── Hard STORAGE gate (Feb 2026 v2) ────────────────────────────
+        try:
+            from modules.storage_billing import (
+                _evaluate_subscription_state, _quota_for_subscription,
+            )
+            _sub2 = await _evaluate_subscription_state(db, user["user_id"])
+            _info2 = _quota_for_subscription(_sub2)
+            _used2 = await _user_total_bytes(db, user["user_id"]) / (1024 * 1024)
+            _over2 = _used2 >= _info2["quota_mb"]
+            if _info2["locked"] or _over2:
+                _reason2 = _info2["locked_reason"] or "امتلأت مساحتك التخزينية. ادفع لتفك القفل."
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "error": "storage_locked",
+                        "locked": _info2["locked"],
+                        "over_quota": _over2,
+                        "used_mb": round(_used2, 2),
+                        "quota_mb": _info2["quota_mb"],
+                        "status": _info2["status"],
+                        "plan_id": _info2["plan_id"],
+                        "message_ar": _reason2,
+                        "cta_url": "/billing/storage",
+                    },
+                )
+        except HTTPException:
+            raise
+        except Exception as _se2:
+            logger.warning(f"[agent-chat-stream] storage gate skipped: {_se2}")
 
         # ── 🛡️ Action-Aware Pre-Flight Credit Gate ────────────────────
         # Replaces the old flat 25-credit minimum. Now classifies the user's

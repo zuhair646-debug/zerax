@@ -187,16 +187,160 @@ async def _get_user_storage_subscription(db, user_id: str) -> dict:
     """Fetch (or default) the user's storage subscription record."""
     sub = await db.storage_subscriptions.find_one({"user_id": user_id}, {"_id": 0})
     if not sub:
+        # New user — defaults to "trial": 10 MB free for evaluation,
+        # must subscribe to keep using. No legacy 'free' plan anymore.
         return {
             "user_id": user_id,
-            "plan_id": "free",
-            "status": "active",                # active | past_due | archived | cancelled
+            "plan_id": "trial",                # synthetic — not in STORAGE_PLANS
+            "status": "trial",                 # trial | active | past_due | archived | cancelled
             "paypal_subscription_id": None,
             "current_period_end": None,
             "grace_started_at": None,
             "archived_at": None,
         }
     return sub
+
+
+async def _evaluate_subscription_state(db, user_id: str) -> dict:
+    """Lazily refresh the user's subscription state on every read.
+
+    Implements the auto-suspension policy (Feb 2026):
+      • active   → if current_period_end passed → past_due (grace starts)
+      • past_due → if >GRACE_DAYS passed → archived (lock access)
+      • archived → stays archived until /recovery/checkout is paid
+      • trial    → if account is older than 7 days → archived (block)
+
+    Returns the (possibly updated) subscription doc.
+    """
+    sub = await _get_user_storage_subscription(db, user_id)
+    now = datetime.now(timezone.utc)
+    status = sub.get("status", "trial")
+    plan_id = sub.get("plan_id", "trial")
+
+    updates = {}
+
+    # 1) active → past_due if period ended
+    if status == "active":
+        period_end_iso = sub.get("current_period_end")
+        if period_end_iso:
+            try:
+                period_end = datetime.fromisoformat(period_end_iso)
+                if period_end < now:
+                    updates["status"] = "past_due"
+                    updates["grace_started_at"] = now.isoformat()
+                    status = "past_due"
+            except Exception:
+                pass
+
+    # 2) past_due → archived if grace expired
+    if status == "past_due":
+        grace_iso = sub.get("grace_started_at")
+        if grace_iso:
+            try:
+                grace_start = datetime.fromisoformat(grace_iso)
+                if (now - grace_start).days >= GRACE_DAYS:
+                    updates["status"] = "archived"
+                    updates["archived_at"] = now.isoformat()
+                    status = "archived"
+            except Exception:
+                pass
+
+    # 3) trial (new users with no plan) — auto-expire after 7 days
+    if status == "trial" and plan_id == "trial":
+        # First touch — store the trial start
+        if not sub.get("trial_started_at"):
+            updates["trial_started_at"] = now.isoformat()
+            updates["user_id"] = user_id
+            updates["plan_id"] = "trial"
+            updates["status"] = "trial"
+        else:
+            try:
+                trial_start = datetime.fromisoformat(sub["trial_started_at"])
+                if (now - trial_start).days >= 7:
+                    updates["status"] = "archived"
+                    updates["archived_at"] = now.isoformat()
+                    status = "archived"
+            except Exception:
+                pass
+
+    if updates:
+        await db.storage_subscriptions.update_one(
+            {"user_id": user_id},
+            {"$set": {**updates, "updated_at": now.isoformat()}},
+            upsert=True,
+        )
+        # Lock/unlock the user's archived flag synchronously
+        if updates.get("status") == "archived":
+            await db.users.update_one({"id": user_id}, {"$set": {"storage_archived": True}})
+        sub = {**sub, **updates}
+
+    return sub
+
+
+def _quota_for_subscription(sub: dict) -> dict:
+    """Resolve effective quota + lock state from a subscription doc.
+
+    Returns: {plan_id, quota_mb, label_ar, status, locked, locked_reason, ...}
+    """
+    status = sub.get("status", "trial")
+    plan_id = sub.get("plan_id", "trial")
+
+    # Trial: 10 MB free for evaluation
+    if plan_id == "trial" or plan_id == "free":
+        quota_mb = 10
+        label_ar = "تجريبية"
+        price_usd = 0
+    else:
+        plan = STORAGE_PLANS.get(plan_id) or STORAGE_PLANS["starter10"]
+        quota_mb = plan["quota_mb"]
+        label_ar = plan["label_ar"]
+        price_usd = plan["price_usd"]
+
+    locked = status in ("archived", "cancelled")
+    locked_reason = None
+    if status == "archived":
+        locked_reason = "انتهت فترة السماح — ادفع رسم الاسترداد لفك القفل"
+    elif status == "cancelled":
+        locked_reason = "اشتراكك ملغى — جدّد لفك القفل"
+
+    return {
+        "plan_id": plan_id,
+        "label_ar": label_ar,
+        "price_usd": price_usd,
+        "quota_mb": quota_mb,
+        "status": status,
+        "locked": locked,
+        "locked_reason": locked_reason,
+    }
+
+
+async def _calc_usage_mb(db, user_id: str) -> float:
+    """Compute the user's storage footprint in MB across every surface.
+
+    Mirrors the logic in freebuild_chat._user_total_bytes (kept in sync).
+    """
+    total = 0
+    cur = db.freebuild_projects.find(
+        {"user_id": user_id, "status": {"$ne": "deleted"}},
+        {"current_html": 1, "messages": 1, "approved_assets": 1},
+    )
+    projects = await cur.to_list(length=1000)
+    for p in projects:
+        total += len((p.get("current_html") or "").encode("utf-8", errors="ignore"))
+        for m in (p.get("messages") or []):
+            total += len((m.get("content") or "").encode("utf-8", errors="ignore"))
+        for a in (p.get("approved_assets") or []):
+            total += len((a.get("prompt") or "").encode("utf-8", errors="ignore"))
+            total += len((a.get("image_url") or "").encode("utf-8", errors="ignore"))
+    try:
+        assets = await db.freebuild_assets.find(
+            {"user_id": user_id}, {"size_bytes": 1, "file_size": 1}
+        ).to_list(length=5000)
+        for a in assets:
+            total += int(a.get("size_bytes") or a.get("file_size") or 0)
+    except Exception:
+        pass
+    return total / (1024 * 1024)
 
 
 def register_storage_billing(app, db, get_current_user):
@@ -223,8 +367,9 @@ def register_storage_billing(app, db, get_current_user):
     # ─── GET /api/storage/subscription ──────────────────────────────────
     @router.get("/subscription")
     async def get_subscription(user=Depends(get_current_user)):
-        sub = await _get_user_storage_subscription(db, user["user_id"])
-        plan = STORAGE_PLANS.get(sub["plan_id"]) or STORAGE_PLANS["starter10"]
+        # Lazy state evaluation — auto-suspends if subscription expired
+        sub = await _evaluate_subscription_state(db, user["user_id"])
+        info = _quota_for_subscription(sub)
         # Compute grace countdown if past_due
         grace_days_left = None
         if sub.get("status") == "past_due" and sub.get("grace_started_at"):
@@ -234,18 +379,66 @@ def register_storage_billing(app, db, get_current_user):
                 grace_days_left = max(0, GRACE_DAYS - elapsed)
             except Exception:
                 pass
+        # Trial countdown
+        trial_days_left = None
+        if info["plan_id"] == "trial" and sub.get("trial_started_at"):
+            try:
+                started = datetime.fromisoformat(sub["trial_started_at"])
+                elapsed = (datetime.now(timezone.utc) - started).days
+                trial_days_left = max(0, 7 - elapsed)
+            except Exception:
+                pass
+        # Recovery fee — for the user's "best fit" plan when archived
+        recovery_plan_id = info["plan_id"] if info["plan_id"] in STORAGE_PLANS else "starter10"
+        recovery = recovery_fee_for_plan(recovery_plan_id)
         return {
-            "plan_id": sub["plan_id"],
-            "plan_label_ar": plan["label_ar"],
-            "plan_quota_mb": plan["quota_mb"],
-            "plan_quota_gb": round(plan["quota_mb"] / 1024, 1),
-            "plan_price_usd": plan["price_usd"],
-            "status": sub.get("status", "active"),
+            "plan_id": info["plan_id"],
+            "plan_label_ar": info["label_ar"],
+            "plan_quota_mb": info["quota_mb"],
+            "plan_quota_gb": round(info["quota_mb"] / 1024, 2),
+            "plan_price_usd": info["price_usd"],
+            "status": info["status"],
+            "locked": info["locked"],
+            "locked_reason": info["locked_reason"],
             "current_period_end": sub.get("current_period_end"),
             "grace_started_at": sub.get("grace_started_at"),
             "grace_days_left": grace_days_left,
+            "trial_started_at": sub.get("trial_started_at"),
+            "trial_days_left": trial_days_left,
             "archived_at": sub.get("archived_at"),
+            "recovery_price_usd": recovery["price_usd"],
             "can_purchase": True,
+        }
+
+    # ─── GET /api/storage/check ─ Quota gate for frontend/backend gates ──
+    # Returns whether the user is currently allowed to perform write/save
+    # operations. Used by chat, project saves, etc. to block requests when
+    # the user is over quota, archived, or past_due.
+    @router.get("/check")
+    async def storage_check(user=Depends(get_current_user)):
+        sub = await _evaluate_subscription_state(db, user["user_id"])
+        info = _quota_for_subscription(sub)
+        # Compute current usage
+        used_mb = await _calc_usage_mb(db, user["user_id"])
+        quota_mb = info["quota_mb"]
+        usage_pct = round((used_mb / quota_mb * 100), 1) if quota_mb > 0 else 0
+        over_quota = used_mb >= quota_mb
+        allowed = (not info["locked"]) and (not over_quota)
+        reason = None
+        if info["locked"]:
+            reason = info["locked_reason"]
+        elif over_quota:
+            reason = "امتلأت مساحتك — قم بترقية اشتراكك للمتابعة"
+        return {
+            "allowed": allowed,
+            "reason": reason,
+            "used_mb": round(used_mb, 3),
+            "quota_mb": quota_mb,
+            "usage_pct": usage_pct,
+            "status": info["status"],
+            "plan_id": info["plan_id"],
+            "locked": info["locked"],
+            "over_quota": over_quota,
         }
 
     # ─── POST /api/storage/checkout ─────────────────────────────────────

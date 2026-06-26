@@ -4932,11 +4932,25 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
         });
         if (!r.ok) {
           if (r.status === 402) {
-            // Parse structured error for the friendly recharge banner +
-            // remember the user's pending message so they can hit "إكمل"
-            // (Continue) after recharging without retyping anything.
+            // Parse structured error
             let info = null;
             try { info = await r.json(); } catch { /* ignore */ }
+            const detail = info?.detail || {};
+            // ─── Storage locked / over quota → send them to /billing/storage
+            if (detail.error === 'storage_locked') {
+              const msg = detail.message_ar ||
+                'امتلأت مساحتك التخزينية. ادفع لتفك القفل ومتابعة الكتابة.';
+              toast.error(msg, { duration: 7000 });
+              try {
+                localStorage.setItem(
+                  `zenrex:pending_msg:${projectId}`,
+                  JSON.stringify({ text: msgText, ts: Date.now(), reference: refAsset, attachments: [] }),
+                );
+              } catch (_) { /* ignore quota */ }
+              navigate(detail.cta_url || '/billing/storage');
+              return;
+            }
+            // ─── Insufficient credits → /pricing
             await refreshCredits();
             notifyCreditsChanged();
             try {
@@ -4945,7 +4959,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                 JSON.stringify({ text: msgText, ts: Date.now(), reference: refAsset, attachments: [] }),
               );
             } catch (_) { /* ignore quota */ }
-            const niceMsg = (info && info.detail && info.detail.message_ar) ||
+            const niceMsg = detail.message_ar ||
               'رصيدك غير كافٍ لمتابعة المحادثة. اشحن نقاطك ثم اضغط (إكمل) لمواصلة الذكاء من حيث توقف.';
             toast.error(niceMsg, { duration: 6000 });
             navigate('/pricing');

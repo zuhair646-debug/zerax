@@ -70,34 +70,45 @@ export default function StorageIndicator({ compact = false }) {
   if (!usage) return null;
 
   const pct = Math.min(usage.used_pct || 0, 100);
-  const isArchived = usage.archived;
+  const isArchived = !!(usage.archived || usage.locked);
   const isPastDue = usage.subscription_status === 'past_due';
+  const isOverQuota = !!usage.over_storage;
+  const isTrial = usage.tier === 'trial';
 
-  // Color logic — purely based on storage % + subscription health
+  // Color logic — RED whenever the user must pay to continue
   let color;
-  if (isArchived || pct >= 95) color = 'red';
+  if (isArchived || isOverQuota || pct >= 95) color = 'red';
   else if (isPastDue || pct >= 70) color = 'amber';
   else color = 'emerald';
 
   const colorMap = {
     emerald: { ring: 'border-emerald-400/40', dot: 'bg-emerald-400', text: 'text-emerald-300', bar: 'bg-emerald-400' },
     amber:   { ring: 'border-amber-400/40',   dot: 'bg-amber-400',   text: 'text-amber-300',   bar: 'bg-amber-400' },
-    red:     { ring: 'border-red-500/50',     dot: 'bg-red-500 animate-pulse', text: 'text-red-300', bar: 'bg-red-500' },
+    red:     { ring: 'border-red-500/60 bg-red-500/10',     dot: 'bg-red-500 animate-pulse', text: 'text-red-300', bar: 'bg-red-500' },
   };
   const c = colorMap[color];
 
-  // Build a context-specific warning message instead of the old generic "تجاوزت الحد"
+  // Build a context-specific warning message
   let warningTitle = null;
   let warningBody = null;
   let warningIcon = AlertTriangle;
   if (isArchived) {
-    warningTitle = 'تم أرشفة ملفاتك';
-    warningBody = 'انتهت فترة السماح. ملفاتك محفوظة لدينا — استردها بدفع رسم الاسترداد + تجديد الاشتراك.';
+    warningTitle = 'مساحتك مُقفلة';
+    warningBody = usage.locked_reason || 'انتهى الاشتراك. ادفع رسم الاسترداد (ضعف سعر الباقة) لفك القفل واستعادة الوصول لملفاتك.';
     warningIcon = Archive;
+  } else if (isOverQuota) {
+    warningTitle = 'امتلأت مساحتك التخزينية';
+    warningBody = `استخدمت ${fmtSize(usage.used_mb)} من ${fmtSize(usage.quota_mb)}. يجب الترقية لمتابعة العمل (الكتابة وحفظ المشاريع موقوفة).`;
+    warningIcon = AlertTriangle;
   } else if (isPastDue) {
     const days = usage.grace_days_left;
-    warningTitle = days != null ? `متبقي ${days} أيام قبل الأرشفة` : 'فشل تجديد الاشتراك';
-    warningBody = 'جدّد اشتراكك الآن لتفادي أرشفة ملفاتك. سنرسل لك تذكيرات على بريدك.';
+    warningTitle = days != null ? `متبقي ${days} أيام قبل قفل الوصول` : 'فشل تجديد الاشتراك';
+    warningBody = 'جدّد اشتراكك الآن لتفادي قفل المساحة. سنحاول السحب تلقائياً.';
+    warningIcon = Clock;
+  } else if (isTrial) {
+    const td = usage.trial_days_left;
+    warningTitle = td != null ? `تجربة مجانية — متبقي ${td} يوم` : 'حساب تجريبي';
+    warningBody = `10 ميجا فقط للتجربة. اشترك بـ $3/شهر للحصول على باقة بداية كاملة.`;
     warningIcon = Clock;
   } else if (pct >= 95) {
     warningTitle = 'تخزينك على وشك الامتلاء';
