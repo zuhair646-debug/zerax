@@ -1,6 +1,38 @@
 # Zitex Changelog
 
 
+### 🎨 Feb 2026 — Independence Landing Page (Marketing)
+
+**Goal**: turn the technically-completed Independence Tier into a **sellable** product with a dedicated premium landing.
+
+**New page** (`/app/frontend/src/pages/IndependenceLanding.js` — ~430 lines):
+- Route: `/independence` (public, no auth required).
+- Structure: Hero (with animated terminal mockup showing the ZIP contents) → Comparison table vs. Lovable/Bolt/v0 → 4-step "How it works" (Discovery → Builder → Backend → Independence) → Kit-files visualization (24 files grouped by Frontend/Backend/DevOps/Docs/CI/CD with color-coded chips) → 4-tier pricing grid → FAQ accordion → Final CTA card.
+- Visual language: dark zinc-950 backdrop + fuchsia-purple gradient accents, grain texture overlay, glass-morphism cards, micro-animations on hover, RTL-first layout, IBM Plex Arabic typography via the global stylesheet.
+- All `data-testid` attributes set for testability (`independence-landing`, `hero-cta-primary`, `tiers-grid`, `kit-files-grid`, `faq-list`, `final-cta-btn`, `tier-card-{id}` × 4, etc.).
+- Static Tailwind class maps (no dynamic `bg-${color}-500/10` patterns — JIT-safe).
+
+**Homepage promo banner** (`/app/frontend/src/pages/LandingPage.js`):
+- New banner inserted above the "Create free account" CTA — only on the public homepage.
+- Gradient fuchsia/purple card with $799 price, key value bullets (Frontend + Backend + JWT + CI/CD + One-click VPS), 4 trust badges, "اكتشف الباقة →" button that routes to `/independence`.
+
+**Service Worker** bumped to `v23-2026-02-independence-landing` to force cache invalidation.
+
+**Deployed to production zenrex.ai**:
+- ✅ `https://zenrex.ai/independence` returns 200 + full landing renders correctly.
+- ✅ `https://zenrex.ai/` homepage now displays the Independence promo banner above the footer.
+- ✅ All sections tested: hero terminal animation, comparison table, 4-step flow cards, 24-file kit grid, 4-tier pricing, FAQ accordion, final CTA.
+- ✅ Backend healthy (`/api/health` returns 200).
+- ✅ Backend now ships with full Phase 3 stack (FastAPI builder + Hetzner + GitHub push + Discovery brain + Architecture-Aware build).
+
+**Marketing-ready outcome**: Zenrex now has a clear, premium-tier landing page that can be:
+- Linked from social media campaigns ("اكتشف الباقة الجديدة" → /independence).
+- Embedded as the destination of paid ads.
+- Used as the "Compare with Lovable/Bolt/v0" SEO landing.
+- Shown to corporate/enterprise prospects who need OWNED code (not subscription-dependent).
+
+
+
 ### 🎨 Feb 2026 — Clean Chat UI (Independence Actions Inline)
 
 **User feedback verbatim**: "اللي امتلك الكود مدري شنو اللي فوق الشات واللي يمين الشات انك تلغيهم تماما وخلاص نعتمد على اللي بيكون داخل الشات اللي بيظهر ضمن الخيارات".

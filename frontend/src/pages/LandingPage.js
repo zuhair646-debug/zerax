@@ -474,6 +474,48 @@ const LandingPage = ({ user }) => {
 
         {/* No more "coming soon" — features moved into proper categories */}
 
+        {/* 💎 Independence Tier Promo Banner */}
+        <div className="mt-16 mx-auto max-w-5xl" data-testid="independence-promo-banner">
+          <button
+            type="button"
+            onClick={() => navigate('/independence')}
+            data-testid="independence-promo-cta"
+            className="group block w-full rounded-2xl border border-fuchsia-400/30 bg-gradient-to-br from-fuchsia-900/40 via-purple-900/30 to-zinc-950 p-6 sm:p-8 text-right hover:border-fuchsia-400/60 hover:shadow-2xl hover:shadow-fuchsia-500/20 transition-all"
+            dir="rtl"
+          >
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-6 justify-between">
+              <div className="flex-1">
+                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-fuchsia-500/20 border border-fuchsia-500/40 mb-3">
+                  <Sparkles className="w-3 h-3 text-fuchsia-300" />
+                  <span className="text-[10px] font-black text-fuchsia-200">جديد · باقة Premium</span>
+                </div>
+                <h3 className="text-2xl sm:text-3xl font-black text-white mb-2 leading-tight">
+                  💎 <span className="bg-gradient-to-r from-fuchsia-300 to-purple-300 bg-clip-text text-transparent">الاستقلال الكامل</span> — تطبيق full-stack مستقل في جلسة واحدة
+                </h3>
+                <p className="text-sm text-zinc-300 leading-relaxed mb-3">
+                  FastAPI + MongoDB + JWT + CRUD + CI/CD + One-click VPS — كل هذا بإيدك على سيرفرك بـ GitHub باسمك.
+                </p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-zinc-400">
+                  <span className="flex items-center gap-1"><Check className="w-3 h-3 text-emerald-400" /> 24 ملف بالـZIP</span>
+                  <span className="flex items-center gap-1"><Check className="w-3 h-3 text-emerald-400" /> رخصة MIT</span>
+                  <span className="flex items-center gap-1"><Check className="w-3 h-3 text-emerald-400" /> 60 يوم دعم</span>
+                  <span className="flex items-center gap-1"><Check className="w-3 h-3 text-emerald-400" /> دفعة وحدة بدون اشتراك</span>
+                </div>
+              </div>
+              <div className="text-center shrink-0">
+                <div className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-fuchsia-300 to-purple-300 bg-clip-text text-transparent mb-1">
+                  $799
+                </div>
+                <div className="text-[10px] text-zinc-500 mb-3">مرة واحدة</div>
+                <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-purple-600 group-hover:from-fuchsia-400 group-hover:to-purple-500 text-white font-black text-xs shadow-lg shadow-fuchsia-500/30 transition-all">
+                  اكتشف الباقة
+                  <span className="rtl:rotate-180">→</span>
+                </div>
+              </div>
+            </div>
+          </button>
+        </div>
+
         {!user && (
           <div className="mt-10 flex justify-center">
             <Button

@@ -12,6 +12,7 @@ import AffiliatesAdmin from '@/pages/AffiliatesAdmin';
 import PayoutsAdmin from '@/pages/PayoutsAdmin';
 import LandingPage from '@/pages/LandingPage';
 import DemoLanding from '@/pages/DemoLanding';
+import IndependenceLanding from '@/pages/IndependenceLanding';
 import VrmPreview from '@/pages/VrmPreview';
 import ZenrexDuoLauncher from '@/components/ZenrexDuoLauncher';
 import GlobalAvatarMount from '@/components/GlobalAvatarMount';
@@ -177,6 +178,7 @@ function App() {
         <Routes>
           {/* Root: ALWAYS show landing. Logged-in users can click on dashboard CTA to navigate. */}
           <Route path="/" element={<LandingPage user={user} />} />
+          <Route path="/independence" element={<IndependenceLanding />} />
           <Route path="/build-from-zero" element={<Navigate to="/freebuild/chat" replace />} />
           <Route path="/build-from-zero-legacy" element={<ProtectedRoute><FreeBuild /></ProtectedRoute>} />
           <Route path="/ai-agent" element={<Navigate to="/freebuild/chat" replace />} />
