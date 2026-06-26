@@ -3745,24 +3745,13 @@ def make_freebuild_chat_router(db, get_current_user):
                 "</body></html>",
                 status_code=404
             )
-        # Superseded version → redirect to the newest version with a friendly notice.
+        # Superseded version → INSTANT HTTP 301 to the newest version.
+        # Was: HTML page with `meta refresh content=2` (felt like a white screen
+        # for the user). HTTP 301 is invisible — the browser jumps straight
+        # to the new slug. Search engines also pick up the redirect cleanly.
         if site.get("superseded") and site.get("superseded_by"):
-            new_slug = site["superseded_by"]
-            new_url = f"/s/{new_slug}"
-            return HTMLResponse(
-                f"<!doctype html><html dir='rtl' lang='ar'><head><meta charset='utf-8'>"
-                f"<title>تم تحديث الموقع</title>"
-                f"<meta http-equiv='refresh' content='2;url={new_url}'>"
-                f"<style>body{{font-family:-apple-system,system-ui,'SF Arabic',sans-serif;background:#0a0a14;color:#e5e7eb;text-align:center;padding:80px 20px;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center}}.card{{max-width:540px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.25);border-radius:18px;padding:48px 32px}}h1{{color:#fbbf24;font-size:28px;margin:0 0 16px}}p{{color:#cbd5e1;line-height:1.7;margin:8px 0}}a{{display:inline-block;margin-top:24px;background:#fbbf24;color:#0a0a14;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700}}.spinner{{display:inline-block;width:22px;height:22px;border:3px solid rgba(251,191,36,0.2);border-top-color:#fbbf24;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-left:8px}}@keyframes spin{{to{{transform:rotate(360deg)}}}}</style></head>"
-                f"<body><div class='card'>"
-                f"<h1>⚠️ هذه نسخة قديمة من الموقع</h1>"
-                f"<p>المالك حدّث الموقع — جاري نقلك للنسخة الجديدة <span class='spinner'></span></p>"
-                f"<p style='font-size:13px;opacity:0.6'>إذا لم يتم النقل تلقائياً:</p>"
-                f"<a href='{new_url}'>افتح النسخة الجديدة الآن ←</a>"
-                f"</div></body></html>",
-                status_code=200,
-                headers={"Cache-Control": "no-store, max-age=0, must-revalidate"},
-            )
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url=f"/s/{site['superseded_by']}", status_code=301)
         try:
             await db.freebuild_published_sites.update_one({"slug": slug}, {"$inc": {"views": 1}})
         except Exception:
@@ -3792,21 +3781,10 @@ def make_freebuild_chat_router(db, get_current_user):
         site = await db.freebuild_published_sites.find_one({"slug": slug})
         if not site:
             return HTMLResponse("<h1>Site not found</h1>", status_code=404)
-        # Superseded sub-page → redirect to same filename on the newer slug.
+        # Superseded sub-page → INSTANT HTTP 301 to same filename on newer slug.
         if site.get("superseded") and site.get("superseded_by"):
-            new_slug = site["superseded_by"]
-            new_url = f"/s/{new_slug}/{filename}"
-            return HTMLResponse(
-                f"<!doctype html><html dir='rtl' lang='ar'><head><meta charset='utf-8'>"
-                f"<meta http-equiv='refresh' content='1;url={new_url}'>"
-                f"<title>تم تحديث الموقع</title></head>"
-                f"<body style='font-family:sans-serif;background:#0a0a14;color:#fbbf24;text-align:center;padding:80px'>"
-                f"<h2>⚠️ هذه نسخة قديمة — جاري النقل للنسخة الجديدة...</h2>"
-                f"<p><a href='{new_url}' style='color:#fbbf24'>اضغط هنا إذا لم يتم النقل ←</a></p>"
-                f"</body></html>",
-                status_code=200,
-                headers={"Cache-Control": "no-store, max-age=0, must-revalidate"},
-            )
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url=f"/s/{site['superseded_by']}/{filename}", status_code=301)
         pages = site.get("pages") or {}
         html = pages.get(filename)
         if not html:
