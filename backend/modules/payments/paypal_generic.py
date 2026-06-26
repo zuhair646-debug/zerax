@@ -1,14 +1,11 @@
 """
-Generic PayPal + LemonSqueezy payments for Zenrex packages.
+Generic PayPal payments for Zenrex packages.
 
-Handles all subscription tiers + Project Pack:
-  - tier_starter_monthly ($19 / 2,000 credits)
-  - tier_pro_monthly ($69 / 8,000 credits)
-  - tier_studio_monthly ($199 / 25,000 credits)
-  - project_pack ($49 / 5,000 credits)
-
+Handles all subscription tiers + Project Pack.
 After payment success → adds credits + sets storage_tier.
 Ready Sites packages have their own flow (creates a project after payment).
+
+Note: Lemon Squeezy was fully removed in Feb 2026. PayPal is the sole processor.
 """
 from __future__ import annotations
 
@@ -24,17 +21,16 @@ from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 
-# Credit-only packages. Math: worst-case fees (Lemon 5% + cards 2.9% + $0.50)
-# + LLM cost at 70% utilization ($0.005/credit) — all packs ≥ 35% margin floor.
+# Credit-only packages.
 PACKAGES = {
-    "credits_mini":   {"price_usd": 9.00,    "credits": 1_200,   "label": "1,200 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_MINI"},
-    "credits_small":  {"price_usd": 19.00,   "credits": 2_800,   "label": "2,800 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_STARTER"},
-    "credits_medium": {"price_usd": 49.00,   "credits": 7_500,   "label": "7,500 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_PROJECT_PACK"},
-    "credits_large":  {"price_usd": 99.00,   "credits": 16_000,  "label": "16,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_PRO"},
-    "credits_xl":     {"price_usd": 199.00,  "credits": 32_000,  "label": "32,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_STUDIO"},
-    "credits_pro":    {"price_usd": 500.00,  "credits": 80_000,  "label": "80,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_PRO_PACK"},
-    "credits_mega":   {"price_usd": 1000.00, "credits": 160_000, "label": "160,000 Credits", "lemon_var": "LEMONSQUEEZY_VARIANT_MEGA"},
-    "credits_enterprise": {"price_usd": 3000.00, "credits": 510_000, "label": "510,000 Credits", "lemon_var": "LEMONSQUEEZY_VARIANT_ENTERPRISE"},
+    "credits_mini":   {"price_usd": 9.00,    "credits": 1_200,   "label": "1,200 Credits"},
+    "credits_small":  {"price_usd": 19.00,   "credits": 2_800,   "label": "2,800 Credits"},
+    "credits_medium": {"price_usd": 49.00,   "credits": 7_500,   "label": "7,500 Credits"},
+    "credits_large":  {"price_usd": 99.00,   "credits": 16_000,  "label": "16,000 Credits"},
+    "credits_xl":     {"price_usd": 199.00,  "credits": 32_000,  "label": "32,000 Credits"},
+    "credits_pro":    {"price_usd": 500.00,  "credits": 80_000,  "label": "80,000 Credits"},
+    "credits_mega":   {"price_usd": 1000.00, "credits": 160_000, "label": "160,000 Credits"},
+    "credits_enterprise": {"price_usd": 3000.00, "credits": 510_000, "label": "510,000 Credits"},
 }
 
 # Custom amount: 130 credits/$ (sits just below the smallest pack at 133 cr/$
@@ -75,20 +71,90 @@ class PayPalCaptureIn(BaseModel):
     payer_id: Optional[str] = None
 
 
-class LemonCreateIn(BaseModel):
-    package_id: str
-
-
 class CustomAmountIn(BaseModel):
     amount_usd: float  # USD amount the user wants to pay
-    method: str        # "paypal" | "lemonsqueezy"
+    method: str        # "paypal" only (Lemon Squeezy removed Feb 2026)
+
+
+# ═════════════════════════════════════════════════════════════════
+# 💳 UNIVERSAL PayPal payload — defined at MODULE level so FastAPI
+# can resolve the type annotation during route registration
+# (defining it inside register_payments() caused NameError).
+# ═════════════════════════════════════════════════════════════════
+class UniversalCreateIn(BaseModel):
+    pkg_id: str                       # e.g. "storage_starter" / "code_only" / "independence"
+    amount_usd: float                 # final price the user is paying
+    meta: Optional[dict] = None       # context (project_id, tier, etc.)
+    return_path: Optional[str] = None  # frontend path to land on after capture
 
 
 def register_payments(app, db, get_current_user):
     router = APIRouter(prefix="/api/payments", tags=["payments"])
 
-    # ───────────────────────────── PayPal ─────────────────────────────
+    # ═════════════════════════════════════════════════════════════
+    # 💳 UNIVERSAL PayPal — single endpoint that any feature can use
+    # (storage tiers, independence tier, code unlock, etc.). Replaces
+    # the per-feature endpoints since Lemon Squeezy is being removed.
+    # ═════════════════════════════════════════════════════════════
     @router.post("/paypal/create")
+    async def paypal_create_universal(body: UniversalCreateIn, user=Depends(get_current_user)):
+        if not (os.environ.get("PAYPAL_CLIENT_ID") and os.environ.get("PAYPAL_SECRET")):
+            raise HTTPException(503, "PayPal غير مُهيأ على الخادم")
+        if body.amount_usd <= 0 or body.amount_usd > 5000:
+            raise HTTPException(400, "مبلغ غير صالح")
+        try:
+            import paypalrestsdk
+            paypalrestsdk.configure({
+                "mode": os.environ.get("PAYPAL_MODE", "live"),
+                "client_id": os.environ["PAYPAL_CLIENT_ID"],
+                "client_secret": os.environ["PAYPAL_SECRET"],
+            })
+            frontend = os.environ.get("FRONTEND_URL", "https://zenrex.ai").rstrip("/")
+            ret_path = body.return_path or "/payments/paypal-return"
+            label = (body.meta or {}).get("label_ar") or body.pkg_id
+
+            payment = paypalrestsdk.Payment({
+                "intent": "sale",
+                "payer": {"payment_method": "paypal"},
+                "redirect_urls": {
+                    "return_url": f"{frontend}{ret_path}?pkg={body.pkg_id}",
+                    "cancel_url": f"{frontend}/pricing?cancelled=1",
+                },
+                "transactions": [{
+                    "item_list": {"items": [{
+                        "name": label[:120], "sku": body.pkg_id[:120],
+                        "price": f"{body.amount_usd:.2f}", "currency": "USD", "quantity": 1,
+                    }]},
+                    "amount": {"total": f"{body.amount_usd:.2f}", "currency": "USD"},
+                    "description": label[:120],
+                }],
+            })
+            if not payment.create():
+                log.error(f"[paypal/create-universal] failed: {payment.error}")
+                raise HTTPException(500, f"فشل PayPal: {payment.error}")
+            approval_url = next((link.href for link in payment.links if link.rel == "approval_url"), None)
+            if not approval_url:
+                raise HTTPException(500, "PayPal لم يرجع رابط الموافقة")
+            await db.payment_transactions.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": user["user_id"],
+                "method": "paypal",
+                "paypal_order_id": payment.id,
+                "pkg_id": body.pkg_id,
+                "amount_usd": body.amount_usd,
+                "meta": body.meta or {},
+                "status": "pending",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            return {"order_id": payment.id, "approval_url": approval_url, "amount_usd": body.amount_usd, "pkg_id": body.pkg_id}
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error(f"[paypal/create-universal] exception: {e}", exc_info=True)
+            raise HTTPException(500, f"خطأ في PayPal: {e}")
+
+    # ───────────────────────────── PayPal (legacy: credit packages) ─────────────────────────────
+    @router.post("/paypal/create-credits")
     async def paypal_create(body: PayPalCreateIn, user=Depends(get_current_user)):
         pkg = PACKAGES.get(body.package_id)
         if not pkg:
@@ -177,112 +243,7 @@ def register_payments(app, db, get_current_user):
             log.error(f"[paypal/capture] exception: {e}", exc_info=True)
             raise HTTPException(500, f"خطأ: {e}")
 
-    # ───────────────────────────── LemonSqueezy ───────────────────────
-    @router.post("/lemonsqueezy/create")
-    async def lemon_create(body: LemonCreateIn, user=Depends(get_current_user)):
-        pkg = PACKAGES.get(body.package_id)
-        if not pkg:
-            raise HTTPException(400, "باقة غير صحيحة")
-        api_key = os.environ.get("LEMONSQUEEZY_API_KEY")
-        store_id = os.environ.get("LEMONSQUEEZY_STORE_ID")
-        variant_id = os.environ.get(pkg["lemon_var"])
-        if not (api_key and store_id):
-            raise HTTPException(503, "LemonSqueezy غير مُهيأ")
-        if not variant_id:
-            raise HTTPException(503,
-                f"لم يُضبط Variant ID للباقة — ضع `{pkg['lemon_var']}` في الـ .env")
-
-        frontend = os.environ.get("FRONTEND_URL", "https://zenrex.ai").rstrip("/")
-        txn_ref = str(uuid.uuid4())
-        # Fetch the user's email — `user` from get_current_user only has user_id
-        u_doc = await db.users.find_one({"id": user["user_id"]}, {"email": 1, "_id": 0})
-        u_email = (u_doc or {}).get("email") or "customer@zenrex.ai"
-        payload = {
-            "data": {
-                "type": "checkouts",
-                "attributes": {
-                    "checkout_data": {
-                        # Email NOT pre-filled — LemonSqueezy re-hydrates this
-                        # field on every internal state change, which caused
-                        # a visible flicker reported by the owner. Letting the
-                        # user type once removes the flicker entirely.
-                        "custom": {
-                            "user_id": user["user_id"],
-                            "package_id": body.package_id,
-                            "txn_ref": txn_ref,
-                        },
-                    },
-                    "product_options": {
-                        "redirect_url": f"{frontend}/payments/lemon-return?txn={txn_ref}",
-                    },
-                    "checkout_options": {"embed": False, "media": False, "logo": True,
-                        # Disable PayPal inside LemonSqueezy (user prefers PayPal as separate option)
-                        "button_color": "#fbbf24",
-                    },
-                    # Hide PayPal option inside the LemonSqueezy hosted page
-                    "preview": False,
-                },
-                "relationships": {
-                    "store": {"data": {"type": "stores", "id": str(store_id)}},
-                    "variant": {"data": {"type": "variants", "id": str(variant_id)}},
-                },
-            }
-        }
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Accept": "application/vnd.api+json",
-            "Content-Type": "application/vnd.api+json",
-        }
-        try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                r = await client.post("https://api.lemonsqueezy.com/v1/checkouts", json=payload, headers=headers)
-            if r.status_code >= 400:
-                log.error(f"[lemon/create] {r.status_code}: {r.text[:300]}")
-                raise HTTPException(500, f"LemonSqueezy: {r.status_code}")
-            data = r.json()
-            url = data.get("data", {}).get("attributes", {}).get("url")
-            if not url:
-                raise HTTPException(500, "LemonSqueezy لم يرجع رابط")
-            await db.payment_transactions.insert_one({
-                "id": str(uuid.uuid4()), "user_id": user["user_id"], "method": "lemonsqueezy",
-                "txn_ref": txn_ref, "package_id": body.package_id,
-                "amount_usd": pkg["price_usd"], "credits": pkg["credits"],
-                "status": "pending", "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-            return {"checkout_url": url, "txn_ref": txn_ref}
-        except HTTPException:
-            raise
-        except Exception as e:
-            log.error(f"[lemon/create] exception: {e}", exc_info=True)
-            raise HTTPException(500, f"خطأ LemonSqueezy: {e}")
-
-    @router.post("/lemonsqueezy/webhook")
-    async def lemon_webhook(payload: dict):
-        try:
-            event = payload.get("meta", {}).get("event_name", "")
-            if event not in ("order_created", "subscription_created"):
-                return {"ok": True, "skipped": event}
-            attrs = payload.get("data", {}).get("attributes", {})
-            custom = (attrs.get("first_order_item", {}).get("custom_data")
-                      or attrs.get("custom_data") or {})
-            txn_ref = custom.get("txn_ref")
-            if not txn_ref:
-                return {"ok": True, "skipped": "no_txn_ref"}
-            txn = await db.payment_transactions.find_one({"txn_ref": txn_ref}, {"_id": 0})
-            if not txn:
-                return {"ok": True, "skipped": "txn_not_found"}
-            if txn.get("status") == "completed":
-                return {"ok": True, "already": True}
-            pkg = PACKAGES.get(txn["package_id"]) or {}
-            await _grant_package(db, txn["user_id"], pkg)
-            await db.payment_transactions.update_one(
-                {"txn_ref": txn_ref},
-                {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}},
-            )
-            return {"ok": True}
-        except Exception as e:
-            log.error(f"[lemon webhook] error: {e}", exc_info=True)
-            return {"ok": False, "error": str(e)}
+    # ───────────────────────── Lemon Squeezy removed (Feb 2026) ─────────────────────────
 
     @router.get("/payment-status/{txn_ref}")
     async def payment_status(txn_ref: str, user=Depends(get_current_user)):
@@ -318,7 +279,7 @@ def register_payments(app, db, get_current_user):
             raise HTTPException(400, "المبلغ المخصص متاح حالياً عبر PayPal فقط")
 
     app.include_router(router)
-    log.info("Generic payments registered (PayPal + LemonSqueezy + Custom)")
+    log.info("Generic payments registered (PayPal + Custom — Lemon Squeezy removed)")
 
 
 async def _grant_package(db, user_id: str, pkg: dict):

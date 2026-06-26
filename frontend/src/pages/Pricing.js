@@ -28,7 +28,7 @@ export default function Pricing({ user }) {
   const [promoResult, setPromoResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [checkingOut, setCheckingOut] = useState(null);
-  const [provider, setProvider] = useState('lemonsqueezy'); // 'paypal' | 'lemonsqueezy'
+  const [provider] = useState('paypal'); // PayPal only — Lemon Squeezy removed (Feb 2026)
 
   useEffect(() => {
     (async () => {
@@ -180,26 +180,10 @@ export default function Pricing({ user }) {
         </button>
       </div>
 
-      {/* Payment provider selector */}
-      <div className="max-w-md mx-auto px-6 mb-12">
-        <div className="text-center text-xs text-zinc-500 mb-2">طريقة الدفع المفضلة</div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setProvider('lemonsqueezy')}
-            data-testid="provider-lemonsqueezy"
-            className={`p-3 rounded-lg border-2 text-sm font-bold transition ${provider === 'lemonsqueezy' ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-zinc-800 bg-zinc-900 text-zinc-500'}`}
-          >
-            🍋 بطاقة / Apple Pay / Google Pay
-            <div className="text-xs font-normal text-zinc-500 mt-1">يدعم السعودية والخليج 🇸🇦</div>
-          </button>
-          <button
-            onClick={() => setProvider('paypal')}
-            data-testid="provider-paypal"
-            className={`p-3 rounded-lg border-2 text-sm font-bold transition ${provider === 'paypal' ? 'border-blue-500 bg-blue-500/10 text-blue-400' : 'border-zinc-800 bg-zinc-900 text-zinc-500'}`}
-          >
-            💙 PayPal
-            <div className="text-xs font-normal text-zinc-500 mt-1">+ تقسيط Pay-in-4 🇺🇸 🇪🇺</div>
-          </button>
+      {/* Payment provider — Lemon Squeezy removed; PayPal only. */}
+      <div className="max-w-md mx-auto px-6 mb-12 text-center">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-500/30 bg-blue-500/5 text-blue-300 text-xs font-bold">
+          💳 الدفع عبر PayPal · آمن ودولي
         </div>
       </div>
 

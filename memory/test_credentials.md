@@ -42,12 +42,13 @@ db.users.updateOne({email:"owner@zerax.com"}, {$set:{credits:4}})
 db.storage_subscriptions.deleteMany({user_id:"<uid>"})
 ```
 
-## Required LemonSqueezy Variant IDs (set in /app/backend/.env)
-- LEMONSQUEEZY_STORAGE_STARTER (Subscription, $7/mo)
-- LEMONSQUEEZY_STORAGE_PLUS (Subscription, $14/mo)
-- LEMONSQUEEZY_STORAGE_PRO (Subscription, $29/mo)
-- LEMONSQUEEZY_STORAGE_STUDIO (Subscription, $59/mo)
-- LEMONSQUEEZY_RECOVERY_SMALL (One-time, $5)
-- LEMONSQUEEZY_RECOVERY_MEDIUM (One-time, $15)
-- LEMONSQUEEZY_RECOVERY_LARGE (One-time, $35)
-- LEMONSQUEEZY_RECOVERY_XL (One-time, $79)
+## Storage Pricing (Feb 2026 — linear, PayPal-only)
+- 10MB Free
+- 50MB → $5
+- 100MB → $10
+- 150MB → $15
+- 200MB → $20
+- 300MB → $30
+- 500MB → $50
+- 1GB → $100
+- Lemon Squeezy fully removed. PayPal is the sole processor.

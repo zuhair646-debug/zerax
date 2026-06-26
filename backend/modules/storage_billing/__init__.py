@@ -2,34 +2,29 @@
 Zenrex Storage Billing — Unified storage subscription system.
 
 Separates storage quotas from AI credits. Users subscribe to a monthly plan
-that gives them GB of storage across ALL surfaces (websites, apps, games,
+that gives them MB/GB of storage across ALL surfaces (websites, apps, games,
 images, videos). If the subscription lapses, files enter a 10-day grace
 period (emails sent on days 1/5/8). After grace, files are ARCHIVED
 (invisible to user but kept on our server) for 6 months. User can recover
 their files by paying a tiered recovery fee + renewing subscription.
 
-Plans (monthly USD, recurring via LemonSqueezy):
-  free     -> $0/mo     250 MB    (default)
-  starter  -> $7/mo     3 GB
-  plus     -> $14/mo    15 GB     (most popular)
-  pro      -> $29/mo    75 GB
-  studio   -> $59/mo    300 GB
+Pricing (linear, monthly USD via PayPal):
+  free  -> $0    10 MB    (default)
+  s50   -> $5    50 MB
+  s100  -> $10   100 MB   (most popular)
+  s150  -> $15   150 MB
+  s200  -> $20   200 MB
+  s300  -> $30   300 MB
+  s500  -> $50   500 MB
+  s1000 -> $100  1 GB
 
-Recovery (one-time):
-  <1 GB    -> $5
-  1-10 GB  -> $15
-  10-50 GB -> $35
-  50+ GB   -> $79
+Recovery (one-time, PayPal):
+  small  -> $3   <50 MB
+  medium -> $5   <100 MB
+  large  -> $10  <250 MB
+  xl     -> $25  <1 GB
 
-LemonSqueezy variant env vars (set after creating the variants in LS):
-  LEMONSQUEEZY_STORAGE_STARTER
-  LEMONSQUEEZY_STORAGE_PLUS
-  LEMONSQUEEZY_STORAGE_PRO
-  LEMONSQUEEZY_STORAGE_STUDIO
-  LEMONSQUEEZY_RECOVERY_SMALL
-  LEMONSQUEEZY_RECOVERY_MEDIUM
-  LEMONSQUEEZY_RECOVERY_LARGE
-  LEMONSQUEEZY_RECOVERY_XL
+Note: Lemon Squeezy fully removed in Feb 2026 — PayPal is the sole processor.
 """
 from __future__ import annotations
 
@@ -47,70 +42,97 @@ from pydantic import BaseModel
 log = logging.getLogger(__name__)
 
 # ─── Plan catalogue (server-side only — never trust client) ─────────────
+# Linear pricing per owner directive (Feb 2026):
+#   10MB free, then +$5 for every +50MB. Single processor: PayPal.
 STORAGE_PLANS = {
     "free": {
         "id": "free",
         "label_ar": "مجاني",
         "label_en": "Free",
         "price_usd": 0,
-        "quota_mb": 250,
-        "lemon_var": None,
+        "quota_mb": 10,
         "monthly": False,
-        "description_ar": "تجربة مجانية — 250 ميجا تخزين",
+        "description_ar": "تجربة مجانية — 10 ميجا تخزين",
         "highlight": False,
     },
-    "starter": {
-        "id": "starter",
-        "label_ar": "ستارتر",
-        "label_en": "Starter",
-        "price_usd": 7,
-        "quota_mb": 3 * 1024,         # 3 GB
-        "lemon_var": "LEMONSQUEEZY_STORAGE_STARTER",
+    "s50": {
+        "id": "s50",
+        "label_ar": "50 ميجا",
+        "label_en": "50 MB",
+        "price_usd": 5,
+        "quota_mb": 50,
         "monthly": True,
-        "description_ar": "للمواقع الصغيرة — 3 جيجا تخزين",
+        "description_ar": "بداية المشروع — 50 ميجا تخزين",
         "highlight": False,
     },
-    "plus": {
-        "id": "plus",
-        "label_ar": "بلَس",
-        "label_en": "Plus",
-        "price_usd": 14,
-        "quota_mb": 15 * 1024,        # 15 GB
-        "lemon_var": "LEMONSQUEEZY_STORAGE_PLUS",
+    "s100": {
+        "id": "s100",
+        "label_ar": "100 ميجا",
+        "label_en": "100 MB",
+        "price_usd": 10,
+        "quota_mb": 100,
         "monthly": True,
-        "description_ar": "الأكثر شعبية — 15 جيجا تخزين",
-        "highlight": True,             # featured tier
+        "description_ar": "الأكثر شعبية — 100 ميجا تخزين",
+        "highlight": True,
     },
-    "pro": {
-        "id": "pro",
-        "label_ar": "برو",
-        "label_en": "Pro",
-        "price_usd": 29,
-        "quota_mb": 75 * 1024,        # 75 GB
-        "lemon_var": "LEMONSQUEEZY_STORAGE_PRO",
+    "s150": {
+        "id": "s150",
+        "label_ar": "150 ميجا",
+        "label_en": "150 MB",
+        "price_usd": 15,
+        "quota_mb": 150,
         "monthly": True,
-        "description_ar": "للوكالات — 75 جيجا تخزين",
+        "description_ar": "للمشاريع المتنامية — 150 ميجا تخزين",
         "highlight": False,
     },
-    "studio": {
-        "id": "studio",
-        "label_ar": "ستوديو",
-        "label_en": "Studio",
-        "price_usd": 59,
-        "quota_mb": 300 * 1024,       # 300 GB
-        "lemon_var": "LEMONSQUEEZY_STORAGE_STUDIO",
+    "s200": {
+        "id": "s200",
+        "label_ar": "200 ميجا",
+        "label_en": "200 MB",
+        "price_usd": 20,
+        "quota_mb": 200,
         "monthly": True,
-        "description_ar": "للشركات الكبيرة — 300 جيجا تخزين",
+        "description_ar": "للمحتوى الثقيل — 200 ميجا تخزين",
+        "highlight": False,
+    },
+    "s300": {
+        "id": "s300",
+        "label_ar": "300 ميجا",
+        "label_en": "300 MB",
+        "price_usd": 30,
+        "quota_mb": 300,
+        "monthly": True,
+        "description_ar": "للمشاريع المتقدمة — 300 ميجا تخزين",
+        "highlight": False,
+    },
+    "s500": {
+        "id": "s500",
+        "label_ar": "500 ميجا",
+        "label_en": "500 MB",
+        "price_usd": 50,
+        "quota_mb": 500,
+        "monthly": True,
+        "description_ar": "للاستوديوهات — 500 ميجا تخزين",
+        "highlight": False,
+    },
+    "s1000": {
+        "id": "s1000",
+        "label_ar": "1 جيجا",
+        "label_en": "1 GB",
+        "price_usd": 100,
+        "quota_mb": 1024,
+        "monthly": True,
+        "description_ar": "للمشاريع الكبيرة — 1 جيجا تخزين",
         "highlight": False,
     },
 }
 
-# ─── Recovery fee tiers ─────────────────────────────────────────────────
+# ─── Recovery fee tiers (one-time, PayPal) ──────────────────────────────
 RECOVERY_TIERS = {
-    "small":  {"id": "small",  "label_ar": "استرداد صغير",  "max_gb": 1,    "price_usd": 5,  "lemon_var": "LEMONSQUEEZY_RECOVERY_SMALL"},
-    "medium": {"id": "medium", "label_ar": "استرداد متوسط",  "max_gb": 10,   "price_usd": 15, "lemon_var": "LEMONSQUEEZY_RECOVERY_MEDIUM"},
-    "large":  {"id": "large",  "label_ar": "استرداد كبير",   "max_gb": 50,   "price_usd": 35, "lemon_var": "LEMONSQUEEZY_RECOVERY_LARGE"},
-    "xl":     {"id": "xl",     "label_ar": "استرداد ضخم",    "max_gb": 9999, "price_usd": 79, "lemon_var": "LEMONSQUEEZY_RECOVERY_XL"},
+    "small":  {"id": "small",  "label_ar": "استرداد صغير",  "max_gb": 0.05, "price_usd": 3},
+    "medium": {"id": "medium", "label_ar": "استرداد متوسط",  "max_gb": 0.1,  "price_usd": 5},
+    "large":  {"id": "large",  "label_ar": "استرداد كبير",   "max_gb": 0.25, "price_usd": 10},
+    "xl":     {"id": "xl",     "label_ar": "استرداد ضخم",    "max_gb": 1.0,  "price_usd": 25},
 }
 
 # ─── Grace period config ────────────────────────────────────────────────
@@ -137,46 +159,10 @@ class RecoveryCheckoutIn(BaseModel):
     confirm: bool = True
 
 
-async def _lemon_create_checkout(
-    api_key: str,
-    store_id: str,
-    variant_id: str,
-    custom: dict,
-    redirect_url: str,
-) -> str:
-    """Generic LemonSqueezy checkout creator (subscription or one-time).
-    Returns the hosted checkout URL.
-    """
-    payload = {
-        "data": {
-            "type": "checkouts",
-            "attributes": {
-                "checkout_data": {"custom": custom},
-                "product_options": {"redirect_url": redirect_url},
-                "checkout_options": {"embed": False, "media": False, "logo": True, "button_color": "#fbbf24"},
-                "preview": False,
-            },
-            "relationships": {
-                "store": {"data": {"type": "stores", "id": str(store_id)}},
-                "variant": {"data": {"type": "variants", "id": str(variant_id)}},
-            },
-        }
-    }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Accept": "application/vnd.api+json",
-        "Content-Type": "application/vnd.api+json",
-    }
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        r = await client.post("https://api.lemonsqueezy.com/v1/checkouts", json=payload, headers=headers)
-    if r.status_code >= 400:
-        log.error(f"[storage/lemon] {r.status_code}: {r.text[:300]}")
-        raise HTTPException(500, f"LemonSqueezy error {r.status_code}")
-    data = r.json()
-    url = data.get("data", {}).get("attributes", {}).get("url")
-    if not url:
-        raise HTTPException(500, "LemonSqueezy لم يرجع رابط")
-    return url
+class StorageCaptureIn(BaseModel):
+    txn_ref: str
+    order_id: Optional[str] = None
+    payer_id: Optional[str] = None
 
 
 async def _get_user_storage_subscription(db, user_id: str) -> dict:
@@ -187,7 +173,7 @@ async def _get_user_storage_subscription(db, user_id: str) -> dict:
             "user_id": user_id,
             "plan_id": "free",
             "status": "active",                # active | past_due | archived | cancelled
-            "lemon_subscription_id": None,
+            "paypal_subscription_id": None,
             "current_period_end": None,
             "grace_started_at": None,
             "archived_at": None,
@@ -201,14 +187,13 @@ def register_storage_billing(app, db, get_current_user):
     # ─── GET /api/storage/plans ─────────────────────────────────────────
     @router.get("/plans")
     async def list_plans():
-        # Mark which variants are configured (so the frontend can disable
-        # buttons until the owner adds the env vars).
+        # PayPal is the sole processor — all paid plans are available
+        # as long as PAYPAL_CLIENT_ID/SECRET are configured.
+        pp_ok = bool(os.environ.get("PAYPAL_CLIENT_ID") and os.environ.get("PAYPAL_SECRET"))
         out = []
         for plan in STORAGE_PLANS.values():
-            available = True
-            if plan["lemon_var"] is not None:
-                available = bool(os.environ.get(plan["lemon_var"]))
-            out.append({**plan, "available": available, "quota_gb": round(plan["quota_mb"] / 1024, 1)})
+            available = True if plan["price_usd"] == 0 else pp_ok
+            out.append({**plan, "available": available, "quota_gb": round(plan["quota_mb"] / 1024, 2)})
         return {"plans": out, "recovery": list(RECOVERY_TIERS.values()), "grace_days": GRACE_DAYS}
 
     # ─── GET /api/storage/subscription ──────────────────────────────────
@@ -267,42 +252,62 @@ def register_storage_billing(app, db, get_current_user):
             )
             return {"ok": True, "downgraded_to": "free"}
 
-        api_key = os.environ.get("LEMONSQUEEZY_API_KEY")
-        store_id = os.environ.get("LEMONSQUEEZY_STORE_ID")
-        variant_id = os.environ.get(plan["lemon_var"] or "")
-        if not (api_key and store_id):
-            raise HTTPException(503, "LemonSqueezy غير مُهيأ")
-        if not variant_id:
-            raise HTTPException(
-                503,
-                f"لم يُضبط Variant ID لباقة {plan['label_ar']} — ضع `{plan['lemon_var']}` في .env",
+        # ─── PayPal (Lemon Squeezy removed — Feb 2026) ─────────────────
+        if not (os.environ.get("PAYPAL_CLIENT_ID") and os.environ.get("PAYPAL_SECRET")):
+            raise HTTPException(503, "PayPal غير مُهيأ على الخادم")
+        try:
+            import paypalrestsdk
+            paypalrestsdk.configure({
+                "mode": os.environ.get("PAYPAL_MODE", "live"),
+                "client_id": os.environ["PAYPAL_CLIENT_ID"],
+                "client_secret": os.environ["PAYPAL_SECRET"],
+            })
+            frontend = os.environ.get("FRONTEND_URL", "https://zenrex.ai").rstrip("/")
+            txn_ref = str(uuid.uuid4())
+            payment = paypalrestsdk.Payment({
+                "intent": "sale",
+                "payer": {"payment_method": "paypal"},
+                "redirect_urls": {
+                    "return_url": f"{frontend}/billing/storage?status=success&txn={txn_ref}",
+                    "cancel_url": f"{frontend}/billing/storage?status=cancelled",
+                },
+                "transactions": [{
+                    "item_list": {"items": [{
+                        "name": f"Storage {plan['label_ar']} ({plan['quota_mb']}MB)",
+                        "sku": f"storage_{plan['id']}",
+                        "price": f"{plan['price_usd']:.2f}",
+                        "currency": "USD",
+                        "quantity": 1,
+                    }]},
+                    "amount": {"total": f"{plan['price_usd']:.2f}", "currency": "USD"},
+                    "description": plan["description_ar"],
+                }],
+            })
+            if not payment.create():
+                raise HTTPException(500, f"فشل PayPal: {payment.error}")
+            approval_url = next(
+                (link.href for link in payment.links if link.rel == "approval_url"), None
             )
-        frontend = os.environ.get("FRONTEND_URL", "https://zenrex.ai").rstrip("/")
-        txn_ref = str(uuid.uuid4())
-        url = await _lemon_create_checkout(
-            api_key=api_key,
-            store_id=store_id,
-            variant_id=variant_id,
-            custom={
+            if not approval_url:
+                raise HTTPException(500, "PayPal لم يرجع رابط الموافقة")
+            await db.payment_transactions.insert_one({
+                "id": str(uuid.uuid4()),
                 "user_id": user["user_id"],
+                "method": "paypal",
+                "paypal_order_id": payment.id,
+                "txn_ref": txn_ref,
                 "kind": "storage_subscription",
                 "plan_id": plan["id"],
-                "txn_ref": txn_ref,
-            },
-            redirect_url=f"{frontend}/billing/storage?status=success&txn={txn_ref}",
-        )
-        await db.payment_transactions.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": user["user_id"],
-            "method": "lemonsqueezy",
-            "txn_ref": txn_ref,
-            "kind": "storage_subscription",
-            "plan_id": plan["id"],
-            "amount_usd": plan["price_usd"],
-            "status": "pending",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        return {"checkout_url": url, "txn_ref": txn_ref}
+                "amount_usd": plan["price_usd"],
+                "status": "pending",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            return {"checkout_url": approval_url, "txn_ref": txn_ref, "method": "paypal"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error(f"[storage/checkout] PayPal exception: {e}", exc_info=True)
+            raise HTTPException(500, f"خطأ في PayPal: {e}")
 
     # ─── POST /api/storage/recovery/checkout ────────────────────────────
     @router.post("/recovery/checkout")
@@ -312,159 +317,166 @@ def register_storage_billing(app, db, get_current_user):
             raise HTTPException(400, "حسابك ليس في حالة أرشفة — لا حاجة للاسترداد")
         archived_size_mb = float(sub.get("archived_size_mb") or 0)
         tier = pick_recovery_tier(archived_size_mb)
-        api_key = os.environ.get("LEMONSQUEEZY_API_KEY")
-        store_id = os.environ.get("LEMONSQUEEZY_STORE_ID")
-        variant_id = os.environ.get(tier["lemon_var"])
-        if not (api_key and store_id):
-            raise HTTPException(503, "LemonSqueezy غير مُهيأ")
-        if not variant_id:
-            raise HTTPException(503, f"Variant ID مفقود لـ {tier['label_ar']} — ضع `{tier['lemon_var']}` في .env")
-        frontend = os.environ.get("FRONTEND_URL", "https://zenrex.ai").rstrip("/")
-        txn_ref = str(uuid.uuid4())
-        url = await _lemon_create_checkout(
-            api_key=api_key,
-            store_id=store_id,
-            variant_id=variant_id,
-            custom={
+        if not (os.environ.get("PAYPAL_CLIENT_ID") and os.environ.get("PAYPAL_SECRET")):
+            raise HTTPException(503, "PayPal غير مُهيأ على الخادم")
+        try:
+            import paypalrestsdk
+            paypalrestsdk.configure({
+                "mode": os.environ.get("PAYPAL_MODE", "live"),
+                "client_id": os.environ["PAYPAL_CLIENT_ID"],
+                "client_secret": os.environ["PAYPAL_SECRET"],
+            })
+            frontend = os.environ.get("FRONTEND_URL", "https://zenrex.ai").rstrip("/")
+            txn_ref = str(uuid.uuid4())
+            payment = paypalrestsdk.Payment({
+                "intent": "sale",
+                "payer": {"payment_method": "paypal"},
+                "redirect_urls": {
+                    "return_url": f"{frontend}/billing/storage?status=recovered&txn={txn_ref}",
+                    "cancel_url": f"{frontend}/billing/storage?status=cancelled",
+                },
+                "transactions": [{
+                    "item_list": {"items": [{
+                        "name": f"Storage Recovery — {tier['label_ar']}",
+                        "sku": f"storage_recovery_{tier['id']}",
+                        "price": f"{tier['price_usd']:.2f}",
+                        "currency": "USD",
+                        "quantity": 1,
+                    }]},
+                    "amount": {"total": f"{tier['price_usd']:.2f}", "currency": "USD"},
+                    "description": f"استرداد ملفات الأرشيف — {tier['label_ar']}",
+                }],
+            })
+            if not payment.create():
+                raise HTTPException(500, f"فشل PayPal: {payment.error}")
+            approval_url = next(
+                (link.href for link in payment.links if link.rel == "approval_url"), None
+            )
+            if not approval_url:
+                raise HTTPException(500, "PayPal لم يرجع رابط الموافقة")
+            await db.payment_transactions.insert_one({
+                "id": str(uuid.uuid4()),
                 "user_id": user["user_id"],
+                "method": "paypal",
+                "paypal_order_id": payment.id,
+                "txn_ref": txn_ref,
                 "kind": "storage_recovery",
                 "recovery_tier": tier["id"],
-                "txn_ref": txn_ref,
-            },
-            redirect_url=f"{frontend}/billing/storage?status=recovered&txn={txn_ref}",
-        )
-        await db.payment_transactions.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": user["user_id"],
-            "method": "lemonsqueezy",
-            "txn_ref": txn_ref,
-            "kind": "storage_recovery",
-            "recovery_tier": tier["id"],
-            "amount_usd": tier["price_usd"],
-            "status": "pending",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        return {"checkout_url": url, "txn_ref": txn_ref, "tier": tier}
-
-    # ─── POST /api/storage/webhook ─ LemonSqueezy events ───────────────
-    # NOTE: For HMAC validation use LEMONSQUEEZY_WEBHOOK_SECRET if you set it
-    # at the LS dashboard. Many LS users keep this open; we validate via the
-    # custom user_id field which is server-set during checkout creation.
-    @router.post("/webhook")
-    async def storage_webhook(payload: dict):
-        try:
-            event = payload.get("meta", {}).get("event_name", "")
-            attrs = payload.get("data", {}).get("attributes", {}) or {}
-            custom = (
-                attrs.get("first_order_item", {}).get("custom_data")
-                or attrs.get("custom_data")
-                or payload.get("meta", {}).get("custom_data")
-                or {}
-            )
-            user_id = custom.get("user_id")
-            kind = custom.get("kind")
-            if not user_id:
-                return {"ok": True, "skipped": "no_user_id"}
-
-            # ── A) Successful initial / renewal payment for storage sub ──
-            if event in ("order_created", "subscription_created", "subscription_payment_success") and kind == "storage_subscription":
-                plan_id = custom.get("plan_id") or "starter"
-                plan = STORAGE_PLANS.get(plan_id) or STORAGE_PLANS["starter"]
-                lemon_sub_id = attrs.get("subscription_id") or attrs.get("first_subscription_item", {}).get("subscription_id")
-                period_end = attrs.get("renews_at") or (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-                await db.storage_subscriptions.update_one(
-                    {"user_id": user_id},
-                    {"$set": {
-                        "user_id": user_id,
-                        "plan_id": plan_id,
-                        "status": "active",
-                        "lemon_subscription_id": lemon_sub_id,
-                        "current_period_end": period_end,
-                        "grace_started_at": None,
-                        "archived_at": None,
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }},
-                    upsert=True,
-                )
-                # Lift any archived flag on the user + bump quota
-                await db.users.update_one(
-                    {"id": user_id},
-                    {"$set": {
-                        "storage_tier": plan_id,
-                        "storage_quota_mb": plan["quota_mb"],
-                        "storage_archived": False,
-                    }},
-                )
-                # If files were archived, restore them
-                await db.freebuild_projects.update_many(
-                    {"user_id": user_id, "status": "archived"},
-                    {"$set": {"status": "active"}},
-                )
-                # Mark txn complete
-                if custom.get("txn_ref"):
-                    await db.payment_transactions.update_one(
-                        {"txn_ref": custom["txn_ref"]},
-                        {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}},
-                    )
-                log.info(f"[storage-webhook] subscription {plan_id} active for {user_id}")
-                return {"ok": True, "applied": "subscription_active"}
-
-            # ── B) Failed renewal → start grace period ───────────────────
-            if event in ("subscription_payment_failed",):
-                await db.storage_subscriptions.update_one(
-                    {"user_id": user_id},
-                    {"$set": {
-                        "status": "past_due",
-                        "grace_started_at": datetime.now(timezone.utc).isoformat(),
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }},
-                )
-                log.info(f"[storage-webhook] {user_id} -> past_due (grace start)")
-                return {"ok": True, "applied": "grace_start"}
-
-            # ── C) Cancelled subscription (manual or auto) ───────────────
-            if event in ("subscription_cancelled", "subscription_expired"):
-                await db.storage_subscriptions.update_one(
-                    {"user_id": user_id},
-                    {"$set": {
-                        "status": "past_due",
-                        "grace_started_at": datetime.now(timezone.utc).isoformat(),
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }},
-                )
-                return {"ok": True, "applied": "cancelled_grace"}
-
-            # ── D) Successful recovery payment → un-archive + require active sub ──
-            if event in ("order_created",) and kind == "storage_recovery":
-                await db.storage_subscriptions.update_one(
-                    {"user_id": user_id},
-                    {"$set": {
-                        "status": "past_due",            # still must renew sub
-                        "archived_at": None,
-                        "archived_size_mb": 0,
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }},
-                )
-                await db.freebuild_projects.update_many(
-                    {"user_id": user_id, "status": "archived"},
-                    {"$set": {"status": "active"}},
-                )
-                await db.users.update_one(
-                    {"id": user_id},
-                    {"$set": {"storage_archived": False}},
-                )
-                if custom.get("txn_ref"):
-                    await db.payment_transactions.update_one(
-                        {"txn_ref": custom["txn_ref"]},
-                        {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}},
-                    )
-                log.info(f"[storage-webhook] recovery applied for {user_id}")
-                return {"ok": True, "applied": "recovery_complete"}
-
-            return {"ok": True, "skipped": event}
+                "amount_usd": tier["price_usd"],
+                "status": "pending",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            return {"checkout_url": approval_url, "txn_ref": txn_ref, "tier": tier}
+        except HTTPException:
+            raise
         except Exception as e:
-            log.error(f"[storage-webhook] error: {e}", exc_info=True)
-            return {"ok": False, "error": str(e)}
+            log.error(f"[storage/recovery] PayPal exception: {e}", exc_info=True)
+            raise HTTPException(500, f"خطأ في PayPal: {e}")
+
+    # ─── POST /api/storage/capture ─ PayPal return handler ────────────
+    # Called by the frontend `BillingStorage` page after the user returns
+    # from PayPal. Finds the pending transaction, executes the payment,
+    # and activates the storage subscription (or recovery).
+    @router.post("/capture")
+    async def storage_capture(body: StorageCaptureIn, user=Depends(get_current_user)):
+        txn = await db.payment_transactions.find_one(
+            {"txn_ref": body.txn_ref, "user_id": user["user_id"]}, {"_id": 0},
+        )
+        if not txn:
+            raise HTTPException(404, "السجل غير موجود")
+        if txn.get("status") == "completed":
+            return {"ok": True, "already": True, "kind": txn.get("kind"), "plan_id": txn.get("plan_id")}
+        # Execute the PayPal payment
+        try:
+            import paypalrestsdk
+            paypalrestsdk.configure({
+                "mode": os.environ.get("PAYPAL_MODE", "live"),
+                "client_id": os.environ["PAYPAL_CLIENT_ID"],
+                "client_secret": os.environ["PAYPAL_SECRET"],
+            })
+            order_id = body.order_id or txn.get("paypal_order_id")
+            payment = paypalrestsdk.Payment.find(order_id)
+            if not payment:
+                raise HTTPException(404, "الطلب غير موجود في PayPal")
+            if body.payer_id and payment.state != "approved":
+                ok = payment.execute({"payer_id": body.payer_id})
+                if not ok:
+                    log.error(f"[storage/capture] execute failed: {payment.error}")
+                    raise HTTPException(500, f"فشل تنفيذ الدفع: {payment.error}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error(f"[storage/capture] exception: {e}", exc_info=True)
+            raise HTTPException(500, f"خطأ في PayPal: {e}")
+
+        uid = user["user_id"]
+        kind = txn.get("kind")
+
+        # ── A) Storage subscription activation ─────────────────────────
+        if kind == "storage_subscription":
+            plan_id = txn.get("plan_id") or "s50"
+            plan = STORAGE_PLANS.get(plan_id) or STORAGE_PLANS["s50"]
+            period_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+            await db.storage_subscriptions.update_one(
+                {"user_id": uid},
+                {"$set": {
+                    "user_id": uid,
+                    "plan_id": plan_id,
+                    "status": "active",
+                    "paypal_subscription_id": None,
+                    "current_period_end": period_end,
+                    "grace_started_at": None,
+                    "archived_at": None,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+            await db.users.update_one(
+                {"id": uid},
+                {"$set": {
+                    "storage_tier": plan_id,
+                    "storage_quota_mb": plan["quota_mb"],
+                    "storage_archived": False,
+                }},
+            )
+            await db.freebuild_projects.update_many(
+                {"user_id": uid, "status": "archived"},
+                {"$set": {"status": "active"}},
+            )
+            await db.payment_transactions.update_one(
+                {"txn_ref": body.txn_ref},
+                {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            log.info(f"[storage-capture] subscription {plan_id} active for {uid}")
+            return {"ok": True, "kind": "storage_subscription", "plan_id": plan_id}
+
+        # ── B) Recovery activation ─────────────────────────────────────
+        if kind == "storage_recovery":
+            await db.storage_subscriptions.update_one(
+                {"user_id": uid},
+                {"$set": {
+                    "status": "past_due",            # still must renew sub
+                    "archived_at": None,
+                    "archived_size_mb": 0,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            await db.freebuild_projects.update_many(
+                {"user_id": uid, "status": "archived"},
+                {"$set": {"status": "active"}},
+            )
+            await db.users.update_one(
+                {"id": uid},
+                {"$set": {"storage_archived": False}},
+            )
+            await db.payment_transactions.update_one(
+                {"txn_ref": body.txn_ref},
+                {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            log.info(f"[storage-capture] recovery applied for {uid}")
+            return {"ok": True, "kind": "storage_recovery"}
+
+        return {"ok": True, "kind": kind, "skipped": "unknown_kind"}
 
     # ─── Background job: enforce grace → archive ───────────────────────
     async def enforce_grace_loop():

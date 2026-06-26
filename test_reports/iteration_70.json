@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 70 — verified Zenrex linear storage pricing (PayPal-only) end-to-end. Backend: 11/11 pytest pass (4 existing + 7 new regression). Frontend: /billing/storage renders all 8 plan cards with linear pricing schedule, s100 highlighted, Arabic explanatory text present, and CTA click triggers /api/storage/checkout (busy spinner visible).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/billing/storage", "issues": ["Page makes 12 network calls (3 fetches × 4 reload cycles) on initial mount — likely React StrictMode double-mount + URL params re-trigger. Not breaking, but wasteful. Consider de-duping the reload trigger in useEffect."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_storage_linear_pricing.py",
+    "/app/backend/tests/test_storage_iter70_extra.py",
+    "/app/test_reports/pytest/iter70_storage_linear.xml",
+    "/app/test_reports/pytest/iter70_extra.xml"
+  ],
+  "verified_endpoints": [
+    "GET /api/storage/plans → 200, 8 tiers, s100 highlight=true, prices [0,5,10,15,20,30,50,100]",
+    "POST /api/payments/paypal/create → 200 with approval_url=https://www.paypal.com/... (universal endpoint regression fixed — UniversalCreateIn now resolves)",
+    "POST /api/storage/checkout {plan_id:'s100'} → 200 method=paypal + PayPal approval URL",
+    "POST /api/storage/checkout {plan_id:'free'} → 200 downgraded_to='free'",
+    "POST /api/storage/capture → endpoint exists (404 record-not-found, NOT route-missing)",
+    "GET /api/storage/subscription → 200 with plan_id, plan_quota_mb, status (auth required)",
+    "Negative: /api/payments/paypal/create without auth → 401/403",
+    "Negative: /api/payments/paypal/create amount=0 or amount>5000 → 400",
+    "Regression: /api/payments/lemonsqueezy/create & /api/storage/webhook → DO NOT return 500 (allowed to 404)"
+  ],
+  "verified_ui_elements": [
+    "All 8 plan cards rendered with data-testid storage-plan-{free,s50,s100,s150,s200,s300,s500,s1000}",
+    "s100 card shows 'الأكثر شعبية' badge (highlight)",
+    "Arabic explanatory text 'تسعير خطي بسيط: 10 ميجا مجاناً، ثم $5 لكل 50 ميجا إضافية.' present",
+    "Prices visible correctly: مجاني, $5, $10, $15, $20, $30, $50, $100",
+    "CTA click (data-testid storage-plan-cta-s50) triggers /api/storage/checkout (busy spinner shown on button)",
+    "Free plan shows 'باقتك الحالية' (current plan) badge for owner@zerax.com"
+  ],
+  "action_items": [
+    "Optional: de-dupe useEffect reload trigger in BillingStorage.js to reduce 12→3 initial API calls (low priority)."
+  ],
+  "critical_code_review_comments": [
+    "GOOD: UniversalCreateIn correctly moved to module level (paypal_generic.py:84) — root cause of the original NameError fixed.",
+    "GOOD: StorageCaptureIn also at module level (storage_billing/__init__.py:162).",
+    "GOOD: STORAGE_PLANS server-authoritative; frontend cannot manipulate prices.",
+    "GOOD: /storage/capture handles both storage_subscription and storage_recovery kinds; idempotent via 'already' short-circuit.",
+    "MINOR: storage_billing/__init__.py:243 still sets 'lemon_subscription_id: None' field — dead artifact from removed LS code, harmless but should be cleaned up.",
+    "MINOR: BillingStorage.js useEffect dependency-less reload + Promise.all means a single 500 on /freebuild-chat/storage/usage would still allow plans to render (good), but errors are caught silently into toast — acceptable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_storage_iter70_extra.py (new — 7 regression tests)"
+  ],
+  "success_rate": {"backend": "100% (11/11 pytest)", "frontend": "100% (all 8 plans + CTA + Arabic text verified)"},
+  "test_credentials": "owner@zerax.com / owner123 (from /app/memory/test_credentials.md). access_token field='token'.",
+  "seed_data_creation": "None. Test uses existing owner account.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Storage linear-pricing + PayPal-only flow is fully verified. Regression suite lives at /app/backend/tests/test_storage_linear_pricing.py (4 tests) + /app/backend/tests/test_storage_iter70_extra.py (7 tests). Run with: cd /app/backend && pytest tests/test_storage_linear_pricing.py tests/test_storage_iter70_extra.py -v. Lemon Squeezy fully removed — frontend has no provider switch UI anymore (PayPal hardcoded). After PayPal approval_url is returned, the actual capture leg can't be tested without a real PayPal sandbox session.",
+  "rca_of_the_issue": "Original bug RCA confirmed by passing test_paypal_universal_endpoint_works: UniversalCreateIn was defined INSIDE register_payments() — FastAPI's dependency injection couldn't resolve the Pydantic type during route registration (raised NameError), causing register_payments to never include the router, hence 404 on /api/payments/paypal/create. Fix (already applied) — moved UniversalCreateIn (and StorageCaptureIn) to module level so FastAPI can resolve them when reflecting on the endpoint signature. Same pattern was the right call for any future Pydantic schemas used in nested register_* factories."
+}

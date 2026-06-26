@@ -1,8 +1,8 @@
 /**
  * BillingStorage — Storage subscription plans page.
  *
- * Lists the 5 storage tiers (free / starter / plus / pro / studio) plus
- * recovery options for archived users. Routes to LemonSqueezy for paid plans.
+ * Lists linear storage tiers (10MB free, +$5 per +50MB up to 1GB) plus
+ * recovery options for archived users. Routes to PayPal for paid plans.
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -55,10 +55,43 @@ export default function BillingStorage() {
 
   useEffect(() => {
     reload();
-    // success/recovered redirects
+    // PayPal return: capture the pending transaction so the subscription
+    // actually flips to active (PayPal does not call our server directly).
     const status = params.get('status');
-    if (status === 'success') toast.success('تم تفعيل اشتراك التخزين بنجاح');
-    if (status === 'recovered') toast.success('تم استرداد ملفاتك. جدّد اشتراكك للحفاظ عليها.');
+    const txn = params.get('txn');
+    const orderId = params.get('paymentId') || params.get('orderID') || params.get('token');
+    const payerId = params.get('PayerID');
+    if (status === 'success' && txn) {
+      (async () => {
+        try {
+          const token = localStorage.getItem('token');
+          await fetch(`${API}/api/storage/capture`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ txn_ref: txn, order_id: orderId, payer_id: payerId }),
+          });
+          toast.success('تم تفعيل اشتراك التخزين بنجاح');
+          await reload();
+        } catch (e) {
+          toast.error('فشل تأكيد الدفع — تواصل مع الدعم إذا تم الخصم');
+        }
+      })();
+    } else if (status === 'recovered' && txn) {
+      (async () => {
+        try {
+          const token = localStorage.getItem('token');
+          await fetch(`${API}/api/storage/capture`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ txn_ref: txn, order_id: orderId, payer_id: payerId }),
+          });
+          toast.success('تم استرداد ملفاتك. جدّد اشتراكك للحفاظ عليها.');
+          await reload();
+        } catch (e) {
+          toast.error('فشل تأكيد الاسترداد — تواصل مع الدعم');
+        }
+      })();
+    }
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startCheckout = async (planId) => {
@@ -204,7 +237,10 @@ export default function BillingStorage() {
 
         {/* Plans grid */}
         <h2 className="text-xl font-black mb-4 text-amber-200">اختر باقتك</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
+        <p className="text-zinc-400 text-sm mb-4">
+          تسعير خطي بسيط: 10 ميجا مجاناً، ثم <span className="text-amber-300 font-bold">$5 لكل 50 ميجا إضافية</span>.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">
           {plans.map((plan) => {
             const isCurrent = sub?.plan_id === plan.id;
             const isFree = plan.id === 'free';
@@ -291,7 +327,7 @@ export default function BillingStorage() {
               <ShieldCheck className="w-5 h-5 text-amber-300" />
             </div>
             <h3 className="font-black mb-1">دفع شهري آمن</h3>
-            <p className="text-xs text-zinc-400">يتجدد اشتراكك تلقائياً كل شهر عبر LemonSqueezy.</p>
+            <p className="text-xs text-zinc-400">يتجدد اشتراكك تلقائياً كل شهر عبر PayPal.</p>
           </div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
             <div className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center mb-3">

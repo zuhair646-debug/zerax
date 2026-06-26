@@ -18,6 +18,14 @@ import {
   Lock, Shield, ArrowLeft, FileCode, Crown, Zap, Globe, Server,
   PlayCircle, Cpu, GitBranch, Award,
 } from 'lucide-react';
+import PayPalButton from '../components/PayPalButton';
+
+const TIER_PRICE_MAP = {
+  free: 0,
+  code: 79,
+  guided: 199,
+  independence: 799,
+};
 
 const TIERS = [
   {
@@ -163,22 +171,23 @@ function TierCard({ tier, onCta }) {
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        onClick={() => onCta(tier.id)}
-        data-testid={`tier-cta-${tier.id}`}
-        className={`w-full py-2.5 rounded-lg font-black text-sm transition-all ${
-          isFlag
-            ? 'bg-gradient-to-r from-fuchsia-500 via-purple-500 to-violet-600 hover:from-fuchsia-400 hover:to-violet-500 text-white shadow-lg shadow-fuchsia-500/30'
-            : tier.popular
-            ? 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black'
-            : tier.id === 'free'
-            ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black'
-            : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black'
-        }`}
-      >
-        ابدأ
-      </button>
+      {tier.id === 'free' ? (
+        <button
+          type="button"
+          onClick={() => onCta(tier.id)}
+          data-testid={`tier-cta-${tier.id}`}
+          className="w-full py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black font-black text-sm transition-all"
+        >
+          ابدأ مجاناً
+        </button>
+      ) : (
+        <PayPalButton
+          amountUsd={TIER_PRICE_MAP[tier.id] || 0}
+          pkgId={`tier_${tier.id}`}
+          meta={{ tier: tier.id, label_ar: tier.name }}
+          label={`اشترك بـ ${tier.price}`}
+        />
+      )}
     </div>
   );
 }
@@ -288,15 +297,14 @@ export default function IndependenceLanding() {
               <span className="text-fuchsia-200 font-bold">Frontend + Backend FastAPI + MongoDB + JWT + CI/CD</span> — كل شيء بإيدك على VPS خاص بك، بـ GitHub باسمك.
             </p>
             <div className="flex flex-wrap items-center gap-3 mb-8">
-              <button
-                type="button"
-                onClick={() => handleCta('independence')}
-                data-testid="hero-cta-primary"
-                className="px-6 py-3 rounded-xl bg-gradient-to-r from-fuchsia-500 via-purple-500 to-violet-600 hover:from-fuchsia-400 hover:to-violet-500 text-white font-black text-sm shadow-xl shadow-fuchsia-500/30 transition-all hover:scale-105 flex items-center gap-2"
-              >
-                <Rocket className="w-4 h-4" />
-                ابدأ الآن — $799 مرة واحدة
-              </button>
+              <div className="w-full sm:w-auto sm:min-w-[280px]">
+                <PayPalButton
+                  amountUsd={799}
+                  pkgId="tier_independence"
+                  meta={{ tier: 'independence', label_ar: 'الاستقلال الكامل', source: 'hero' }}
+                  label="ابدأ الآن — الاستقلال الكامل"
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -538,16 +546,15 @@ export default function IndependenceLanding() {
           <p className="text-zinc-300 text-sm mb-8 max-w-xl mx-auto leading-relaxed">
             ابدأ بدفعة واحدة، اطلع بتطبيق full-stack حقيقي، على سيرفرك، بـGitHub باسمك. بدون اشتراك. بدون قيود.
           </p>
-          <button
-            type="button"
-            onClick={() => handleCta('independence')}
-            data-testid="final-cta-btn"
-            className="px-8 py-4 rounded-xl bg-gradient-to-r from-fuchsia-500 via-purple-500 to-violet-600 hover:from-fuchsia-400 hover:to-violet-500 text-white font-black text-base shadow-xl shadow-fuchsia-500/30 transition-all hover:scale-105 inline-flex items-center gap-2"
-          >
-            <Rocket className="w-5 h-5" />
-            ابدأ مشروعك الآن — $799
-          </button>
-          <p className="text-[10px] text-zinc-500 mt-4">دفع آمن عبر Stripe · ضمان 14 يوم استرداد</p>
+          <div className="max-w-sm mx-auto">
+            <PayPalButton
+              amountUsd={799}
+              pkgId="tier_independence"
+              meta={{ tier: 'independence', label_ar: 'الاستقلال الكامل', source: 'final_cta' }}
+              label="ابدأ مشروعك الآن"
+            />
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-4">دفع آمن عبر PayPal · ضمان 14 يوم استرداد</p>
         </div>
       </section>
 
