@@ -8482,19 +8482,30 @@ verdict = READY، 0 placeholders، 0 dead buttons").
    عرض النتيجة الحقيقية من الأداة (length_before/after, removed_ids,
    filename, إلخ) = الدليل الوحيد على الإنجاز. أي شيء غير ذلك = كذب.
 
-🚫 **11. ممنوع "الوعد وتوقّف" — Anti Announce-and-Stop:**
+🚫 **11. ممنوع "الوعد وتوقّف" — Anti Announce-and-Stop (مُنفَّذ بالسيرفر):**
    إذا كتبت في ردّك أي عبارة تعدّ بفعل قادم — مثل:
      "سأبدأ التنفيذ" / "سأصلح الآن" / "يبدأ التنفيذ الآن..." / "Let me start..." /
      "بعدها أبني" / "ثم أنشئ" / "خلّيني أصلح" / "نبدأ الآن" / أي جملة تنتهي بـ "..." أو ":"
    ⚠️ **يجب أن يحتوي نفس الـ turn على tool_use فعلي يُنفّذ الوعد**.
-   ⚠️ **ممنوع** كتابة وعد ثم إنهاء الـ turn بلا أداة — العميل سيدفع شعلات
-   ثانية ليجبرك على إكمال ما وعدت به، وهذا ظلم له.
-   
+   ⚠️ **السيرفر يكتشف الكذبة تلقائياً**: لو كتبت وعداً بلا tool_use، السيرفر سيُجبرك
+   على إعادة المحاولة بـ `tool_choice=any` حتى 3 مرات — فأنت لن تكسب شيئاً بكتابة
+   "انتظر دقيقة ⌛" ثم السكوت. كل محاولة فاشلة = ضياع للـ tokens بدون فائدة للعميل.
+
    السلوك الصحيح:
      خاطئ ❌: "🔧 أصلح الـ placeholders الآن..." [end turn]
-     صحيح ✅: "🔧 أصلح الـ placeholders" + `apply_section(...)` + 
+     خاطئ ❌: "راح أسوي فحص شامل: 1. HTML 2. JS 3. ... انتظر دقيقة ⌛" [end turn]
+     صحيح ✅: "🔧 أصلح الـ placeholders" + `apply_section(...)` +
              `audit_html` + "✅ تم — 0 placeholders متبقية."
-   
+     صحيح ✅: "🔬 فحص هندسي — أبدأ بـ HTML Structure الآن" + `audit_html(...)` →
+             تعرض النتيجة → "✅ HTML نظيف. التالي JS Handlers..." + `engineer_summon(...)`
+             → استمر خطوة-بخطوة حتى تخلّص كل المهمة في turns متعاقبة.
+
+   📌 **للمهام الطويلة (فحص شامل، بناء عدة صفحات، تنفيذ خطة من 5+ خطوات):**
+   - لا تنشر checklist كامل ثم تسكت — العميل يحس إنك توقفت.
+   - بدل ذلك: انشر **الخطوة الحالية فقط**، نفّذها بـ tool_use، أعلن نتيجتها مختصرة،
+     ثم ابدأ الخطوة التالية في نفس الـ turn أو الذي يليه. **لا تكتب "انتظر".**
+   - أنت **مهندس** يشتغل خطوة-بخطوة بحرفية، لست موظف استقبال يخبر العميل بنوايا.
+
    إذا احتجت تفكير طويل، اصمت تماماً ولا تكتب — استدعِ الأدوات مباشرة.
    النص بدون tool_use = إنهاء الـ turn. لا توعد بلا تنفيذ.
 
@@ -9133,16 +9144,40 @@ async def _run_anthropic_agent(
     except Exception:
         full_system_prompt = base_prompt
 
+    # ── 🛡️ Anti-Stoppage Guard (non-streaming path) ────────────────
+    _stoppage_retries_ns = 0
+    _MAX_STOPPAGE_RETRIES_NS = 3
+    import re as _re_stop_ns
+    _STOPPAGE_RE_NS = _re_stop_ns.compile(
+        r"سأبدأ|راح أ|الآن أ|خلّيني أ|خليني أ|"
+        r"انتظر\s*(?:دقيقة|لحظة|قليلاً|ثانية)|⌛|⏳|"
+        r"يبدأ\s*التنفيذ|يبدأ\s*الآن|بعدها\s*أ|ثم\s*أ|"
+        r"\.\.\.\s*$|:\s*$|Let me\s+|I'll\s+(?:start|begin|now)|"
+        r"سوف\s*أ|بحاول\s*أ",
+        _re_stop_ns.IGNORECASE | _re_stop_ns.MULTILINE,
+    )
+
+    def _is_unfulfilled_promise_ns(text: str) -> bool:
+        if not text:
+            return False
+        return bool(_STOPPAGE_RE_NS.search(text[-500:]))
+
+    _force_any_tool_next = False
+
     for _step in range(max_iterations):
         iterations += 1
         try:
-            resp = await client.messages.create(
+            _create_kwargs: Dict[str, Any] = dict(
                 model=model,
                 system=full_system_prompt,
                 max_tokens=8000,
                 tools=tools_for_user(ctx.is_owner),
                 messages=messages,
             )
+            if _force_any_tool_next:
+                _create_kwargs["tool_choice"] = {"type": "any"}
+                _force_any_tool_next = False
+            resp = await client.messages.create(**_create_kwargs)
         except Exception as e:
             return {"ok": False, "error": f"anthropic call failed: {type(e).__name__}: {str(e)[:200]}",
                     "iterations": iterations, "tool_log": ctx.tool_log}
@@ -9168,12 +9203,34 @@ async def _run_anthropic_agent(
         messages.append({"role": "assistant", "content": assistant_blocks})
 
         if not tool_uses:
-            # No tool calls this turn — accept the AI's text response as-is.
-            # LYING GUARD removed per user request: zero hard rules; trust the
-            # AI's intelligence + workflow_engine system-prompt guidance.
+            # No tool calls this turn — but check for the "Announce-and-Stop"
+            # bug (same fix as the streaming path).
+            _text_buf = ""
             for b in assistant_blocks:
                 if b.get("type") == "text":
-                    summary = (summary + "\n" + b["text"]).strip()
+                    _text_buf = (_text_buf + "\n" + b["text"]).strip()
+            if (
+                _stoppage_retries_ns < _MAX_STOPPAGE_RETRIES_NS
+                and _is_unfulfilled_promise_ns(_text_buf)
+            ):
+                _stoppage_retries_ns += 1
+                logger.info(
+                    f"[anti-stoppage-ns] retry {_stoppage_retries_ns}/{_MAX_STOPPAGE_RETRIES_NS} "
+                    f"— promise without tool. Tail: {_text_buf[-150:]!r}"
+                )
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "⛔ Anti-Announce-and-Stop: قلت إنك راح تسوي شيء بدون tool_use. "
+                        "في هذا الـ turn يجب أن تستدعي أداة واحدة على الأقل تنفّذ ما وعدت به. "
+                        "إذا المهمة طويلة، نفّذ خطوة واحدة الآن وكمل الباقي في الـ turn التالي. "
+                        "الكلام بلا tool = إنهاء غير مكتمل."
+                    ),
+                })
+                _force_any_tool_next = True
+                continue
+            # Genuine end-of-turn — accept the text.
+            summary = (summary + "\n" + _text_buf).strip()
             break
 
         tool_results: List[Dict[str, Any]] = []
@@ -9936,6 +9993,32 @@ async def _stream_one_provider(
     _blocked_tools: set = set()
     _required_tool: Optional[str] = None
 
+    # ── 🛡️ Anti-Stoppage Guard (إصلاح "AI يعلن وعداً ثم يتوقف") ──────
+    # If the model returns text-only with a phrase like "سأبدأ / راح أسوي /
+    # انتظر دقيقة / ⌛" without any tool_use, it's the classic
+    # announce-and-stop bug. We push a strict system reminder and re-run the
+    # turn up to 3 times before accepting the silence.
+    _stoppage_retries = 0
+    _MAX_STOPPAGE_RETRIES = 3
+    import re as _re_stop
+    _STOPPAGE_PATTERNS = [
+        r"سأبدأ", r"راح أ", r"الآن أ", r"خلّيني أ", r"خليني أ",
+        r"انتظر\s*(?:دقيقة|لحظة|قليلاً|ثانية)", r"⌛", r"⏳",
+        r"يبدأ\s*التنفيذ", r"يبدأ\s*الآن", r"بعدها\s*أ", r"ثم\s*أ",
+        r"\.\.\.\s*$", r":\s*$", r"Let me\s+", r"I'll\s+(?:start|begin|now)",
+        r"سوف\s*أ", r"بحاول\s*أ",
+    ]
+    _STOPPAGE_RE = _re_stop.compile("|".join(_STOPPAGE_PATTERNS), _re_stop.IGNORECASE | _re_stop.MULTILINE)
+
+    def _looks_like_unfulfilled_promise(text: str) -> bool:
+        """Detect 'I will...' / 'انتظر دقيقة ⌛' patterns that need a tool_use."""
+        if not text:
+            return False
+        # Only treat as a promise if the text is short-ish (long answers are
+        # likely real content) and contains at least one stoppage signal.
+        snippet = text[-500:]  # focus on the tail (where promises usually sit)
+        return bool(_STOPPAGE_RE.search(snippet))
+
     for step in range(max_iterations):
         iterations += 1
         logger.info(f"[agent-stream] iter={iterations} start (provider={provider})")
@@ -10199,11 +10282,47 @@ async def _stream_one_provider(
                     await asyncio.sleep(0)
 
         if not tool_uses:
-            # No tool calls this turn — accept the model's text response as
-            # the final answer. Stall-recovery, false-failure detection, and
-            # in-turn lie detection were ALL removed per user request: zero
-            # hard rules, trust the AI's intelligence + system-prompt guidance.
-            summary = "\n".join(text_chunks).strip()
+            # No tool calls this turn — but check for the "Announce-and-Stop"
+            # bug: AI wrote a promise like "راح أسوي... انتظر دقيقة ⌛" then
+            # ended the turn without doing the work. We retry with a strict
+            # reminder up to 3 times. If still no tool, we accept the text.
+            _text_so_far = "\n".join(text_chunks).strip()
+            if (
+                _stoppage_retries < _MAX_STOPPAGE_RETRIES
+                and _looks_like_unfulfilled_promise(_text_so_far)
+            ):
+                _stoppage_retries += 1
+                logger.info(
+                    f"[anti-stoppage] retry {_stoppage_retries}/{_MAX_STOPPAGE_RETRIES} "
+                    f"— AI promised work without tool_use. Tail: {_text_so_far[-150:]!r}"
+                )
+                # Visible status so the user knows we're forcing continuation
+                # (no more silent stalls). Friendly Arabic tone.
+                yield _sse("info", {
+                    "message": "🔧 أكمل تنفيذ المهمة...",
+                })
+                await asyncio.sleep(0)
+                # Push a strong reminder + flip force_tool_use_next_iter so
+                # Anthropic call below uses tool_choice={"type":"any"} which
+                # forces the model to pick at least one tool this turn.
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "⛔ Anti-Announce-and-Stop: قلت إنك راح تسوي شيء (مثلاً 'سأبدأ' / "
+                        "'انتظر دقيقة' / '⌛') لكن أنهيت الـ turn بدون أي tool_use. "
+                        "هذا ممنوع — العميل لا يريد وعوداً، يريد عملاً. "
+                        "في هذا الـ turn يجب أن تستدعي tool واحدة على الأقل تنفّذ ما وعدت به مباشرة. "
+                        "لا تكتب 'سأ' / 'راح' / 'الآن أ' بدون tool_use يطابقها. "
+                        "إذا المهمة طويلة (فحص شامل، بناء عدة صفحات)، نفّذ خطوة واحدة الآن "
+                        "ثم أعلِم العميل بإيجاز ('🔨 الآن أؤسس HTML') وكمل الخطوة التالية في tool_use ثانية. "
+                        "الكلام بلا tool = إنهاء الـ turn، والعميل سيعيد المحادثة على حسابه."
+                    ),
+                })
+                force_tool_use_next_iter = True
+                # Don't double-charge tokens for the failed-promise turn.
+                continue
+            # Genuine end-of-turn — accept the text.
+            summary = _text_so_far
             break
 
         # Execute each tool, emit "tool" events
