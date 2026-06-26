@@ -2726,9 +2726,12 @@ function CodeActions({ project, projectId, onOpenConnections }) {
 // ─────────────────────────────────────────────────────────────
 // 💎 Independence Tier Banner — premium customer always sees the
 // one-click Delivery Kit + Handover summary at the top of chat.
+// Also exposes the VPS provisioning UI (Hetzner one-click deploy).
 // ─────────────────────────────────────────────────────────────
 function IndependenceBanner({ project, projectId }) {
   const [busy, setBusy] = useState(false);
+  const [vpsOpen, setVpsOpen] = useState(false);
+  const [gitBusy, setGitBusy] = useState(false);
   const downloadKit = async () => {
     setBusy(true);
     try {
@@ -2757,10 +2760,41 @@ function IndependenceBanner({ project, projectId }) {
       setBusy(false);
     }
   };
+  const pushToGithub = async () => {
+    const repoName = window.prompt('اسم المستودع على GitHub:', (project.name || 'my-site').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'my-site');
+    if (!repoName) return;
+    setGitBusy(true);
+    try {
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('repo_name', repoName.trim());
+      fd.append('private', 'false');
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/push-independence-to-github`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        if ((d.detail || '').includes('اربط GitHub')) {
+          toast.error('اربط GitHub أولاً من زر الاتصالات (PAT بصلاحية repo)');
+          return;
+        }
+        throw new Error(d.detail || 'فشل دفع الكود');
+      }
+      toast.success(`🐙 رُفع ${d.pushed_count} ملف على GitHub`);
+      window.open(d.repo_url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setGitBusy(false);
+    }
+  };
+  const vps = project.vps;
   return (
     <div
       data-testid="independence-banner"
-      className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-500/15 via-purple-500/10 to-zinc-900 p-4 shadow-lg shadow-fuchsia-500/10"
+      className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-500/15 via-purple-500/10 to-zinc-900 p-4 shadow-lg shadow-fuchsia-500/10 space-y-3"
     >
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
@@ -2773,21 +2807,308 @@ function IndependenceBanner({ project, projectId }) {
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-fuchsia-500/30 text-fuchsia-50 font-bold">$799</span>
             </p>
             <p className="text-[11px] text-fuchsia-200/70 leading-relaxed">
-              Delivery Kit جاهز — Dockerfile, nginx, deploy.sh, ARCHITECTURE.md (Claude) + HANDOVER.md
+              Delivery Kit + One-click VPS + GitHub Transfer + 60-day support
             </p>
           </div>
         </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={downloadKit}
+            disabled={busy || !project.current_html}
+            data-testid="banner-download-kit-btn"
+            className="px-3 py-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-purple-600 hover:from-fuchsia-400 hover:to-purple-500 disabled:opacity-50 text-white font-black text-xs flex items-center gap-2 whitespace-nowrap"
+          >
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {project.current_html ? 'تحميل Kit' : 'انتظر الموقع'}
+          </button>
+          <button
+            type="button"
+            onClick={pushToGithub}
+            disabled={gitBusy || !project.current_html}
+            data-testid="banner-push-github-btn"
+            className="px-3 py-2 rounded-lg bg-gradient-to-r from-zinc-800 to-black hover:from-zinc-700 hover:to-zinc-900 disabled:opacity-50 text-white font-black text-xs flex items-center gap-2 whitespace-nowrap border border-zinc-700"
+          >
+            {gitBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
+            ادفع لـ GitHub
+          </button>
+          <button
+            type="button"
+            onClick={() => setVpsOpen((v) => !v)}
+            data-testid="banner-vps-toggle-btn"
+            className="px-3 py-2 rounded-lg border border-fuchsia-400/50 bg-black/30 hover:bg-fuchsia-500/20 text-fuchsia-100 font-black text-xs flex items-center gap-2 whitespace-nowrap"
+          >
+            🚀 {vps && vps.server_id ? 'حالة الـVPS' : 'نشر على VPS'}
+            {vps?.status === 'running' && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            )}
+          </button>
+        </div>
+      </div>
+      {vpsOpen && (
+        <VpsProvisionPanel project={project} projectId={projectId} onClose={() => setVpsOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 🚀 VPS Provisioning Panel — paste Hetzner token, one-click deploy.
+// ─────────────────────────────────────────────────────────────
+function VpsProvisionPanel({ project, projectId, onClose }) {
+  const [hetznerToken, setHetznerToken] = useState('');
+  const [domain, setDomain] = useState('');
+  const [validating, setValidating] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
+  const [vps, setVps] = useState(project.vps || null);
+  const [tokenSaved, setTokenSaved] = useState(false);
+  const [polling, setPolling] = useState(false);
+
+  // Check if Hetzner is already connected
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/connections`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const d = await r.json();
+        const has = (d.connections || []).find((c) => c.provider === 'hetzner');
+        setTokenSaved(!!has);
+      } catch (_) { /* ignore */ }
+    })();
+  }, [projectId]);
+
+  // Poll vps-status every 5s when a server exists and isn't ready
+  useEffect(() => {
+    if (!vps || !vps.server_id || vps.status === 'running' && vps.cloud_init_status === 'done') {
+      return undefined;
+    }
+    let alive = true;
+    const tick = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/vps-status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!alive) return;
+        const d = await r.json();
+        if (r.ok) setVps((prev) => ({ ...(prev || {}), ...d }));
+      } catch (_) { /* ignore */ }
+    };
+    setPolling(true);
+    tick();
+    const id = setInterval(tick, 5000);
+    return () => { alive = false; clearInterval(id); setPolling(false); };
+  }, [vps?.server_id, vps?.status, projectId]);
+
+  const validateAndSaveToken = async () => {
+    if (!hetznerToken.trim()) {
+      toast.error('الصق التوكن أولاً');
+      return;
+    }
+    setValidating(true);
+    try {
+      const token = localStorage.getItem('token');
+      // First validate
+      const vf = new FormData();
+      vf.append('token', hetznerToken.trim());
+      const vr = await fetch(`${API}/api/freebuild-chat/project/${projectId}/vps-validate-token`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: vf,
+      });
+      const vd = await vr.json();
+      if (!vr.ok) throw new Error(vd.detail || 'فشل التحقق من التوكن');
+      // Then save as connection
+      const sf = new FormData();
+      sf.append('token', hetznerToken.trim());
+      sf.append('extra', vd.default_location || 'nbg1');
+      const sr = await fetch(`${API}/api/freebuild-chat/project/${projectId}/connections/hetzner`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: sf,
+      });
+      if (!sr.ok) {
+        const err = await sr.json().catch(() => ({}));
+        throw new Error(err.detail || 'فشل حفظ التوكن');
+      }
+      setTokenSaved(true);
+      setHetznerToken('');
+      toast.success('✅ تم حفظ توكن Hetzner — جاهز للنشر');
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const provision = async () => {
+    setProvisioning(true);
+    try {
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('domain', domain.trim());
+      fd.append('server_type', 'cx22');
+      fd.append('location', 'nbg1');
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/provision-vps`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل إنشاء السيرفر');
+      setVps(d);
+      toast.success(`🚀 السيرفر بدأ — IP: ${d.ip || 'يُعدّ'}`);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setProvisioning(false);
+    }
+  };
+
+  // ── Render: existing VPS status
+  if (vps && vps.server_id) {
+    const isReady = vps.status === 'running';
+    return (
+      <div className="rounded-lg border border-fuchsia-500/30 bg-black/40 p-4 space-y-2" data-testid="vps-status-panel">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="text-sm font-black text-fuchsia-100">🚀 حالة الـ VPS</h4>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="bg-zinc-900/60 rounded p-2 border border-white/5">
+            <div className="text-[10px] text-zinc-500">الحالة</div>
+            <div className="font-bold text-fuchsia-200">{vps.stage_ar || vps.status}</div>
+          </div>
+          <div className="bg-zinc-900/60 rounded p-2 border border-white/5">
+            <div className="text-[10px] text-zinc-500">IP السيرفر</div>
+            <div className="font-mono font-bold text-cyan-200">{vps.ip || '—'}</div>
+          </div>
+          <div className="bg-zinc-900/60 rounded p-2 border border-white/5">
+            <div className="text-[10px] text-zinc-500">النوع</div>
+            <div className="font-bold text-zinc-200">{vps.server_type || 'cx22'} ({vps.location})</div>
+          </div>
+          <div className="bg-zinc-900/60 rounded p-2 border border-white/5">
+            <div className="text-[10px] text-zinc-500">الدومين</div>
+            <div className="font-bold text-zinc-200">{vps.domain || '—'}</div>
+          </div>
+        </div>
+        {isReady && vps.ip && (
+          <a
+            href={vps.domain ? `https://${vps.domain}` : `http://${vps.ip}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="vps-open-link"
+            className="w-full px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black text-xs font-black flex items-center justify-center gap-2"
+          >
+            <ExternalLink className="w-3.5 h-3.5" /> افتح الموقع
+          </a>
+        )}
+        {!isReady && polling && (
+          <p className="text-[11px] text-fuchsia-300/80 text-center flex items-center justify-center gap-2">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            يتم النشر تلقائياً — قد يستغرق ٢-٣ دقائق...
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // ── Render: needs Hetzner token first
+  if (!tokenSaved) {
+    return (
+      <div className="rounded-lg border border-fuchsia-500/30 bg-black/40 p-4 space-y-3" data-testid="vps-token-panel">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-black text-fuchsia-100">🔑 اربط حساب Hetzner Cloud</h4>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="text-[11px] text-zinc-300 leading-relaxed space-y-1">
+          <p>للنشر على VPS مستقل، ابني API Token من Hetzner Console:</p>
+          <ol className="list-decimal mr-4 space-y-0.5 text-zinc-400">
+            <li>ادخل <a href="https://console.hetzner.com/" target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline">console.hetzner.com</a> → سجّل/سجل دخول</li>
+            <li>اختر مشروعك → Security → API Tokens → Generate API Token</li>
+            <li>اختر صلاحية Read &amp; Write → انسخ التوكن</li>
+            <li>الصقه تحت 👇</li>
+          </ol>
+        </div>
+        <input
+          type="password"
+          value={hetznerToken}
+          onChange={(e) => setHetznerToken(e.target.value)}
+          placeholder="hcloud_xxxxxxxxxxxxxxxxxxxxxxxxxxx..."
+          data-testid="hetzner-token-input"
+          className="w-full bg-zinc-900/60 border border-fuchsia-500/30 rounded-lg px-3 py-2 text-xs font-mono text-fuchsia-100 outline-none focus:border-fuchsia-300"
+        />
         <button
           type="button"
-          onClick={downloadKit}
-          disabled={busy || !project.current_html}
-          data-testid="banner-download-kit-btn"
-          className="px-4 py-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-purple-600 hover:from-fuchsia-400 hover:to-purple-500 disabled:opacity-50 text-white font-black text-xs flex items-center gap-2 whitespace-nowrap"
+          onClick={validateAndSaveToken}
+          disabled={validating || !hetznerToken.trim()}
+          data-testid="hetzner-token-save-btn"
+          className="w-full py-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-purple-600 hover:from-fuchsia-400 hover:to-purple-500 text-white font-black text-xs flex items-center justify-center gap-2 disabled:opacity-50"
         >
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          {project.current_html ? 'تحميل Independence Kit' : 'انتظر اكتمال الموقع'}
+          {validating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          تحقق واحفظ التوكن
         </button>
       </div>
+    );
+  }
+
+  // ── Render: token saved, ready to provision
+  return (
+    <div className="rounded-lg border border-fuchsia-500/30 bg-black/40 p-4 space-y-3" data-testid="vps-provision-panel">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-black text-fuchsia-100 flex items-center gap-2">
+          🚀 انشر على Hetzner Cloud
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">Hetzner ✓</span>
+        </h4>
+        <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-[11px]">
+        <div className="bg-zinc-900/60 rounded p-2 border border-white/5">
+          <div className="text-[10px] text-zinc-500">نوع السيرفر</div>
+          <div className="font-bold text-zinc-200">CX22</div>
+          <div className="text-[10px] text-zinc-500">2 vCPU · 4 GB · 40 GB · €4.5/mo</div>
+        </div>
+        <div className="bg-zinc-900/60 rounded p-2 border border-white/5">
+          <div className="text-[10px] text-zinc-500">الموقع</div>
+          <div className="font-bold text-zinc-200">Nuremberg, DE</div>
+          <div className="text-[10px] text-zinc-500">nbg1 — أوربا</div>
+        </div>
+      </div>
+      <div>
+        <label className="text-[11px] text-zinc-300 block mb-1">دومين مخصص (اختياري — يفعّل HTTPS تلقائياً)</label>
+        <input
+          type="text"
+          value={domain}
+          onChange={(e) => setDomain(e.target.value)}
+          placeholder="example.com (اختياري)"
+          data-testid="vps-domain-input"
+          className="w-full bg-zinc-900/60 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 outline-none focus:border-fuchsia-300"
+        />
+        <p className="text-[10px] text-zinc-500 mt-1">
+          خلّه فاضي للنشر على IP فقط. إذا حطّيت دومين، أضف A record يشير لـ IP السيرفر أولاً.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={provision}
+        disabled={provisioning || !project.current_html}
+        data-testid="vps-provision-btn"
+        className="w-full py-2.5 rounded-lg bg-gradient-to-r from-fuchsia-500 via-purple-500 to-violet-600 hover:from-fuchsia-400 hover:to-violet-500 text-white font-black text-sm flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-fuchsia-500/30"
+      >
+        {provisioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
+        أنشئ السيرفر وانشر تلقائياً
+      </button>
+      <p className="text-[10px] text-zinc-500 text-center">
+        ⚠️ هذا سيستهلك من رصيد Hetzner الخاص بك (€4.5/شهر). Zenrex لا يدفع شيء.
+      </p>
     </div>
   );
 }

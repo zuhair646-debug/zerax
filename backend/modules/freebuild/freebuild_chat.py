@@ -1905,9 +1905,9 @@ def make_freebuild_chat_router(db, get_current_user):
                 "\n"
                 "**المرحلة ٥ — نقل ملكية GitHub:**\n"
                 "  1. اطلب من العميل GitHub username (مثلاً 'mohammed-abc').\n"
-                "  2. اطلب PAT (Personal Access Token) بصلاحية repo full.\n"
-                "  3. أنشئ repo جديد باسم العميل وادفع الكود (استعمل tool push_to_github).\n"
-                "  4. اشرح كيف يحوّل ملكية الـ repo لاسمه إن أردت ينقله من حسابك.\n"
+                "  2. اطلب PAT (Personal Access Token) بصلاحية repo full → ربط من زر 'الاتصالات'.\n"
+                "  3. أعطه زر '🐙 ادفع Independence Kit لـ GitHub' في الواجهة — يستدعي `/push-independence-to-github` ويرفع ١١ ملف دفعة وحدة.\n"
+                "  4. اشرح كيف يحوّل ملكية الـ repo: ادخل Settings → Transfer ownership → اكتب اسم حسابه/منظمته.\n"
                 "\n"
                 "**المرحلة ٦ — التسليم الرسمي:**\n"
                 "  1. اعطه ملف HANDOVER.md (موجود في الـ ZIP) كفاتورة تسليم.\n"
@@ -2063,6 +2063,19 @@ def make_freebuild_chat_router(db, get_current_user):
         except Exception:
             _section_brief = ""
 
+        # 🧠 Discovery Blueprint context — once the customer confirmed
+        # "ready_to_build" we expose the roadmap to the Builder for every
+        # turn, not just the kickoff message. This is what makes the
+        # Discovery Brain worth its weight: phase-by-phase execution.
+        discovery_ctx = ""
+        _disc = proj.get("discovery") or {}
+        if _disc and _disc.get("status") in ("building", "ready_to_build", "in_discovery"):
+            try:
+                from modules.freebuild.discovery_brain import render_blueprint_for_builder
+                discovery_ctx = "\n\n" + render_blueprint_for_builder(_disc) + "\n"
+            except Exception:
+                discovery_ctx = ""
+
         extra_ctx = (
             _section_brief + "\n\n"
             + guardian_note_for_prompt
@@ -2077,6 +2090,7 @@ def make_freebuild_chat_router(db, get_current_user):
             f"{app_ctx}"
             f"{template_ctx}"
             f"{guided_ctx}\n"
+            f"{discovery_ctx}"
             "\n"
             "🧠 **استراتيجية المستشار الذكي (Value Consultant — لا تخالفها أبداً)**:\n"
             "═══════════════════════════════════════════════════════════════\n"
@@ -6626,7 +6640,7 @@ def make_freebuild_chat_router(db, get_current_user):
         extra: str = Form(default=""),
         user=Depends(get_current_user),
     ):
-        if provider not in ("github", "vercel", "cloudflare", "domain"):
+        if provider not in ("github", "vercel", "cloudflare", "domain", "hetzner"):
             raise HTTPException(400, "provider غير مدعوم")
         proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0, "id": 1})
         if not proj:
@@ -6746,6 +6760,130 @@ def make_freebuild_chat_router(db, get_current_user):
             {"$set": {"github_repo_url": repo_url, "updated_at": _now()}},
         )
         return {"ok": True, "repo_url": repo_url, "pages_url_hint": pages_url}
+
+    # ═══════════════════════════════════════════════════════════════
+    # 💎 INDEPENDENCE PHASE-2 — Push the FULL Independence Kit (10 files)
+    # to the customer's GitHub repo and (optionally) transfer ownership.
+    # ═══════════════════════════════════════════════════════════════
+    @router.post("/project/{pid}/push-independence-to-github")
+    async def push_independence_to_github(
+        pid: str,
+        repo_name: str = Form(...),
+        private: bool = Form(default=False),
+        user=Depends(get_current_user),
+    ):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404)
+        if proj.get("tier") != "full_independence":
+            raise HTTPException(402, "هذه الميزة لباقة الاستقلال الكامل فقط ($799).")
+        if not proj.get("current_html"):
+            raise HTTPException(400, "أكمل الموقع قبل النشر على GitHub.")
+        conn = await db.freebuild_connections.find_one(
+            {"project_id": pid, "user_id": user["user_id"], "provider": "github"},
+            {"_id": 0, "token_enc": 1},
+        )
+        if not conn:
+            raise HTTPException(400, "اربط GitHub أولاً من زر 'الاتصالات' — يحتاج Personal Access Token بصلاحية repo.")
+        token = _dec(conn["token_enc"])
+        if not token:
+            raise HTTPException(400, "GitHub token تالف. أعد ربطه.")
+
+        # Build the kit (10 files + index.html)
+        from modules.freebuild.independence_kit import build_independence_kit
+        kit = await build_independence_kit(
+            proj, owner_email=user.get("email") or user.get("user_id") or "—"
+        )
+        # Strip Zenrex footer
+        html = proj.get("current_html") or ""
+        if ZENREX_FOOTER_MARK in html:
+            fs = html.find(ZENREX_FOOTER_MARK)
+            fe = html.find("</a>", fs)
+            if fe != -1:
+                html = html[:fs] + html[fe + 4:]
+
+        files_to_push: Dict[str, str] = {"index.html": html, **kit}
+
+        import httpx
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        async with httpx.AsyncClient(timeout=60) as cli:
+            u_r = await cli.get("https://api.github.com/user", headers=headers)
+            if u_r.status_code != 200:
+                raise HTTPException(400, f"فشل التحقق من GitHub: {u_r.status_code}")
+            owner = u_r.json().get("login")
+
+            # Create repo (idempotent)
+            cr_r = await cli.post(
+                "https://api.github.com/user/repos",
+                headers=headers,
+                json={
+                    "name": repo_name,
+                    "private": private,
+                    "auto_init": True,
+                    "description": f"Independence delivery — {proj.get('name', '')}",
+                },
+            )
+            if cr_r.status_code not in (201, 422):
+                raise HTTPException(400, f"فشل إنشاء المستودع: {cr_r.status_code} — {cr_r.text[:160]}")
+
+            # Push every kit file
+            pushed: List[str] = []
+            failed: List[Dict[str, Any]] = []
+            for fname, fcontent in files_to_push.items():
+                try:
+                    get_f = await cli.get(
+                        f"https://api.github.com/repos/{owner}/{repo_name}/contents/{fname}",
+                        headers=headers,
+                    )
+                    sha = get_f.json().get("sha") if get_f.status_code == 200 else None
+                    content_b64 = base64.b64encode(fcontent.encode()).decode()
+                    payload = {
+                        "message": f"chore: Independence kit — {fname}",
+                        "content": content_b64,
+                    }
+                    if sha:
+                        payload["sha"] = sha
+                    put_r = await cli.put(
+                        f"https://api.github.com/repos/{owner}/{repo_name}/contents/{fname}",
+                        headers=headers,
+                        json=payload,
+                    )
+                    if put_r.status_code in (200, 201):
+                        pushed.append(fname)
+                    else:
+                        failed.append({"file": fname, "status": put_r.status_code, "msg": put_r.text[:120]})
+                except Exception as e:  # noqa: BLE001
+                    failed.append({"file": fname, "error": str(e)[:120]})
+
+        repo_url = f"https://github.com/{owner}/{repo_name}"
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$set": {
+                "github_repo_url": repo_url,
+                "github_independence_pushed": True,
+                "github_independence_files": pushed,
+                "updated_at": _now(),
+            }},
+        )
+        return {
+            "ok": True,
+            "repo_url": repo_url,
+            "owner": owner,
+            "pushed_count": len(pushed),
+            "pushed_files": pushed,
+            "failed": failed,
+            "next_step": (
+                f"تمام! المستودع جاهز على {repo_url}\n"
+                f"الخطوة الأخيرة (اختيارية): لو تبي تحوّل ملكية المستودع لحسابك الشخصي/منظمتك، "
+                f"ادخل {repo_url}/settings → Transfer ownership → اكتب اسم الحساب الجديد."
+            ),
+        }
 
     # ═══════════════════════════════════════════════════════════════
     # APP CONVERSION ENDPOINTS — convert a finished FreeBuild website
@@ -7484,6 +7622,213 @@ For questions: legal@zenrex.ai
                 "X-Kit-Files": str(len(independence_files)),
             },
         )
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🚀 INDEPENDENCE PHASE-2 — One-click VPS provisioning via Hetzner.
+    # The customer pastes their Hetzner API token once, we save it via
+    # /connections/hetzner, then they hit /provision-vps which:
+    #   1. Mints a one-time signed kit-download URL (60 min TTL).
+    #   2. Creates a CX22 server with cloud-init that auto-deploys.
+    #   3. Persists vps_provisioning state on the project.
+    #   4. Frontend polls /vps-status until cloud-init finishes.
+    # ═══════════════════════════════════════════════════════════════
+
+    @router.get("/project/{pid}/kit-download/{token}")
+    async def kit_download_signed(pid: str, token: str, request: Request):
+        """Public, signed, one-time kit ZIP download for cloud-init.
+        Validated via HMAC + expiry. NO auth header required (it's the
+        server that calls us, with no credentials at boot time)."""
+        from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+        import io
+        import zipfile
+        from fastapi.responses import StreamingResponse
+
+        secret = os.environ.get("KIT_SIGN_SECRET") or os.environ.get("FB_FERNET_KEY") or "zenrex-kit-secret"
+        signer = URLSafeTimedSerializer(secret, salt="independence-kit")
+        try:
+            payload = signer.loads(token, max_age=3600)
+        except SignatureExpired:
+            raise HTTPException(410, "رابط منتهي — اطلب رابطاً جديداً.")
+        except BadSignature:
+            raise HTTPException(403, "توقيع غير صالح.")
+        if payload.get("pid") != pid:
+            raise HTTPException(403, "الرابط لمشروع آخر.")
+
+        proj = await db.freebuild_projects.find_one({"id": pid}, {"_id": 0})
+        if not proj or not proj.get("current_html"):
+            raise HTTPException(404, "المشروع غير جاهز.")
+
+        # Build the kit (same as /export-source but bypassing auth — signature is the proof)
+        from modules.freebuild.independence_kit import build_independence_kit
+        owner_email = payload.get("owner_email") or "—"
+        kit = await build_independence_kit(proj, owner_email=owner_email)
+
+        # Strip Zenrex footer from HTML
+        html = proj.get("current_html") or ""
+        if ZENREX_FOOTER_MARK in html:
+            fs = html.find(ZENREX_FOOTER_MARK)
+            fe = html.find("</a>", fs)
+            if fe != -1:
+                html = html[:fs] + html[fe + 4:]
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("index.html", html)
+            for fname, fcontent in kit.items():
+                zf.writestr(fname, fcontent)
+        buf.seek(0)
+        return StreamingResponse(
+            iter([buf.getvalue()]),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="zenrex-kit-{pid[:8]}.zip"'},
+        )
+
+    @router.post("/project/{pid}/provision-vps")
+    async def provision_vps(
+        pid: str,
+        request: Request,
+        domain: str = Form(default=""),
+        server_type: str = Form(default="cx22"),
+        location: str = Form(default="nbg1"),
+        user=Depends(get_current_user),
+    ):
+        """Create a Hetzner CX22 and auto-deploy the Independence Kit."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404)
+        if proj.get("tier") != "full_independence":
+            raise HTTPException(402, "هذه الميزة لباقة الاستقلال الكامل فقط ($799).")
+        if not proj.get("current_html"):
+            raise HTTPException(400, "أكمل بناء الموقع قبل النشر على VPS.")
+        # Fetch the saved Hetzner token
+        conn = await db.freebuild_connections.find_one(
+            {"project_id": pid, "user_id": user["user_id"], "provider": "hetzner"},
+            {"_id": 0, "token_enc": 1},
+        )
+        if not conn:
+            raise HTTPException(
+                400,
+                "اربط Hetzner أولاً من زر 'الاتصالات' — تحتاج Personal API Token من Hetzner Console.",
+            )
+        token = _dec(conn["token_enc"])
+        if not token:
+            raise HTTPException(400, "التوكن المحفوظ تالف. أعد ربط Hetzner.")
+
+        # Generate a one-time signed kit-download URL the cloud-init can hit
+        from itsdangerous import URLSafeTimedSerializer
+        secret = os.environ.get("KIT_SIGN_SECRET") or os.environ.get("FB_FERNET_KEY") or "zenrex-kit-secret"
+        signer = URLSafeTimedSerializer(secret, salt="independence-kit")
+        sig_token = signer.dumps({"pid": pid, "owner_email": user.get("email") or user.get("user_id")})
+        host = _public_host()
+        kit_url = f"{host}/api/freebuild-chat/project/{pid}/kit-download/{sig_token}"
+
+        # Create the Hetzner server (this is sync — blocks for ~3s)
+        try:
+            from modules.freebuild.hetzner_provision import create_server
+            result = create_server(
+                token=token,
+                name=(proj.get("name") or f"zenrex-{pid[:8]}")[:50],
+                project_id=pid,
+                kit_url=kit_url,
+                domain=domain.strip() or None,
+                server_type=server_type,
+                location=location,
+            )
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+        # Persist the VPS metadata on the project
+        vps = {
+            "server_id": result["server_id"],
+            "ip": result.get("ip"),
+            "name": result.get("name"),
+            "server_type": result.get("server_type"),
+            "location": result.get("location"),
+            "image": result.get("image"),
+            "domain": domain.strip(),
+            "root_password_enc": _enc(result.get("root_password") or ""),
+            "status": result.get("status") or "provisioning",
+            "cloud_init_status": "running",
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {"vps": vps, "updated_at": _now()}}
+        )
+        return {
+            "ok": True,
+            "server_id": vps["server_id"],
+            "ip": vps["ip"],
+            "status": vps["status"],
+            "domain": vps["domain"],
+            "estimated_ready_in_seconds": 180,
+        }
+
+    @router.get("/project/{pid}/vps-status")
+    async def vps_status(pid: str, user=Depends(get_current_user)):
+        """Poll Hetzner for current server status. Frontend polls every 5s."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "vps": 1}
+        )
+        if not proj or not proj.get("vps"):
+            raise HTTPException(404, "ما فيه VPS مرتبط بهذا المشروع.")
+        vps = proj["vps"]
+        conn = await db.freebuild_connections.find_one(
+            {"project_id": pid, "user_id": user["user_id"], "provider": "hetzner"},
+            {"_id": 0, "token_enc": 1},
+        )
+        if not conn:
+            return {"ok": True, **{k: v for k, v in vps.items() if k != "root_password_enc"}}
+        token = _dec(conn["token_enc"])
+        try:
+            from modules.freebuild.hetzner_provision import get_server_status
+            live = get_server_status(token, vps["server_id"])
+            # Update DB if status changed
+            if live.get("status") != vps.get("status") or live.get("ip") != vps.get("ip"):
+                await db.freebuild_projects.update_one(
+                    {"id": pid},
+                    {"$set": {
+                        "vps.status": live.get("status"),
+                        "vps.ip": live.get("ip") or vps.get("ip"),
+                        "vps.updated_at": _now(),
+                    }},
+                )
+                vps["status"] = live.get("status")
+                vps["ip"] = live.get("ip") or vps.get("ip")
+        except ValueError:
+            pass
+        public = {k: v for k, v in vps.items() if k != "root_password_enc"}
+        # Provide a friendly Arabic stage label
+        stage_ar = {
+            "initializing": "📦 جاري التهيئة...",
+            "starting": "▶️ السيرفر يقلع...",
+            "running": "✅ السيرفر شغّال — جاري نشر الموقع...",
+            "stopping": "🛑 جاري الإيقاف...",
+            "off": "⏸️ السيرفر متوقف",
+            "deleting": "🗑️ جاري الحذف",
+        }.get(public.get("status") or "", public.get("status"))
+        return {"ok": True, **public, "stage_ar": stage_ar}
+
+    @router.post("/project/{pid}/vps-validate-token")
+    async def vps_validate_token(
+        pid: str,
+        token: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        """Quick sanity check on a Hetzner token before saving it.
+        Returns the available locations so the UI can offer a dropdown."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "id": 1}
+        )
+        if not proj:
+            raise HTTPException(404)
+        try:
+            from modules.freebuild.hetzner_provision import validate_token
+            return validate_token(token)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
 
     @router.post("/project/{pid}/snapshots/{sid}/restore")
     async def restore_snapshot(pid: str, sid: str, user=Depends(get_current_user)):

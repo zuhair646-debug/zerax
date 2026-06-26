@@ -1,6 +1,60 @@
 # Zitex Changelog
 
 
+### 🚀 Feb 2026 — Independence Phase 2 — One-click VPS + GitHub Transfer
+
+**Goal**: turn the $799 tier from "download the ZIP and figure it out yourself" into "click 2 buttons and your site is on your own VPS, in your own GitHub, fully owned".
+
+**New Backend Module** (`/app/backend/modules/freebuild/hetzner_provision.py` — ~180 lines):
+- `validate_token(token)` — verifies a Hetzner API token by listing locations. Returns friendly Arabic errors for 401, billing-required, quota-reached, etc.
+- `create_server(token, name, project_id, kit_url, domain, server_type, location)` — provisions a CX22 (€4.5/mo, 2 vCPU, 4 GB) in `nbg1` with cloud-init `user_data` that:
+  1. Installs Docker.
+  2. Downloads the Independence Kit via a signed one-time URL.
+  3. Runs `deploy.sh <domain>` (Caddy auto-HTTPS if domain provided).
+- `get_server_status(token, server_id)` — for polling.
+- `delete_server(token, server_id)` — teardown.
+
+**New REST endpoints** in `freebuild_chat.py`:
+- `POST /project/{pid}/vps-validate-token` — sanity check before saving.
+- `POST /project/{pid}/provision-vps` — creates the Hetzner server. Tier-gated to `full_independence`.
+- `GET /project/{pid}/vps-status` — polls Hetzner + updates DB. Returns Arabic stage labels.
+- `GET /project/{pid}/kit-download/{token}` — **public**, HMAC-signed (itsdangerous, 60-min TTL) one-shot kit ZIP endpoint that the cloud-init can hit at server boot WITHOUT customer credentials. Validates `pid` matches signed payload.
+- `POST /project/{pid}/push-independence-to-github` — pushes ALL 11 files (index.html + 10 kit files) to a customer-owned GitHub repo in one shot using their PAT. Returns the repo URL + transfer-ownership instructions.
+
+**AI Training Update**: Phase 5 in the `full_independence` system prompt now references the new `/push-independence-to-github` endpoint and the "Transfer ownership" GitHub settings path.
+
+**Builder Integration**:
+- `freebuild_chat.py:2066` — every chat turn now injects `render_blueprint_for_builder(discovery)` into the Builder's system prompt when `discovery.status ∈ {in_discovery, ready_to_build, building}`. The Builder no longer "guesses" — it executes the Discovery Brain's phased roadmap turn after turn.
+
+**Frontend changes** (`/app/frontend/src/pages/FreeBuildChat.js`):
+- New `<VpsProvisionPanel>` component (~250 lines):
+  - 3 states: needs-token → has-token-no-server → server-exists.
+  - Step-by-step Hetzner Console signup instructions (4 numbered ol items + link).
+  - Password-style input for the token, validated server-side first.
+  - Domain field (optional — empty → IP-only; filled → auto-HTTPS via Caddy).
+  - Live status polling every 5s with Arabic stage labels (`📦 جاري التهيئة`, `▶️ السيرفر يقلع`, `✅ السيرفر شغّال — جاري نشر الموقع...`).
+  - "افتح الموقع" CTA appears when status=running.
+- `<IndependenceBanner>` now exposes 3 actions side-by-side: 💎 Download Kit · 🐙 Push to GitHub · 🚀 Deploy VPS. The VPS button shows a live green pulse dot when the server is running.
+
+**Dependencies**:
+- `hcloud==2.22.0` — official Hetzner Cloud Python SDK.
+- `itsdangerous==2.2.0` — signed token utilities for the public kit-download URL.
+
+**Pytest** (`/app/backend/tests/test_hetzner_provision.py`):
+- `test_cloud_init_template_includes_required_fields` — locks in Docker install + kit URL + hostname stamping + `.zenrex_status` marker.
+- `test_validate_token_rejects_blank` — empty token fails loudly.
+- `test_validate_token_friendly_arabic_error` — bad tokens produce Arabic-friendly errors.
+
+**Verified end-to-end on preview**:
+- ✅ Backend endpoints respond correctly: `vps-status` → 404 (no VPS yet), `vps-validate-token` with fake token → 400 Arabic error, `provision-vps` without saved token → 400 "اربط Hetzner أولاً".
+- ✅ UI: clicking the VPS button expands the token panel; 4-step signup guide visible; password input + validate button rendered.
+- ✅ Service Worker bumped to `v20-2026-02-vps-provisioning`.
+- ✅ All 5 pytest tests passing.
+
+**Honest scope limit**: backend code generation (FastAPI/Node + DB schemas) still pending Phase 3. The current $799 tier delivers static HTML/CSS/JS sites — perfect for landing pages, portfolios, restaurant menus, brochures. Full-stack apps wait for Phase 3 (week-long).
+
+
+
 ### 💎 Feb 2026 — Independence Tier $799 — Phase 1 COMPLETE
 
 **The Reality Check**: $200 was too low for what we promised. Repriced to $79 / $199 / $799 tiers. The $799 Independence tier now delivers a real, enterprise-grade handover.

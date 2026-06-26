@@ -22,19 +22,16 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 | 🎓 Code + Guided | $199 | Code + AI walks you through GitHub Pages/Vercel + Cloudflare DNS |
 | 💎 Full Independence | $799 | All of above + Dockerfile/nginx/deploy.sh + ARCHITECTURE.md + HANDOVER.md + VPS guidance + GitHub repo ownership transfer + 60-day support |
 
-## Next Tasks (Independence — Phase 2)
-- 🟡 **P0 — One-click VPS Provisioning** via Hetzner Cloud API (4-5 hrs): customer pastes their Hetzner API token, AI provisions CX22 server + uploads kit + runs deploy.sh + reports back IP + HTTPS URL.
-- 🟡 **P1 — GitHub Repo Ownership Transfer Flow**: customer pastes PAT, AI creates repo, pushes code, sets customer as owner.
-- 🟡 **P1 — Auto-monitoring**: Uptime Kuma + Backup cron on deployed VPS.
-- 🟡 **P1 — Builder Integration**: ensure `freebuild_agent.py` injects `render_blueprint_for_builder()` whenever `project.discovery.status === 'building'`.
-- 🟡 P1 — Surgical-edit integration with annotated images.
-- 🟡 P1 — New build modes: Finish-Existing-App (GitHub/ZIP import), Redesign-Website, Backend-Only Builder.
+## Next Tasks (Independence — Phase 3)
+- 🔴 **Backend Builder Agent** — generates FastAPI/Node.js servers from Discovery blueprints.
+- 🔴 **DB Schema Generator** — Postgres/MongoDB schemas from blueprint essentials.
+- 🔴 **CI/CD Pipeline Generator** — GitHub Actions YAMLs for auto-deploy.
+- 🔴 **Apps Mode (PWA)** — extend Independence Kit with manifest.json + service worker.
 
-## Independence — Phase 3 (Backend Generation, week-long)
-- 🔴 Build a separate **Backend Builder Agent** that generates FastAPI/Node.js servers from Discovery blueprints.
-- 🔴 DB Schema Generator (Postgres/MongoDB) from blueprint essentials.
-- 🔴 CI/CD Pipeline Generator (GitHub Actions YAMLs).
-- 🔴 Apps Mode (PWA): extend Independence Kit with manifest.json + service worker.
+## Phase 2 Polish (Future)
+- 🟡 Auto-monitoring: install Uptime Kuma + Backup cron on the provisioned VPS.
+- 🟡 Multi-cloud support: extend `hetzner_provision.py` pattern to DigitalOcean + AWS Lightsail.
+- 🟡 GitHub Organization ownership transfer (currently only personal repo).
 
 ## Backlog
 - 🟢 Email verification via Resend / Refactor `freebuild_agent.py` monolith.
