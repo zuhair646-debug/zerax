@@ -193,20 +193,30 @@ export default function StorageIndicator({ compact = false }) {
           )}
 
           <div className="flex gap-2">
-            <a
-              href="/billing/storage"
+            <button
+              type="button"
+              onClick={() => { setOpen(false); window.location.href = '/billing/storage'; }}
               data-testid="storage-plans-cta"
-              className="flex-1 text-center px-3 py-2 rounded-lg bg-gradient-to-r from-amber-400 to-yellow-500 hover:opacity-90 text-black text-xs font-black"
+              className="flex-1 px-4 py-2.5 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.99] shadow-lg shadow-blue-900/30 relative overflow-hidden group cursor-pointer"
+              style={{ background: 'linear-gradient(180deg, #003087 0%, #0070ba 50%, #ffc439 100%)' }}
             >
-              {isArchived ? 'استرداد الملفات' : isPastDue ? 'جدّد الاشتراك' : 'باقات التخزين'}
-            </a>
-            <a
-              href="/pricing"
+              <div className="absolute inset-0 opacity-30 pointer-events-none bg-gradient-to-br from-white/20 via-transparent to-transparent" />
+              <div className="relative flex items-center justify-center gap-1.5 pointer-events-none">
+                <HardDrive className="w-3.5 h-3.5 text-white drop-shadow" />
+                <span className="text-white font-black drop-shadow">
+                  {isArchived ? 'استرداد الملفات' : isPastDue ? 'جدّد الاشتراك' : 'باقات التخزين'}
+                </span>
+              </div>
+              <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setOpen(false); window.location.href = '/pricing'; }}
               data-testid="storage-pricing-cta"
-              className="px-3 py-2 rounded-lg border border-amber-500/40 text-amber-200 text-xs font-bold hover:bg-amber-500/10"
+              className="px-4 py-2.5 rounded-xl border border-amber-500/40 text-amber-200 text-xs font-black hover:bg-amber-500/10 transition cursor-pointer"
             >
               النقاط
-            </a>
+            </button>
           </div>
         </div>
         </>,
