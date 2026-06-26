@@ -30,6 +30,7 @@ export default function StorageIndicator({ compact = false }) {
   const [usage, setUsage] = useState(null);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
+  const popoverRef = useRef(null);
 
   const load = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -51,11 +52,16 @@ export default function StorageIndicator({ compact = false }) {
     return () => clearInterval(t);
   }, [load]);
 
-  // Close on outside-click
+  // Close on outside-click — BUT exclude the portal-mounted popover too
+  // (it lives in document.body, outside wrapRef). Otherwise mousedown on
+  // a button inside the popover closes it BEFORE the click event fires
+  // → unmounts the <a> → cancels navigation. (This was the actual bug.)
   useEffect(() => {
     if (!open) return;
     const onClick = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+      const inWrap = wrapRef.current && wrapRef.current.contains(e.target);
+      const inPopover = popoverRef.current && popoverRef.current.contains(e.target);
+      if (!inWrap && !inPopover) setOpen(false);
     };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
@@ -140,6 +146,7 @@ export default function StorageIndicator({ compact = false }) {
             aria-hidden
           />
           <div
+            ref={popoverRef}
             data-testid="storage-upgrade-popover"
             className="fixed z-[9999] left-1/2 -translate-x-1/2 top-[72px] sm:top-[80px] w-[calc(100vw-1rem)] sm:w-[26rem] max-w-[26rem] rounded-2xl border-2 border-amber-400 shadow-2xl shadow-amber-500/40 p-5 animate-in fade-in slide-in-from-top-3 duration-200"
             style={{ backgroundColor: '#1a1a1d' }}
@@ -195,9 +202,8 @@ export default function StorageIndicator({ compact = false }) {
           <div className="flex gap-2">
             <a
               href="/billing/storage"
-              onClick={() => setOpen(false)}
               data-testid="storage-plans-cta"
-              className="flex-1 px-4 py-2.5 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.99] shadow-lg shadow-blue-900/30 relative overflow-hidden group cursor-pointer"
+              className="flex-1 px-4 py-2.5 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 transition-all active:opacity-80 shadow-lg shadow-blue-900/30 relative overflow-hidden cursor-pointer"
               style={{ background: 'linear-gradient(180deg, #003087 0%, #0070ba 50%, #ffc439 100%)' }}
             >
               <div className="absolute inset-0 opacity-30 pointer-events-none bg-gradient-to-br from-white/20 via-transparent to-transparent" />
@@ -207,11 +213,9 @@ export default function StorageIndicator({ compact = false }) {
                   {isArchived ? 'استرداد الملفات' : isPastDue ? 'جدّد الاشتراك' : 'باقات التخزين'}
                 </span>
               </div>
-              <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/15 to-transparent" />
             </a>
             <a
               href="/pricing"
-              onClick={() => setOpen(false)}
               data-testid="storage-pricing-cta"
               className="px-4 py-2.5 rounded-xl border border-amber-500/40 text-amber-200 text-xs font-black hover:bg-amber-500/10 transition cursor-pointer inline-flex items-center justify-center"
             >
