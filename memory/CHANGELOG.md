@@ -1,6 +1,34 @@
 # Zitex Changelog
 
 
+### 💳 Feb 2026 — Linear Storage Pricing + Lemon Squeezy Removal (PayPal-only)
+
+**Owner directive (Saudi Arabic):** Remove Lemon Squeezy entirely (account rejected) and adopt a strictly linear storage pricing model: **10 MB free, then $5 per +50 MB**.
+
+**Backend fixes**
+- `/app/backend/modules/payments/paypal_generic.py`
+  - Moved `UniversalCreateIn` Pydantic model to module level (was nested inside `register_payments()`, which caused FastAPI to fail route registration with `NameError: name 'UniversalCreateIn' is not defined` → the entire payments router 404'd at runtime).
+  - Removed the `/lemonsqueezy/create` and `/lemonsqueezy/webhook` endpoints, the `LemonCreateIn` schema, and all LS variant env vars from the credit `PACKAGES` dict.
+- `/app/backend/modules/storage_billing/__init__.py`
+  - Replaced the legacy `STORAGE_PLANS` (free/starter/plus/pro) with the new linear ladder: `free` (10 MB / $0), `s50` ($5), `s100` ($10, highlight), `s150` ($15), `s200` ($20), `s300` ($30), `s500` ($50), `s1000` ($100).
+  - Removed `_lemon_create_checkout()` helper and the entire `POST /api/storage/webhook` Lemon Squeezy event handler.
+  - Rewrote `POST /api/storage/recovery/checkout` to use PayPal (was Lemon Squeezy).
+  - Added `POST /api/storage/capture` — called by the frontend after the user returns from PayPal, executes the payment and activates the subscription (or recovery).
+  - Moved `StorageCaptureIn` to module level (same FastAPI annotation-resolution issue as above).
+
+**Frontend updates**
+- `/app/frontend/src/pages/BillingStorage.js`
+  - Grid expanded from 5 to 8 plans, layout switched to `lg:grid-cols-4` (2 rows of 4 cards).
+  - Added explanatory copy: «تسعير خطي بسيط: 10 ميجا مجاناً، ثم $5 لكل 50 ميجا إضافية».
+  - Wired the PayPal return handler: on `?status=success&txn=…` the page calls `/api/storage/capture` and refreshes the subscription state.
+- `/app/frontend/public/service-worker.js` bumped to `v25-2026-02-linear-storage`.
+
+**Tests**
+- New regression suite `/app/backend/tests/test_storage_linear_pricing.py` — 4 cases, all passing.
+- Testing agent (iteration_70): backend 11/11, frontend 100% — all 8 plan cards render, CTAs trigger checkout, Lemon Squeezy endpoints safely 404, PayPal universal endpoint returns approval URL.
+
+
+
 ### 🎨 Feb 2026 — Independence Landing Page (Marketing)
 
 **Goal**: turn the technically-completed Independence Tier into a **sellable** product with a dedicated premium landing.

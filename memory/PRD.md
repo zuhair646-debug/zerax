@@ -1,18 +1,19 @@
-# Zenrex Farm — PRD (Updated 2026-02 — Discovery Brain UI + $200 Independence)
+# Zenrex Farm — PRD (Updated 2026-02 — Linear Storage Pricing + PayPal-only)
 
 ## Problem Statement
-Arabic-first AI builder for websites/apps/images/videos with credits-based pricing, Stripe payments, background-task persistence, and exportable codebase. Deployed on Hetzner VPS (zenrex.ai).
+Arabic-first AI builder for websites/apps/images/videos with credits-based pricing, **PayPal payments** (Lemon Squeezy fully removed Feb 2026), background-task persistence, and exportable codebase. Deployed on Hetzner VPS (zenrex.ai).
 
 ## Current Status — Healthy, Production Live ✅
 - Domain: https://zenrex.ai (HTTP 200 / api/health → healthy)
 - Backend: Docker compose, MongoDB local (+ Atlas for prod data)
-- Frontend: React PWA, Service Worker v21 (2026-02-backend-builder)
-- Stripe: Official `stripe` SDK with proxy support — webhook now handles `full_independence`
+- Frontend: React PWA, Service Worker **v25 (2026-02-linear-storage)**
+- **Payments: PayPal only.** Lemon Squeezy removed (account rejected). Stripe still used for credit packs.
 - **🧠 Discovery Brain (AI #1.5)** — LIVE end-to-end (UI + backend).
 - **💎 Full Independence $799 — Phases 1+2+3 COMPLETE (2026-02)**:
   - Phase 1: Delivery Kit (Dockerfile, nginx, deploy.sh, README, ARCHITECTURE.md from Claude, HANDOVER.md, MIT LICENSE)
   - Phase 2: One-click Hetzner VPS provisioning + GitHub full-kit push + Builder integration with Discovery blueprint
-  - **Phase 3 (NEW)**: Backend Builder Agent — generates FastAPI + MongoDB + JWT auth + CRUD endpoints + GitHub Actions CI/CD from Discovery blueprint. Final ZIP now contains 24 files (static frontend + full backend + DB + CI/CD).
+  - Phase 3: Backend Builder Agent — generates FastAPI + MongoDB + JWT auth + CRUD endpoints + GitHub Actions CI/CD from Discovery blueprint. Final ZIP contains 24 files.
+- **💾 Storage Pricing — Linear (2026-02)**: 10MB free, then $5 per +50MB. Plans: free / s50 / s100 (most popular) / s150 / s200 / s300 / s500 / s1000. PayPal-only checkout via `/api/storage/checkout` → return via `/api/storage/capture`.
 - **Owner Engineer Portal** (`/admin/engineer`) — read + write + browser-audit.
 - **🗂️ Design Archive (المحفوظات)** — visual snapshot history per project.
 
@@ -24,7 +25,20 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 | 🎓 Code + Guided | $199 | Code + AI walks you through GitHub Pages/Vercel + Cloudflare DNS |
 | 💎 Full Independence | $799 | All of above + Dockerfile/nginx/deploy.sh + ARCHITECTURE.md + HANDOVER.md + VPS guidance + GitHub repo ownership transfer + 60-day support |
 
+## Storage Pricing (Linear — 2026-02)
+| ID | Quota | Price/mo |
+|---|---|---|
+| free | 10 MB | $0 |
+| s50 | 50 MB | $5 |
+| s100 | 100 MB | $10 (★ most popular) |
+| s150 | 150 MB | $15 |
+| s200 | 200 MB | $20 |
+| s300 | 300 MB | $30 |
+| s500 | 500 MB | $50 |
+| s1000 | 1 GB | $100 |
+
 ## Next Tasks (Phase 3 Polish — Future)
+- 🟡 **Deploy linear-pricing + PayPal-only build to zenrex.ai** via `bash /app/deploy/deploy.sh`.
 - 🟡 **Apps Mode (PWA)** — extend backend builder to emit `manifest.json` + `service-worker.js` for native-feeling mobile apps.
 - 🟡 **Frontend → Backend wiring** — auto-generate `fetch('/api/...')` calls in the static HTML/JS based on the discovered entities (e.g. movies catalog renders from `GET /api/movies`).
 - 🟡 **Multi-stack support** — Node.js/Express alternative to FastAPI, Postgres alternative to MongoDB.
@@ -32,6 +46,8 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - 🟡 **OAuth provider connections** — proper Google/GitHub OAuth flow instead of paste-PAT.
 
 ## Backlog
+- 🟢 Migrate residual Lemon Squeezy dead code in `pricing/router.py` / `freebuild_chat.py` / `ready_sites/payment_router.py` (UI hardcodes PayPal so paths are unreachable but should be deleted for hygiene).
+- 🟢 Data migration: users with old `storage_tier` values ('starter', 'plus', 'pro') get gracefully fallback to 'free' — fine, but bulk-rename to nearest new tier would be nicer.
 - 🟢 Email verification via Resend.
 - 🟢 Refactor `freebuild_agent.py` monolith into smaller modules.
 - 🟢 Multi-cloud support (DigitalOcean, AWS Lightsail).
