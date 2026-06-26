@@ -296,24 +296,42 @@ export default function BillingStorage() {
                       </li>
                     )}
                   </ul>
-                  <button
-                    onClick={() => startCheckout(plan.id)}
-                    disabled={isCurrent || busyPlanId === plan.id || (!isFree && !plan.available)}
-                    data-testid={`storage-plan-cta-${plan.id}`}
-                    className={`w-full px-3 py-2.5 rounded-lg text-xs font-black flex items-center justify-center gap-2 transition ${
-                      isCurrent
-                        ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                        : plan.highlight
-                          ? 'bg-gradient-to-r from-amber-400 to-yellow-500 hover:opacity-90 text-black'
-                          : 'bg-zinc-800 hover:bg-zinc-700 text-white'
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    {busyPlanId === plan.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    {isCurrent ? 'باقتك الحالية' :
-                     isFree ? 'الخطة المجانية' :
-                     !plan.available ? 'قريباً' :
-                     'اشترك الآن'}
-                  </button>
+                  {(isCurrent || isFree || !plan.available) ? (
+                    <button
+                      onClick={() => startCheckout(plan.id)}
+                      disabled={isCurrent || busyPlanId === plan.id || (!isFree && !plan.available)}
+                      data-testid={`storage-plan-cta-${plan.id}`}
+                      className="w-full px-4 py-3 rounded-xl text-sm font-black inline-flex items-center justify-center gap-2 transition-all bg-zinc-800 hover:bg-zinc-700 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:text-zinc-500"
+                    >
+                      {busyPlanId === plan.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      {isCurrent ? 'باقتك الحالية' :
+                       isFree ? 'الخطة المجانية' :
+                       'قريباً'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => startCheckout(plan.id)}
+                      disabled={busyPlanId === plan.id}
+                      data-testid={`storage-plan-cta-${plan.id}`}
+                      className="relative group w-full overflow-hidden rounded-xl shadow-lg shadow-blue-900/30 transition-all hover:scale-[1.02] active:scale-[0.99] disabled:opacity-60 disabled:scale-100 disabled:cursor-wait"
+                      style={{ background: 'linear-gradient(180deg, #003087 0%, #0070ba 50%, #ffc439 100%)' }}
+                    >
+                      <div className="absolute inset-0 opacity-30 pointer-events-none bg-gradient-to-br from-white/20 via-transparent to-transparent" />
+                      <div className="relative flex items-center justify-center gap-1.5 py-3 px-4">
+                        {busyPlanId === plan.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        ) : (
+                          <>
+                            <span className="text-base font-black italic" style={{ color: '#003087', textShadow: '0 1px 0 rgba(255,255,255,0.5)' }}>Pay</span>
+                            <span className="text-base font-black italic" style={{ color: '#ffffff', textShadow: '0 1px 0 rgba(0,0,0,0.2)' }}>Pal</span>
+                            <span className="mx-1.5 h-3.5 w-px bg-white/40" />
+                            <span className="text-sm font-bold text-white drop-shadow">${plan.price_usd}</span>
+                          </>
+                        )}
+                      </div>
+                      <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+                    </button>
+                  )}
                 </div>
               </div>
             );

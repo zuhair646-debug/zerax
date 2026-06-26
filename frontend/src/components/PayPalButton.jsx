@@ -94,7 +94,6 @@ export default function PayPalButton({
             <Loader2 className="w-5 h-5 animate-spin text-white" />
           ) : (
             <>
-              {/* "Pay" in italics white with PayPal styling */}
               <span
                 className="text-lg font-black italic"
                 style={{ color: '#003087', textShadow: '0 1px 0 rgba(255,255,255,0.5)' }}
@@ -114,7 +113,6 @@ export default function PayPalButton({
             </>
           )}
         </div>
-        {/* Animated shine on hover */}
         <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/15 to-transparent" />
       </button>
       <p className="text-[10px] text-zinc-500 text-center">

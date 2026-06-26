@@ -178,14 +178,24 @@ export default function ReadySitesPurchase({ user }) {
                 <button
                   onClick={() => payPayPal(plan.id)}
                   disabled={busy !== null}
-                  className="w-full py-3 rounded-xl font-black text-sm transition-all inline-flex items-center justify-center gap-2 bg-[#0070ba] hover:bg-[#005ea6] text-white disabled:opacity-50 disabled:cursor-wait"
+                  className="relative group w-full overflow-hidden rounded-xl shadow-lg shadow-blue-900/30 transition-all hover:scale-[1.02] active:scale-[0.99] disabled:opacity-60 disabled:scale-100 disabled:cursor-wait"
                   data-testid={`paypal-${plan.id}-btn`}
+                  style={{ background: 'linear-gradient(180deg, #003087 0%, #0070ba 50%, #ffc439 100%)' }}
                 >
-                  {busy === `${plan.id}-paypal` ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> جاري التحويل...</>
-                  ) : (
-                    <><span className="font-extrabold">Pay</span><span className="italic font-bold">Pal</span><span className="text-xs opacity-80">— ${plan.price}</span></>
-                  )}
+                  <div className="absolute inset-0 opacity-30 pointer-events-none bg-gradient-to-br from-white/20 via-transparent to-transparent" />
+                  <div className="relative flex items-center justify-center gap-1.5 py-3 px-4">
+                    {busy === `${plan.id}-paypal` ? (
+                      <><Loader2 className="w-4 h-4 animate-spin text-white" /> <span className="text-white text-sm">جاري التحويل...</span></>
+                    ) : (
+                      <>
+                        <span className="text-base font-black italic" style={{ color: '#003087', textShadow: '0 1px 0 rgba(255,255,255,0.5)' }}>Pay</span>
+                        <span className="text-base font-black italic" style={{ color: '#ffffff', textShadow: '0 1px 0 rgba(0,0,0,0.2)' }}>Pal</span>
+                        <span className="mx-1.5 h-3.5 w-px bg-white/40" />
+                        <span className="text-sm font-bold text-white drop-shadow">${plan.price}</span>
+                      </>
+                    )}
+                  </div>
+                  <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/15 to-transparent" />
                 </button>
                 <p className="text-[10px] text-zinc-500 text-center">
                   ادفع بأمان عبر PayPal (بطاقة أو رصيد PayPal)

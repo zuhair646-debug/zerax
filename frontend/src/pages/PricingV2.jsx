@@ -116,9 +116,23 @@ function PackCard({ pack, onBuy, busy }) {
         onClick={() => onBuy(pack.id, 'paypal')}
         disabled={!!busy}
         data-testid={`buy-${pack.id}-paypal`}
-        className="w-full px-3 py-2 rounded-lg bg-[#0070ba] hover:bg-[#005ea6] text-white text-xs font-black disabled:opacity-50"
+        className="relative group w-full overflow-hidden rounded-xl shadow-lg shadow-blue-900/30 transition-all hover:scale-[1.02] active:scale-[0.99] disabled:opacity-60 disabled:scale-100 disabled:cursor-wait"
+        style={{ background: 'linear-gradient(180deg, #003087 0%, #0070ba 50%, #ffc439 100%)' }}
       >
-        {busy === `${pack.id}-paypal` ? '...' : <><span className="font-extrabold">Pay</span>Pal</>}
+        <div className="absolute inset-0 opacity-30 pointer-events-none bg-gradient-to-br from-white/20 via-transparent to-transparent" />
+        <div className="relative flex items-center justify-center gap-1.5 py-3 px-4">
+          {busy === `${pack.id}-paypal` ? (
+            <span className="text-white font-black">...</span>
+          ) : (
+            <>
+              <span className="text-base font-black italic" style={{ color: '#003087', textShadow: '0 1px 0 rgba(255,255,255,0.5)' }}>Pay</span>
+              <span className="text-base font-black italic" style={{ color: '#ffffff', textShadow: '0 1px 0 rgba(0,0,0,0.2)' }}>Pal</span>
+              <span className="mx-1.5 h-3.5 w-px bg-white/40" />
+              <span className="text-sm font-bold text-white drop-shadow">${pack.price}</span>
+            </>
+          )}
+        </div>
+        <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/15 to-transparent" />
       </button>
     </div>
   );
@@ -226,9 +240,27 @@ export default function Pricing() {
               onClick={buyCustom}
               disabled={!customAmount || busy === 'custom-paypal'}
               data-testid="custom-buy-btn"
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-fuchsia-500 hover:opacity-90 text-white font-black text-sm disabled:opacity-50"
+              className="relative group overflow-hidden rounded-xl shadow-lg shadow-blue-900/30 transition-all hover:scale-[1.02] active:scale-[0.99] disabled:opacity-60 disabled:scale-100 disabled:cursor-wait whitespace-nowrap min-w-[200px]"
+              style={{ background: 'linear-gradient(180deg, #003087 0%, #0070ba 50%, #ffc439 100%)' }}
             >
-              {busy === 'custom-paypal' ? '...' : 'ادفع عبر PayPal'}
+              <div className="absolute inset-0 opacity-30 pointer-events-none bg-gradient-to-br from-white/20 via-transparent to-transparent" />
+              <div className="relative flex items-center justify-center gap-1.5 py-3 px-6">
+                {busy === 'custom-paypal' ? (
+                  <span className="text-white font-black">...</span>
+                ) : (
+                  <>
+                    <span className="text-base font-black italic" style={{ color: '#003087', textShadow: '0 1px 0 rgba(255,255,255,0.5)' }}>Pay</span>
+                    <span className="text-base font-black italic" style={{ color: '#ffffff', textShadow: '0 1px 0 rgba(0,0,0,0.2)' }}>Pal</span>
+                    {amtNum > 0 && (
+                      <>
+                        <span className="mx-1.5 h-3.5 w-px bg-white/40" />
+                        <span className="text-sm font-bold text-white drop-shadow">${amtNum}</span>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+              <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/15 to-transparent" />
             </button>
           </div>
 
