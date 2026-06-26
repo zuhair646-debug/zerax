@@ -4805,11 +4805,18 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 await _db.freebuild_published_sites.update_one(
                     {"slug": slug},
                     {"$set": {
+                        "slug": slug,
+                        "project_id": ctx.project_id if hasattr(ctx, "project_id") else None,
                         "current_html": pages_to_push.get("index.html",
                                                           ctx.current_html or ""),
                         "pages": pages_to_push,
                         "updated_at": __import__("time").time(),
+                        "superseded": False,
+                    }, "$setOnInsert": {
+                        "created_at": __import__("time").time(),
+                        "views": 0,
                     }},
+                    upsert=True,
                 )
                 return {
                     "ok": True,
@@ -8881,6 +8888,19 @@ def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
 > العميل يدفع نقاط مقابل **تنفيذ**، لا مقابل **محادثات**.
 > كل tool call = قيمة للعميل. كل سؤال غير ضروري = نقاط مهدورة.
 > لو شككت "أنفّذ أم أسأل؟" → **نفّذ**. الاعتذار أرخص من التردد.
+
+**🎨 قاعدة حماية التصميم (DESIGN PRESERVATION):**
+> ممنوع منعاً باتاً تغيير التصميم الموجود إلا إذا العميل **صراحةً** طلب تغييره.
+> - إصلاح bug في الكود ≠ إعادة تصميم القسم
+> - إضافة ميزة ≠ تغيير الألوان أو الـ layout
+> - أي `write_full_html` لازم يحافظ على:
+>   • نفس الـ color palette (CSS variables، tailwind classes)
+>   • نفس الـ font / typography
+>   • نفس الـ layout structure للأقسام الموجودة
+>   • نفس الصور والمحتوى ما عدا اللي طُلب تعديله
+> - لو تحتاج تعدّل قسم، اقرأه أولاً ثم عدّل **داخل** نطاقه فقط.
+> - إذا طُلب منك "أصلح" أو "اصلاح bug"، **اقرأ الكود الحالي أولاً** ثم طبّق أصغر تعديل ممكن.
+> - "كان غير التصميم" من العميل = فشل خطير. تجنّبه.
 ══════════════════════════════════════════════════════════════
 """
 

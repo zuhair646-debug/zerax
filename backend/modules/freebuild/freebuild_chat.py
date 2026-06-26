@@ -7431,10 +7431,20 @@ For questions: legal@zenrex.ai
                             await db.freebuild_published_sites.update_one(
                                 {"slug": slug},
                                 {"$set": {
+                                    "slug": slug,
+                                    "project_id": pid,
+                                    "user_id": user["user_id"],
                                     "current_html": published_current,
                                     "pages": all_pages,
+                                    "name": proj_doc.get("name") or slug,
                                     "updated_at": _now(),
+                                    "superseded": False,
+                                    "auto_published": True,
+                                }, "$setOnInsert": {
+                                    "created_at": _now(),
+                                    "views": 0,
                                 }},
+                                upsert=True,
                             )
                             logger.info(f"[auto-republish] synced slug={slug} for project={pid} ({len(all_pages)} pages, active={getattr(final_ctx,'active_page',None)})")
                 except Exception as _rep_e:
@@ -7475,15 +7485,29 @@ For questions: legal@zenrex.ai
 
         async def event_stream():
             """Tail the queue. If client goes away, this generator dies but
-            `bg_task` keeps running independently and finishes its `finally`."""
+            `bg_task` keeps running independently and finishes its `finally`.
+
+            Sends a heartbeat comment every 15s during long LLM thinking to
+            keep proxies (CloudFlare, nginx) from killing the connection.
+            CloudFlare's default idle timeout is 100s — without these pings,
+            multi-step builds would die mid-stream and the user would see
+            'Stream stopped' even though the agent is still working.
+            """
+            HEARTBEAT_S = 15
             try:
                 while True:
-                    chunk = await event_queue.get()
+                    try:
+                        chunk = await _asyncio.wait_for(event_queue.get(), timeout=HEARTBEAT_S)
+                    except _asyncio.TimeoutError:
+                        # No event in HEARTBEAT_S seconds → send a comment to
+                        # keep the connection alive. Comments start with ":"
+                        # per SSE spec and are ignored by the EventSource API.
+                        yield f": ka {int(time.time())}\n\n"
+                        continue
                     if chunk is None:
                         break
                     yield chunk
             except _asyncio.CancelledError:
-                # Client disconnected — DO NOT cancel bg_task
                 logger.info(f"[agent-stream] client disconnected, bg task continues for project {pid}")
                 raise
 
