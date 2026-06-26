@@ -237,13 +237,18 @@ export default function BillingStorage() {
 
         {/* Plans grid */}
         <h2 className="text-xl font-black mb-4 text-amber-200">اختر باقتك</h2>
-        <p className="text-zinc-400 text-sm mb-4">
-          تسعير خطي بسيط: 10 ميجا مجاناً، ثم <span className="text-amber-300 font-bold">$5 لكل 50 ميجا إضافية</span>.
-        </p>
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 mb-6 text-[12px] leading-relaxed">
+          <p className="text-amber-200 font-bold mb-2">💡 كيف تعمل الباقات</p>
+          <ul className="space-y-1 text-zinc-300">
+            <li>• <b className="text-amber-300">تسعير خطي:</b> 10 ميجا بـ $3، ثم +$5 لكل +50 ميجا.</li>
+            <li>• <b className="text-amber-300">تجديد شهري تلقائي</b> عبر PayPal — تقدر تلغي في أي وقت.</li>
+            <li>• <b className="text-rose-300">عند التأخر في السداد:</b> ملفاتك تبقى محفوظة لكن الوصول إليها يُقفل.</li>
+            <li>• <b className="text-rose-300">رسوم الاسترداد = ضعف سعر الباقة</b> (مثال: باقة $5 → استرداد بـ $10).</li>
+          </ul>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">
           {plans.map((plan) => {
             const isCurrent = sub?.plan_id === plan.id;
-            const isFree = plan.id === 'free';
             return (
               <div
                 key={plan.id}
@@ -267,20 +272,15 @@ export default function BillingStorage() {
                 <div className="text-center">
                   <h3 className="text-base font-black text-amber-200 mb-1">{plan.label_ar}</h3>
                   <p className="text-[11px] text-zinc-400 mb-3 min-h-[28px]">{plan.description_ar}</p>
-                  <div className="mb-3">
-                    {isFree ? (
-                      <span className="text-2xl font-black">مجاني</span>
-                    ) : (
-                      <>
-                        <span className="text-3xl font-black">${plan.price_usd}</span>
-                        <span className="text-sm text-zinc-400">/شهر</span>
-                      </>
-                    )}
+                  <div className="mb-1">
+                    <span className="text-3xl font-black">${plan.price_usd}</span>
+                    <span className="text-sm text-zinc-400">/شهر</span>
                   </div>
+                  <p className="text-[10px] text-emerald-300 font-bold mb-3">يتجدد شهرياً تلقائياً</p>
                   <div className="text-amber-300 font-black text-lg mb-3">
                     {fmtGB(plan.quota_mb)}
                   </div>
-                  <ul className="space-y-1.5 text-[11px] text-zinc-300 mb-4 text-right">
+                  <ul className="space-y-1.5 text-[11px] text-zinc-300 mb-3 text-right">
                     <li className="flex items-center gap-1.5">
                       <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />
                       <span>تخزين موحد لكل المحتوى</span>
@@ -289,24 +289,24 @@ export default function BillingStorage() {
                       <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />
                       <span>مشاريع غير محدودة</span>
                     </li>
-                    {!isFree && (
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                        <span>تجديد شهري تلقائي</span>
-                      </li>
-                    )}
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                      <span>إلغاء في أي وقت</span>
+                    </li>
                   </ul>
-                  {(isCurrent || isFree || !plan.available) ? (
+                  {plan.recovery_price_usd != null && (
+                    <p className="text-[10px] text-rose-300/80 mb-3" data-testid={`recovery-fee-${plan.id}`}>
+                      💡 رسم الاسترداد عند التأخر: <b>${plan.recovery_price_usd}</b>
+                    </p>
+                  )}
+                  {(isCurrent || !plan.available) ? (
                     <button
                       onClick={() => startCheckout(plan.id)}
-                      disabled={isCurrent || busyPlanId === plan.id || (!isFree && !plan.available)}
+                      disabled
                       data-testid={`storage-plan-cta-${plan.id}`}
-                      className="w-full px-4 py-3 rounded-xl text-sm font-black inline-flex items-center justify-center gap-2 transition-all bg-zinc-800 hover:bg-zinc-700 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:text-zinc-500"
+                      className="w-full px-4 py-3 rounded-xl text-sm font-black inline-flex items-center justify-center gap-2 transition-all bg-zinc-800 text-zinc-500 cursor-not-allowed"
                     >
-                      {busyPlanId === plan.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      {isCurrent ? 'باقتك الحالية' :
-                       isFree ? 'الخطة المجانية' :
-                       'قريباً'}
+                      {isCurrent ? 'باقتك الحالية' : 'قريباً'}
                     </button>
                   ) : (
                     <button
@@ -345,39 +345,37 @@ export default function BillingStorage() {
               <ShieldCheck className="w-5 h-5 text-amber-300" />
             </div>
             <h3 className="font-black mb-1">دفع شهري آمن</h3>
-            <p className="text-xs text-zinc-400">يتجدد اشتراكك تلقائياً كل شهر عبر PayPal.</p>
+            <p className="text-xs text-zinc-400">يتجدد اشتراكك تلقائياً كل شهر عبر PayPal. تقدر تلغي في أي وقت.</p>
           </div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
             <div className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center mb-3">
               <Clock className="w-5 h-5 text-amber-300" />
             </div>
             <h3 className="font-black mb-1">{graceDays} أيام فترة سماح</h3>
-            <p className="text-xs text-zinc-400">إذا فشل التجديد، نُذكّرك بالبريد قبل أرشفة الملفات.</p>
+            <p className="text-xs text-zinc-400">إذا فشل التجديد، نحاول مرة أخرى ثم نقفل الوصول للملفات بعد {graceDays} أيام.</p>
           </div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5">
-            <div className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center mb-3">
-              <Archive className="w-5 h-5 text-amber-300" />
+            <div className="w-9 h-9 rounded-full bg-rose-500/20 flex items-center justify-center mb-3">
+              <Archive className="w-5 h-5 text-rose-300" />
             </div>
-            <h3 className="font-black mb-1">استرداد متى ما رغبت</h3>
-            <p className="text-xs text-zinc-400">ملفاتك محفوظة 6 أشهر بعد الأرشفة — استردها بدفع رسم بسيط.</p>
+            <h3 className="font-black mb-1">رسم استرداد = ضعف الباقة</h3>
+            <p className="text-xs text-zinc-400">ملفاتك تبقى محفوظة بعد التأخر، لكن لاستعادة الوصول ادفع <b className="text-rose-300">ضعف سعر باقتك</b>.</p>
           </div>
         </div>
 
-        {/* Recovery fee schedule */}
-        <h2 className="text-xl font-black mb-4 text-amber-200">رسوم الاسترداد</h2>
-        <p className="text-zinc-400 text-sm mb-4">
-          إذا أُرشفت ملفاتك، تدفع رسماً واحداً بحسب حجم البيانات + تجديد الاشتراك الشهري لاستعادة الوصول.
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-12">
-          {recovery.map((r) => (
-            <div key={r.id} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 text-center">
-              <p className="text-xs text-zinc-400 mb-1">{r.label_ar}</p>
-              <p className="text-2xl font-black text-amber-300 mb-1">${r.price_usd}</p>
-              <p className="text-[11px] text-zinc-500">
-                {r.max_gb >= 9999 ? '+50 جيجا' : `حتى ${r.max_gb} جيجا`}
-              </p>
-            </div>
-          ))}
+        {/* Terms summary */}
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 mb-12" data-testid="storage-terms">
+          <h3 className="text-base font-black text-amber-200 mb-3 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4" /> الشروط والأحكام للتخزين
+          </h3>
+          <ol className="space-y-2 text-xs text-zinc-300 leading-relaxed list-decimal pr-5">
+            <li>الاشتراك <b className="text-amber-300">شهري ويتجدد تلقائياً</b> عبر PayPal حتى تقوم بإلغائه.</li>
+            <li>إذا فشل التجديد أو لم تدفع، يبدأ <b>عداد {graceDays} أيام</b> سماح. خلالها نحاول السحب من حسابك تلقائياً.</li>
+            <li>بعد انتهاء فترة السماح <b className="text-rose-300">يُقفل الوصول</b> لكل ملفاتك (المواقع، الصور، التطبيقات...) — لكنها <b>تبقى محفوظة عندنا</b> لمدة 6 أشهر.</li>
+            <li>لاستعادة الوصول لملفاتك ادفع <b className="text-rose-300">رسم استرداد يساوي ضعف سعر باقتك الشهرية</b> + التجديد الشهري.</li>
+            <li>عند إلغاء الاشتراك تنطبق نفس قواعد الاسترداد إذا أردت استعادة الوصول لاحقاً.</li>
+            <li>الدفع بالكامل عبر PayPal — لا نحفظ بيانات بطاقتك على خوادمنا.</li>
+          </ol>
         </div>
       </div>
     </div>

@@ -42,17 +42,20 @@ from pydantic import BaseModel
 log = logging.getLogger(__name__)
 
 # ─── Plan catalogue (server-side only — never trust client) ─────────────
-# Linear pricing per owner directive (Feb 2026):
-#   10MB free, then +$5 for every +50MB. Single processor: PayPal.
+# Linear pricing per owner directive (Feb 2026 v2):
+#   • Starter: 10MB at $3/mo (no free tier).
+#   • Then +$5 per +50MB up to 1 GB.
+#   • All plans monthly; PayPal-only.
+#   • Recovery fee = DOUBLE the plan price (per-plan dynamic).
 STORAGE_PLANS = {
-    "free": {
-        "id": "free",
-        "label_ar": "مجاني",
-        "label_en": "Free",
-        "price_usd": 0,
+    "starter10": {
+        "id": "starter10",
+        "label_ar": "بداية",
+        "label_en": "Starter",
+        "price_usd": 3,
         "quota_mb": 10,
-        "monthly": False,
-        "description_ar": "تجربة مجانية — 10 ميجا تخزين",
+        "monthly": True,
+        "description_ar": "بداية المشوار — 10 ميجا تخزين",
         "highlight": False,
     },
     "s50": {
@@ -128,26 +131,41 @@ STORAGE_PLANS = {
 }
 
 # ─── Recovery fee tiers (one-time, PayPal) ──────────────────────────────
-RECOVERY_TIERS = {
-    "small":  {"id": "small",  "label_ar": "استرداد صغير",  "max_gb": 0.05, "price_usd": 3},
-    "medium": {"id": "medium", "label_ar": "استرداد متوسط",  "max_gb": 0.1,  "price_usd": 5},
-    "large":  {"id": "large",  "label_ar": "استرداد كبير",   "max_gb": 0.25, "price_usd": 10},
-    "xl":     {"id": "xl",     "label_ar": "استرداد ضخم",    "max_gb": 1.0,  "price_usd": 25},
-}
+# Per-plan dynamic recovery: 2× the plan's monthly price.
+# Computed via `recovery_fee_for_plan(plan_id)`.
+RECOVERY_TIERS = {}
+
+
+def recovery_fee_for_plan(plan_id: str) -> dict:
+    """Calculate the per-plan recovery fee (2× monthly price).
+
+    Triggered when the user is late paying / cancelled and wants to unlock
+    their archived files. Doubles the plan price as a penalty.
+    """
+    plan = STORAGE_PLANS.get(plan_id) or STORAGE_PLANS["starter10"]
+    fee = round(plan["price_usd"] * 2, 2)
+    return {
+        "id": f"recovery_{plan_id}",
+        "label_ar": f"استرداد {plan['label_ar']}",
+        "plan_id": plan_id,
+        "plan_price_usd": plan["price_usd"],
+        "price_usd": fee,
+        "quota_mb": plan["quota_mb"],
+    }
+
 
 # ─── Grace period config ────────────────────────────────────────────────
 GRACE_DAYS = 10
 ARCHIVE_RETENTION_DAYS = 180   # 6 months — after this we may purge
 
 
-def pick_recovery_tier(used_mb: float) -> dict:
-    """Return the cheapest recovery tier that fits the user's archived size."""
-    used_gb = used_mb / 1024.0
-    for tier in ("small", "medium", "large", "xl"):
-        t = RECOVERY_TIERS[tier]
-        if used_gb <= t["max_gb"]:
-            return t
-    return RECOVERY_TIERS["xl"]
+def pick_recovery_tier(used_mb: float = 0, plan_id: str = "starter10") -> dict:
+    """Return the recovery tier for the user's CURRENT plan (2× plan price).
+
+    `used_mb` kept for backwards-compat only — recovery is now per-plan,
+    not per-size.
+    """
+    return recovery_fee_for_plan(plan_id)
 
 
 class CheckoutIn(BaseModel):
@@ -192,15 +210,21 @@ def register_storage_billing(app, db, get_current_user):
         pp_ok = bool(os.environ.get("PAYPAL_CLIENT_ID") and os.environ.get("PAYPAL_SECRET"))
         out = []
         for plan in STORAGE_PLANS.values():
-            available = True if plan["price_usd"] == 0 else pp_ok
-            out.append({**plan, "available": available, "quota_gb": round(plan["quota_mb"] / 1024, 2)})
-        return {"plans": out, "recovery": list(RECOVERY_TIERS.values()), "grace_days": GRACE_DAYS}
+            available = pp_ok  # No free plan exists anymore — all require PayPal
+            recovery = recovery_fee_for_plan(plan["id"])
+            out.append({
+                **plan,
+                "available": available,
+                "quota_gb": round(plan["quota_mb"] / 1024, 2),
+                "recovery_price_usd": recovery["price_usd"],
+            })
+        return {"plans": out, "recovery": [], "grace_days": GRACE_DAYS}
 
     # ─── GET /api/storage/subscription ──────────────────────────────────
     @router.get("/subscription")
     async def get_subscription(user=Depends(get_current_user)):
         sub = await _get_user_storage_subscription(db, user["user_id"])
-        plan = STORAGE_PLANS.get(sub["plan_id"]) or STORAGE_PLANS["free"]
+        plan = STORAGE_PLANS.get(sub["plan_id"]) or STORAGE_PLANS["starter10"]
         # Compute grace countdown if past_due
         grace_days_left = None
         if sub.get("status") == "past_due" and sub.get("grace_started_at"):
@@ -230,27 +254,7 @@ def register_storage_billing(app, db, get_current_user):
         plan = STORAGE_PLANS.get(body.plan_id)
         if not plan:
             raise HTTPException(400, "خطة غير صحيحة")
-        if plan["id"] == "free":
-            # Downgrade to free — no checkout needed, just mark and return
-            await db.storage_subscriptions.update_one(
-                {"user_id": user["user_id"]},
-                {"$set": {
-                    "user_id": user["user_id"],
-                    "plan_id": "free",
-                    "status": "active",
-                    "lemon_subscription_id": None,
-                    "current_period_end": None,
-                    "grace_started_at": None,
-                    "archived_at": None,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }},
-                upsert=True,
-            )
-            await db.users.update_one(
-                {"id": user["user_id"]},
-                {"$set": {"storage_tier": "free", "storage_quota_mb": plan["quota_mb"]}},
-            )
-            return {"ok": True, "downgraded_to": "free"}
+        # Note: no free tier — all plans require PayPal checkout.
 
         # ─── PayPal (Lemon Squeezy removed — Feb 2026) ─────────────────
         if not (os.environ.get("PAYPAL_CLIENT_ID") and os.environ.get("PAYPAL_SECRET")):
@@ -310,13 +314,15 @@ def register_storage_billing(app, db, get_current_user):
             raise HTTPException(500, f"خطأ في PayPal: {e}")
 
     # ─── POST /api/storage/recovery/checkout ────────────────────────────
+    # Recovery fee = 2× the plan's monthly price (per-plan, not per-size).
+    # Triggered when the user is past_due/archived and wants to unlock files.
     @router.post("/recovery/checkout")
     async def create_recovery_checkout(_body: RecoveryCheckoutIn, user=Depends(get_current_user)):
         sub = await _get_user_storage_subscription(db, user["user_id"])
-        if sub.get("status") != "archived":
-            raise HTTPException(400, "حسابك ليس في حالة أرشفة — لا حاجة للاسترداد")
-        archived_size_mb = float(sub.get("archived_size_mb") or 0)
-        tier = pick_recovery_tier(archived_size_mb)
+        if sub.get("status") not in ("archived", "past_due", "cancelled"):
+            raise HTTPException(400, "حسابك نشط — لا حاجة للاسترداد")
+        plan_id = sub.get("plan_id") or "starter10"
+        tier = recovery_fee_for_plan(plan_id)
         if not (os.environ.get("PAYPAL_CLIENT_ID") and os.environ.get("PAYPAL_SECRET")):
             raise HTTPException(503, "PayPal غير مُهيأ على الخادم")
         try:
