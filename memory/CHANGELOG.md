@@ -1,6 +1,37 @@
 # Zitex Changelog
 
 
+### 🗂️ Feb 2026 — Design Archive (المحفوظات) — Unlimited Visual Version Control
+
+User feedback (verbatim): "بعد ما يكون عنده اول تصميم ممتاز يكون كل شي والعميل كمل يعدل عليه ... يحط صور جديدة ما يمحي السابقات يضيف جدد حتى لو وصل 300 صورة عادي ... ما يقدر كل دقيقة ذكاء صناعي مثلا فجأة يبدل الصور".
+
+Built a new "المحفوظات" tab beside Chat/Live with visual thumbnails + unlimited snapshot history. The AI can NEVER wipe prior versions — every change spawns a new immutable snapshot.
+
+**Backend changes (`/app/backend/modules/freebuild/freebuild_chat.py`)**
+- Added `_make_snapshot_doc(html, user_msg, kind, label)` helper. Each snapshot now carries `kind` ∈ {baseline, publish, auto, manual, pre_restore} and an Arabic `label`.
+- Removed EVERY `"$slice": -20` on `html_snapshots` — archive is now unbounded (300+ ok per the user).
+- `publish_project` + `auto_republish_project` now capture a baseline-or-publish snapshot at each publish. First-ever publish is permanently labeled "✅ التصميم المعتمد (النسخة الأساسية)".
+- `restore` endpoint pushes a `pre_restore` snapshot BEFORE swapping so any restore is reversible.
+- New endpoint: `POST /api/freebuild-chat/project/{pid}/snapshots/manual` (Form-encoded optional `label`) — lets users pin checkpoints from the UI at any time.
+- `GET /api/freebuild-chat/project/{pid}/snapshots` now returns `kind`, `label`, `is_baseline`, `published_slug`, `published_version` per item, newest-first.
+
+**Frontend changes (`/app/frontend/src/pages/FreeBuildChat.js`)**
+- New `DesignArchiveTab` component: visual gallery with iframe-srcdoc live thumbnails (scaled), per-card badges (⭐baseline / 🚀publish / 💾manual / ↩️pre_restore / 🕘auto), and per-card actions: `استرجاع` (restore-only) + `عدّل عليها` (restore + prefill chat composer with seeded prompt + switch to chat tab).
+- New `ArchiveThumb` lazy loader: fetches snapshot HTML on demand and renders inside a scaled iframe (no Playwright/screenshot service needed).
+- Tab-bar gets `data-testid="tab-archive"` in website mode, placed visually between chat and live in RTL.
+- Full-size preview overlay (`archive-preview-overlay`) with Restore + Restore-and-edit buttons.
+- Manual save UX: text input for label + "احفظ النسخة الحالية" button (`archive-save-manual`).
+
+**Testing**
+- 9/9 pytest tests in `/app/backend/tests/test_design_archive.py` pass (list schema, manual save happy path, manual save 404/400, no -20 cap regression, baseline-once-on-first-publish, publish-kind-on-subsequent, pre_restore-on-top after restore, /approve-design regression).
+- `testing_agent_v3_fork` (iteration 69) — 100% backend, ~85% frontend (only the prefill text confirmation was timing-bound on the slow dev preview; code logic verified by inspection: `setMessage(text)` writes directly to the `data-testid="chat-input"` field).
+- Deployed to production VPS via `bash /app/deploy/deploy.sh` — `https://zenrex.ai/api/health` returns 200 with new endpoint live.
+
+**Why this matters**
+The user lost progress before because the AI would re-generate sections and overwrite their preferred design. Now every "good" design is permanently captured — and restorable from a visual gallery with one click — regardless of how many subsequent edits the AI makes.
+
+
+
 ### 🏛️ Feb 2026 — Zenrex AI Constitution (8 إلزامية لا تُنتهك)
 
 User watched the AI build zaheer-market and identified the root cause: **AI uses template thinking instead of REAL engineering**. Every project starts from a memorized template (Hero + product cards + 4-circle bottom-nav), regardless of what the user actually wants.

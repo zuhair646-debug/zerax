@@ -4361,6 +4361,18 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
             {isWebsiteMode && (
             <button
               type="button"
+              onClick={() => setActiveTab('archive')}
+              data-testid="tab-archive"
+              className={`px-3 sm:px-4 py-2.5 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${activeTab === 'archive' ? 'text-amber-300 border-amber-400' : 'text-zinc-400 border-transparent hover:text-white'}`}
+              title="المحفوظات — كل نسخة سابقة من تصميمك (غير محدودة)"
+            >
+              <ArchiveIcon className="w-3.5 h-3.5" />
+              <span>المحفوظات</span>
+            </button>
+            )}
+            {isWebsiteMode && (
+            <button
+              type="button"
               onClick={() => setActiveTab('live')}
               data-testid="tab-live"
               className={`px-3 sm:px-4 py-2.5 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${activeTab === 'live' ? 'text-cyan-300 border-cyan-400' : 'text-zinc-400 border-transparent hover:text-white'}`}
@@ -4369,18 +4381,6 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               <Eye className="w-3.5 h-3.5" />
               <span>الرابط المباشر</span>
               {project?.published_slug && <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">v{project?.published_version || 1}</span>}
-            </button>
-            )}
-            {isWebsiteMode && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('archive')}
-              data-testid="tab-archive"
-              className={`px-3 sm:px-4 py-2.5 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${activeTab === 'archive' ? 'text-amber-300 border-amber-400' : 'text-zinc-400 border-transparent hover:text-white'}`}
-              title="المحفوظات — كل نسخة سابقة من تصميمك (غير محدودة)"
-            >
-              <ArchiveIcon className="w-3.5 h-3.5" />
-              <span>المحفوظات</span>
             </button>
             )}
             {!isWebsiteMode && (
