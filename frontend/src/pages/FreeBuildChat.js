@@ -18,6 +18,7 @@ import {
   ZoomIn, Reply, Download, ExternalLink, Rocket, Smartphone as Phone,
   Crown, Github, Globe2, Cloud, Link2, Copy, FileText, Plug, Mic,
   History, RotateCcw, Clock, HelpCircle, AlertCircle, ChevronLeft,
+  Archive as ArchiveIcon, Save, Pin, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -1222,6 +1223,370 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
           )}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// DESIGN ARCHIVE TAB (المحفوظات) — visual gallery of every saved
+// design snapshot. Unlimited history. Each card shows a live
+// iframe thumbnail + restore + "ask AI to edit from this version".
+// ─────────────────────────────────────────────────────────────
+function DesignArchiveTab({ projectId, onRestored, onPrefillChat, switchToChat, switchToLive }) {
+  const [snaps, setSnaps] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [previewing, setPreviewing] = useState(null); // {id, html}
+  const [savingManual, setSavingManual] = useState(false);
+  const [manualLabel, setManualLabel] = useState('');
+
+  const refresh = useCallback(async () => {
+    if (!projectId) return;
+    setLoading(true);
+    const token = localStorage.getItem('token');
+    try {
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/snapshots`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (r.ok) setSnaps(d.snapshots || []);
+    } catch {
+      toast.error('فشل جلب المحفوظات');
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const fetchHtml = async (sid) => {
+    const token = localStorage.getItem('token');
+    const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/snapshots/${sid}/preview`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) throw new Error('failed');
+    return r.json();
+  };
+
+  const openPreview = async (sid) => {
+    try {
+      const d = await fetchHtml(sid);
+      setPreviewing({ id: sid, html: d.html || '' });
+    } catch {
+      toast.error('فشلت المعاينة');
+    }
+  };
+
+  const restore = async (sid, alsoPrefillChat = false) => {
+    if (busy) return;
+    const ok = window.confirm(
+      alsoPrefillChat
+        ? 'راح أرجع تصميمك للنسخة المختارة + أعطيك أمر تعديل جاهز في المحادثة. متأكد؟'
+        : 'متأكد إنك تبي ترجع للنسخة المختارة؟ النسخة الحالية راح تتحفظ في المحفوظات تلقائياً.'
+    );
+    if (!ok) return;
+    setBusy(true);
+    const token = localStorage.getItem('token');
+    try {
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/snapshots/${sid}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل الاسترجاع');
+      toast.success('✅ تم استرجاع النسخة');
+      onRestored && onRestored();
+      await refresh();
+      if (alsoPrefillChat && onPrefillChat) {
+        onPrefillChat('استلمت النسخة السابقة من المحفوظات. ابدأ من هذا التصميم بالضبط وعدّل الآتي فقط دون كسر باقي العناصر: ');
+        switchToChat && switchToChat();
+      } else if (switchToLive) {
+        switchToLive();
+      }
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveManual = async () => {
+    if (savingManual) return;
+    setSavingManual(true);
+    const token = localStorage.getItem('token');
+    try {
+      const fd = new FormData();
+      fd.append('label', manualLabel || '');
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/snapshots/manual`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل الحفظ');
+      toast.success('💾 تم حفظ النسخة الحالية في المحفوظات');
+      setManualLabel('');
+      await refresh();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setSavingManual(false);
+    }
+  };
+
+  const kindBadge = (kind) => {
+    if (kind === 'baseline') return { text: '⭐ التصميم المعتمد', cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40' };
+    if (kind === 'publish')  return { text: '🚀 نُشر', cls: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40' };
+    if (kind === 'manual')   return { text: '💾 حفظ يدوي', cls: 'bg-violet-500/20 text-violet-300 border-violet-400/40' };
+    if (kind === 'pre_restore') return { text: '↩️ قبل استرجاع', cls: 'bg-zinc-500/20 text-zinc-300 border-zinc-400/30' };
+    return { text: '🕘 تلقائي', cls: 'bg-amber-500/15 text-amber-300 border-amber-400/30' };
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gradient-to-b from-zinc-950 to-black" data-testid="tab-content-archive">
+      {/* Header + manual save */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <div>
+          <h2 className="text-lg font-black text-amber-300 flex items-center gap-2">
+            <ArchiveIcon className="w-5 h-5" /> <span>المحفوظات</span>
+            <span className="text-xs text-zinc-500 font-normal">({snaps.length} نسخة)</span>
+          </h2>
+          <p className="text-[11px] text-zinc-500 mt-1">
+            كل نسخة من تصميمك محفوظة هنا — بدون حد أقصى. ارجع لأي نسخة وقت ما تبي، وعدّل عليها بأمان.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={manualLabel}
+            onChange={(e) => setManualLabel(e.target.value)}
+            placeholder="وسم اختياري (مثال: قبل تجربة الألوان الجديدة)"
+            data-testid="archive-manual-label"
+            className="bg-zinc-900/60 border border-amber-500/30 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 min-w-[220px]"
+            dir="rtl"
+          />
+          <button
+            type="button"
+            onClick={saveManual}
+            disabled={savingManual}
+            data-testid="archive-save-manual"
+            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/30 to-orange-500/30 hover:from-amber-500/50 hover:to-orange-500/50 border border-amber-400/40 text-amber-100 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+            title="احفظ النسخة الحالية لتقدر ترجعها لاحقاً"
+          >
+            {savingManual ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            <span>احفظ النسخة الحالية</span>
+          </button>
+          <button
+            type="button"
+            onClick={refresh}
+            data-testid="archive-refresh"
+            className="px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 text-xs"
+            title="تحديث"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-16">
+          <Loader2 className="w-7 h-7 animate-spin text-amber-400 mx-auto" />
+          <p className="text-xs text-zinc-500 mt-3">يفتح أرشيف المحفوظات…</p>
+        </div>
+      ) : snaps.length === 0 ? (
+        <div className="text-center py-16 max-w-md mx-auto">
+          <ArchiveIcon className="w-14 h-14 mx-auto mb-3 text-zinc-700" />
+          <p className="text-zinc-300 font-bold mb-1">ما فيه محفوظات لسا</p>
+          <p className="text-zinc-500 text-xs leading-6">
+            أول ما يبني الذكاء الصناعي تصميمك أو تنشر الموقع، راح تظهر النسخ هنا تلقائياً.
+            تقدر كذلك تضغط «احفظ النسخة الحالية» بأي وقت لتثبيت نقطة رجوع.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {snaps.map((s) => {
+            const badge = kindBadge(s.kind);
+            const isPreviewing = previewing?.id === s.id;
+            return (
+              <div
+                key={s.id}
+                data-testid={`archive-card-${s.id}`}
+                className={`rounded-xl overflow-hidden border bg-zinc-900/40 flex flex-col transition-all ${
+                  s.is_baseline
+                    ? 'border-emerald-400/50 shadow-[0_0_20px_-6px_rgba(16,185,129,0.4)]'
+                    : 'border-white/10 hover:border-amber-400/40'
+                }`}
+              >
+                {/* Thumbnail (live iframe of stored HTML, scaled) */}
+                <button
+                  type="button"
+                  onClick={() => openPreview(s.id)}
+                  data-testid={`archive-thumb-${s.id}`}
+                  className="block w-full bg-white relative overflow-hidden"
+                  style={{ aspectRatio: '16 / 10' }}
+                  title="معاينة بالحجم الكامل"
+                >
+                  <ArchiveThumb projectId={projectId} sid={s.id} fetchHtml={fetchHtml} />
+                  {s.is_baseline && (
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-emerald-500 text-black text-[10px] font-black flex items-center gap-1">
+                      <Pin className="w-3 h-3" /> الأساس
+                    </div>
+                  )}
+                </button>
+
+                <div className="p-3 flex flex-col gap-2 text-right">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md border font-bold ${badge.cls}`}>
+                      {badge.text}
+                    </span>
+                    <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {s.created_at ? new Date(s.created_at).toLocaleString('ar-SA') : '—'}
+                    </span>
+                  </div>
+                  {s.label && (
+                    <p className="text-[11px] text-amber-200 font-bold truncate" dir="rtl">{s.label}</p>
+                  )}
+                  <p className="text-[10px] text-zinc-400 truncate" dir="rtl">{s.summary}</p>
+                  {s.user_msg && (
+                    <p className="text-[10px] text-zinc-500 italic line-clamp-2" dir="rtl">
+                      الطلب: {s.user_msg}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => restore(s.id, false)}
+                      disabled={busy}
+                      data-testid={`archive-restore-${s.id}`}
+                      className="flex-1 px-2 py-1.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 text-[11px] font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                    >
+                      <RotateCcw className="w-3 h-3" /> استرجاع
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => restore(s.id, true)}
+                      disabled={busy}
+                      data-testid={`archive-edit-from-${s.id}`}
+                      className="flex-1 px-2 py-1.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-100 text-[11px] font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                      title="استرجع هذي النسخة وابعث أمر تعديل للذكاء"
+                    >
+                      <Pencil className="w-3 h-3" /> عدّل عليها
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Full-size preview overlay */}
+      {previewing && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPreviewing(null)}
+          data-testid="archive-preview-overlay"
+        >
+          <div
+            className="bg-zinc-950 border border-amber-400/30 rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                <Eye className="w-4 h-4" /> معاينة النسخة بالحجم الكامل
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPreviewing(null)}
+                className="text-zinc-400 hover:text-white p-1"
+                data-testid="archive-preview-close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <iframe
+              title="archive-preview-large"
+              srcDoc={previewing.html}
+              sandbox=""
+              className="w-full h-[75vh] bg-white border-0"
+              data-testid="archive-preview-iframe"
+            />
+            <div className="px-4 py-3 border-t border-white/10 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => restore(previewing.id, false)}
+                disabled={busy}
+                data-testid={`archive-preview-restore-${previewing.id}`}
+                className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> استرجاع كامل
+              </button>
+              <button
+                type="button"
+                onClick={() => restore(previewing.id, true)}
+                disabled={busy}
+                data-testid={`archive-preview-edit-${previewing.id}`}
+                className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-100 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Pencil className="w-3.5 h-3.5" /> استرجع وعدّل
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Thumbnail (lazy-loaded HTML in an iframe scaled down so the grid stays fast)
+function ArchiveThumb({ projectId, sid, fetchHtml }) {
+  const [html, setHtml] = useState(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const d = await fetchHtml(sid);
+        if (alive) setHtml(d.html || '');
+      } catch {
+        if (alive) setErr(true);
+      }
+    })();
+    return () => { alive = false; };
+  }, [projectId, sid, fetchHtml]);
+  if (err) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-zinc-400 text-xs">
+        تعذّر تحميل المعاينة
+      </div>
+    );
+  }
+  if (html === null) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+      </div>
+    );
+  }
+  // Use srcDoc with a scaled wrapper. Aspect-ratio container handles sizing;
+  // we render at 1280px wide and CSS scale it down to fit the card.
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none bg-white">
+      <iframe
+        title={`thumb-${sid}`}
+        srcDoc={html}
+        sandbox=""
+        scrolling="no"
+        style={{
+          width: '1280px',
+          height: '800px',
+          border: 0,
+          transformOrigin: 'top left',
+          transform: 'scale(0.28)',
+          pointerEvents: 'none',
+        }}
+      />
     </div>
   );
 }
@@ -2691,7 +3056,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   const [activePhaseOverride, setActivePhaseOverride] = useState(null);
   const activePhase = activePhaseOverride || project?.current_phase || 'discovery';
   const setActivePhase = setActivePhaseOverride;
-  const [activeTab, _setActiveTabRaw] = useState('chat'); // chat | live | approved
+  const [activeTab, _setActiveTabRaw] = useState('chat'); // chat | live | approved | archive
   // Credits guard — disables input + shows recharge UI when credits = 0
   const { isBlocked: creditsBlocked, refresh: refreshCredits, credits: liveCredits, unlimited: liveUnlimited } = useCreditsGuard();
 
@@ -4006,6 +4371,18 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               {project?.published_slug && <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">v{project?.published_version || 1}</span>}
             </button>
             )}
+            {isWebsiteMode && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('archive')}
+              data-testid="tab-archive"
+              className={`px-3 sm:px-4 py-2.5 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${activeTab === 'archive' ? 'text-amber-300 border-amber-400' : 'text-zinc-400 border-transparent hover:text-white'}`}
+              title="المحفوظات — كل نسخة سابقة من تصميمك (غير محدودة)"
+            >
+              <ArchiveIcon className="w-3.5 h-3.5" />
+              <span>المحفوظات</span>
+            </button>
+            )}
             {!isWebsiteMode && (
             <button
               type="button"
@@ -4968,6 +5345,16 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                 </>
               )}
             </div>
+          )}
+
+          {activeTab === 'archive' && (
+            <DesignArchiveTab
+              projectId={projectId}
+              onRestored={() => { refreshProject(); }}
+              onPrefillChat={(text) => setMessage(text)}
+              switchToChat={() => setActiveTab('chat')}
+              switchToLive={() => setActiveTab('live')}
+            />
           )}
 
           {activeTab === 'approved' && (

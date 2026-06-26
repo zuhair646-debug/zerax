@@ -9570,34 +9570,24 @@ async def stream_agent_turn(
     # In hybrid mode, the FIRST creative build is routed to GPT-5.5 for
     # visual flair; all other phases (surgical edits, debug, conversation)
     # stay with Claude Sonnet 4.5 for tool-use discipline.
+    # AI Router DISABLED (2026-02 — owner request).
+    # The platform is locked to Claude Sonnet 4.5 via Anthropic Direct only.
+    # No more hybrid routing to GPT/GLM — that path produced the
+    # `openai_direct: tool_calls without matching tool_result` 400 errors.
     try:
-        from .ai_mode import (
-            get_ai_mode, classify_phase, pick_provider, describe_choice,
-            GPT_PROVIDER, GLM_PROVIDER,
-        )
-        _ai_mode = await get_ai_mode(db) if db is not None else "claude_only"
-        _phase = classify_phase(user_message, project)
-        _prov, _model = pick_provider(_ai_mode, _phase)
-        logger.info(f"[ai-router] mode={_ai_mode} phase={_phase} → {_prov}/{_model}")
-    except Exception as _re:
-        logger.warning(f"[ai-router] failed, falling back to claude: {_re}")
-        _ai_mode, _phase = "claude_only", "surgical"
-        _prov, _model = "anthropic", "claude-sonnet-4-5-20250929"
-        GPT_PROVIDER = "openai_direct"
-        GLM_PROVIDER = "zhipu_glm"
+        from .ai_mode import GPT_PROVIDER, GLM_PROVIDER
+    except Exception:
+        GPT_PROVIDER, GLM_PROVIDER = "openai_direct", "zhipu_glm"
+    _ai_mode, _phase = "claude_only", "surgical"
+    _prov, _model = "anthropic", "claude-sonnet-4-5-20250929"
+    logger.info("[ai-router] LOCKED to anthropic/claude-sonnet-4-5 (claude_only)")
 
-    # Build the provider chain. Primary = router choice. Fallback = Claude.
+    # Build the provider chain. Claude only. No GPT, no GLM, no Emergent fallback.
     providers = []
-    if _prov == GPT_PROVIDER and (os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY")):
-        providers.append((GPT_PROVIDER, _model))
-    elif _prov == GLM_PROVIDER and (os.environ.get("OPENROUTER_API_KEY") or os.environ.get("ZHIPU_API_KEY")):
-        providers.append((GLM_PROVIDER, _model))
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
         providers.append(("anthropic", "claude-sonnet-4-5-20250929"))
-    elif os.environ.get("EMERGENT_LLM_KEY", "").strip():
-        providers.append(("emergent_anthropic", "claude-sonnet-4-5-20250929"))
     if not providers:
-        yield _sse("error", {"message": "لا يوجد مفتاح Anthropic أو OpenAI أو Zhipu — أضف ANTHROPIC_API_KEY / OPENAI_DIRECT_KEY / ZHIPU_API_KEY"})
+        yield _sse("error", {"message": "لا يوجد ANTHROPIC_API_KEY — أضفه في backend/.env"})
         return
 
     last_err = None

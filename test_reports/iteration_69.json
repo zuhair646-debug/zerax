@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 69 — Verified the new 'المحفوظات' (Design Archive) feature end-to-end. Backend: 9/9 pytest tests pass against the live preview URL (REACT_APP_BACKEND_URL) covering (1) GET /snapshots schema (kind+label+is_baseline on every item), (2) POST /snapshots/manual happy path with custom Arabic label, (3) manual save with no label defaults, (4) repeated manual saves 6+ times with NO -20 cap (verified count grew), (5) manual on unknown PID → 404, (6) manual on empty current_html → 400, (7) first POST /publish creates kind=baseline + 2nd publish creates kind=publish (NOT a 2nd baseline), (8) POST /snapshots/{sid}/restore pushes pre_restore BEFORE swap and newest-first ordering returns pre_restore at top, (9) regression /approve-design <500. Frontend Playwright on live preview confirmed: tab-chat + tab-archive + tab-live all render (DOM order = chat|live|archive, which the review explicitly says is acceptable); clicking tab-archive renders archive-save-manual button + archive-card-* cards + archive-thumb-* thumbnails + archive-restore-* + archive-edit-from-* buttons. The 'الأساس' Pin label is present in the DOM. POST /snapshots/manual was triggered from the UI by clicking archive-save-manual and the card count refreshed to 4 (the seeded snapshots came back into view). One unconfirmed item — the 'عدّل عليها' prefill text 'استلمت النسخة السابقة من المحفوظات...' was NOT found in any textarea on first attempt; could not re-verify reliably due to slow archive-load on the dev preview (yarn webpack-dev-server is sluggish — initial GET /snapshots takes >10s to render in DOM despite the API responding in <200ms). Main agent should self-verify this prefill manually.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Archive tab edit-from prefill", "issue": "Could not confirm that clicking [data-testid^='archive-edit-from-'] populates the chat composer textarea with 'استلمت النسخة السابقة من المحفوظات...'. The window.confirm() was auto-accepted by the Playwright dialog handler but no textarea ended up containing the seeded prompt within 6s. May be timing-related (slow dev server) — recommend main agent verifies manually or via a deterministic state-spy.", "affected_selectors": ["archive-edit-from-{sid}", "textarea"]}
+    ],
+    "design_issues": [
+      {"screen": "FreeBuildChat tab bar", "issues": ["DOM tab order is [tab-chat, tab-live, tab-archive] — review_request says either order is fine, but visually in the RTL preview the 'Snapshots' tab ends up on the FAR LEFT of the bar (because tab-archive is the LAST DOM sibling and RTL flips order). The user's stated request put 'المحفوظات in the middle'. Consider swapping the JSX order so DOM = [chat, archive, live], which renders RTL as [live | archive | chat] keeping archive in the middle visually."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_design_archive.py",
+    "/app/test_reports/pytest/iter69_design_archive.xml"
+  ],
+  "action_items": [
+    "Manually verify the 'عدّل عليها' (edit-from) flow on /freebuild/chat/{pid}: click archive-edit-from-*, accept the window.confirm, then check the bottom chat composer textarea is prefilled with 'استلمت النسخة السابقة من المحفوظات...' AND activeTab switched to 'chat'. Backend restore call works; only the UI prefill side needs a confirm.",
+    "(Optional UX) Reorder the tabs so 'المحفوظات' sits in the middle visually (request literally said 'يكون في المنتصف' was implied by the user's 1a/2a/3c choices). Currently DOM = [chat, live, archive]; recommend [chat, archive, live]."
+  ],
+  "critical_code_review_comments": [
+    "freebuild_chat.py is now 7671 lines — far past the 700-line guideline. The Design Archive logic (list/manual/restore/baseline) is sprinkled across L114-220, L585-595, L3607-3735, L6700-6823, L7050-7065. Recommend extracting into a dedicated module /app/backend/modules/freebuild/design_archive.py with its own router so the surface is auditable.",
+    "_make_snapshot_doc at L585 is correct but the publish path at L3716-3735 swallows ALL exceptions (`except Exception: publish_snapshot_push = None`) and continues silently — if the snapshot insertion ever fails the user gets no warning and history is corrupted. At minimum logger.exception() should be added there.",
+    "Manual save endpoint (L6784) uses Form(\"\") for label which is fine, but the 80-char truncation `(label or 'حفظ يدوي').strip()[:80]` is silent — UI sends a placeholder up to ~50 chars so this is OK in practice, but consider returning the truncated value in the response so the UI can warn.",
+    "Frontend FreeBuildChat.js L1280 restore() uses window.confirm() — this works but blocks E2E automation. Consider switching to a shadcn AlertDialog with data-testid so future Playwright tests can deterministically accept/reject.",
+    "FreeBuildChat.js is 5851 lines — split DesignArchiveTab (L1235-1535) and ArchiveThumb (L1543-1590) into separate files under /app/frontend/src/pages/freebuild/ for maintainability.",
+    "ArchiveThumb fetches html_snapshot HTML per-card via fetchHtml() — for projects with 300+ snapshots (user's stated goal) this will hammer the API. Recommend the LIST endpoint returns a tiny html_preview (first 4KB) per snap so the grid can lazy-render iframes without N extra round-trips."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_design_archive.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 — all archive endpoints verified including no-cap, 404, 400, baseline-once, pre_restore-on-top)",
+    "frontend": "~85% (tabs render, save-manual works, cards/thumbs/restore/edit buttons all in DOM with correct testids; preview overlay testids confirmed in code; only edit-from prefill text could not be confirmed via Playwright due to slow dev server)"
+  },
+  "test_credentials": "owner@zerax.com / owner123 — works.",
+  "seed_data_creation": "Created and deleted 4 TEST_iter69_* throwaway projects (archive, empty, pub, rst). Also added 6+ manual snapshots to one of them then auto-deleted it via DELETE /api/freebuild-chat/project/{pid} in test teardown. The reusable PID c15b67ea-7a65-48dc-9b0a-df4f2ddd0760 has 6 snapshots {1 baseline, 1 publish, 2 manual, 2 pre_restore} — confirmed via direct API call.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file is /app/backend/tests/test_design_archive.py and uses BASE_URL=REACT_APP_BACKEND_URL with owner@zerax.com login. Login takes up to 30s on the preview URL — keep timeout=60. Publish endpoint requires slug as Form data (not JSON). Manual save endpoint also uses Form for label. The dev preview environment has a slow webpack-dev-server overlay that masks loading states — for Playwright runs, do `await page.evaluate(...)` to remove any div whose text starts with 'Compiled with problems:' BEFORE querying. Initial archive fetch in the browser can take 10-20s to render despite the API responding in <200ms — poll with a 20-iteration 1s loop. The reference PID c15b67ea-7a65-48dc-9b0a-df4f2ddd0760 still exists with 6 snapshots — reusable for UI tests."
+}

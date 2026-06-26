@@ -182,13 +182,39 @@ async def auto_republish_project(db, project_id: str, user_id: str) -> Optional[
         history = list(proj.get("published_history") or [])
         history.append({"slug": new_slug, "version": new_version, "published_at": now, "auto": True})
         history = history[-10:]
+        # 🗂️ Design Archive — capture a snapshot on each auto-republish so the
+        # user can always recover any prior live design. First-ever publish is
+        # tagged as "baseline".
+        _auto_pub_snap = None
+        try:
+            existing_snaps = proj.get("html_snapshots") or []
+            has_baseline = any(
+                (s.get("kind") == "baseline") for s in existing_snaps if isinstance(s, dict)
+            )
+            kind = "baseline" if not has_baseline else "publish"
+            label = (
+                "✅ التصميم المعتمد (النسخة الأساسية)"
+                if not has_baseline
+                else f"📦 نُشرت تلقائياً v{new_version}"
+            )
+            _auto_pub_snap = _make_snapshot_doc(
+                proj.get("current_html") or "",
+                user_msg=f"نشر تلقائي {new_slug}",
+                kind=kind,
+                label=label,
+            )
+        except Exception:
+            _auto_pub_snap = None
+        _update_doc: Dict[str, Any] = {"$set": {
+            "published": True, "published_slug": new_slug,
+            "published_base_slug": base, "published_version": new_version,
+            "published_at": now, "published_history": history,
+        }}
+        if _auto_pub_snap:
+            _update_doc["$push"] = {"html_snapshots": {"$each": [_auto_pub_snap]}}
         await collection.update_one(
             {"id": project_id},
-            {"$set": {
-                "published": True, "published_slug": new_slug,
-                "published_base_slug": base, "published_version": new_version,
-                "published_at": now, "published_history": history,
-            }},
+            _update_doc,
         )
         url = f"{_public_host()}/s/{new_slug}"
         previous_url = f"{_public_host()}/s/{prev_slug}" if prev_slug and prev_slug != new_slug else None
@@ -554,6 +580,24 @@ def _build_fix_prompt(issues: List[Dict[str, Any]]) -> str:
     lines.append("")
     lines.append("أعد إصدار الـHTML مع تطبيق كل الإصلاحات أعلاه. استخدم `<<REPLACE_SECTION>>` لقسم محدد، أو ```html``` كامل إذا كانت أكثر من قسم.")
     return "\n".join(lines)
+
+
+def _make_snapshot_doc(html: str, user_msg: str = "", kind: str = "auto", label: str = "") -> Dict[str, Any]:
+    """Build a Design Archive (المحفوظات) snapshot document.
+
+    kind ∈ {"baseline", "auto", "manual", "pre_restore", "publish"}.
+    Snapshots are unlimited — the user explicitly requested NO trimming so they
+    can roll back to any prior design, even after 300+ revisions.
+    """
+    return {
+        "id": str(uuid.uuid4()),
+        "html": html or "",
+        "created_at": _now(),
+        "user_msg": (user_msg or "")[:200],
+        "summary": _summarize_html(html or ""),
+        "kind": kind,
+        "label": label or "",
+    }
 
 
 def _summarize_html(html: str) -> str:
@@ -2851,16 +2895,15 @@ def make_freebuild_chat_router(db, get_current_user):
             # Keep last 20 snapshots only.
             old_html = proj.get("current_html")
             if old_html and old_html != new_html:
-                snapshot = {
-                    "id": str(uuid.uuid4()),
-                    "html": old_html,
-                    "created_at": _now(),
-                    "user_msg": (message or "")[:200],
-                    "summary": _summarize_html(old_html),
-                }
+                snapshot = _make_snapshot_doc(
+                    old_html,
+                    user_msg=(message or ""),
+                    kind="auto",
+                    label="قبل تعديل",
+                )
                 push_ops["html_snapshots"] = {
                     "$each": [snapshot],
-                    "$slice": -20,  # keep last 20
+                    # UNLIMITED — user explicitly requested no trimming (300+ ok).
                 }
             update_set["current_html"] = _inject_zenrex_footer(new_html)
             # Persist validation report + auto-heal flag for admin/dashboard visibility
@@ -2964,14 +3007,12 @@ def make_freebuild_chat_router(db, get_current_user):
         old_html = proj.get("current_html")
         if old_html and old_html != variant_html:
             update_doc["$push"] = {"html_snapshots": {
-                "$each": [{
-                    "id": str(uuid.uuid4()),
-                    "html": old_html,
-                    "created_at": _now(),
-                    "user_msg": "[تصميم سابق قبل اعتماد variant جديد]",
-                    "summary": _summarize_html(old_html),
-                }],
-                "$slice": -20,
+                "$each": [_make_snapshot_doc(
+                    old_html,
+                    user_msg="[تصميم سابق قبل اعتماد variant جديد]",
+                    kind="auto",
+                    label="قبل اعتماد تصميم جديد",
+                )],
             }}
         await db.freebuild_projects.update_one(
             {"id": pid},
@@ -3669,16 +3710,43 @@ def make_freebuild_chat_router(db, get_current_user):
         history = list(proj.get("published_history") or [])
         history.append({"slug": new_slug, "version": new_version, "published_at": now})
         history = history[-10:]
+        # 🗂️ Design Archive (المحفوظات) — capture a publish snapshot so the
+        # user can ALWAYS recover any published design later. The very first
+        # publish is tagged as the "baseline" (التصميم المعتمد الأول).
+        publish_snapshot_push = None
+        try:
+            existing_snaps = proj.get("html_snapshots") or []
+            has_baseline = any(
+                (s.get("kind") == "baseline") for s in existing_snaps if isinstance(s, dict)
+            )
+            kind = "baseline" if not has_baseline else "publish"
+            label = (
+                "✅ التصميم المعتمد (النسخة الأساسية)"
+                if not has_baseline
+                else f"📦 نشر النسخة v{new_version}"
+            )
+            publish_snapshot_push = _make_snapshot_doc(
+                proj.get("current_html") or "",
+                user_msg=f"نشر {new_slug}",
+                kind=kind,
+                label=label,
+            )
+        except Exception:
+            publish_snapshot_push = None
+
+        _publish_update: Dict[str, Any] = {"$set": {
+            "published": True,
+            "published_slug": new_slug,
+            "published_base_slug": base,
+            "published_version": new_version,
+            "published_at": now,
+            "published_history": history,
+        }}
+        if publish_snapshot_push:
+            _publish_update["$push"] = {"html_snapshots": {"$each": [publish_snapshot_push]}}
         await collection.update_one(
             {"id": pid},
-            {"$set": {
-                "published": True,
-                "published_slug": new_slug,
-                "published_base_slug": base,
-                "published_version": new_version,
-                "published_at": now,
-                "published_history": history,
-            }},
+            _publish_update,
         )
 
         live_url = f"https://zenrex.ai/s/{new_slug}"
@@ -6683,20 +6751,25 @@ def make_freebuild_chat_router(db, get_current_user):
     async def list_snapshots(pid: str, user=Depends(get_current_user)):
         proj = await db.freebuild_projects.find_one(
             {"id": pid, "user_id": user["user_id"]},
-            {"_id": 0, "html_snapshots": 1, "current_html": 1},
+            {"_id": 0, "html_snapshots": 1, "current_html": 1, "published_slug": 1, "published_version": 1},
         )
         if not proj:
             raise HTTPException(404)
         snaps = proj.get("html_snapshots") or []
-        # newest first, strip the full html from listing (only summaries)
+        # newest first, strip the full html from listing (only summaries).
+        # Each item carries `label` + `kind` so the UI can show distinct
+        # treatments (e.g. baseline pinned at top, publish chips green, etc.).
         items = []
         for s in reversed(snaps):
             items.append({
                 "id": s.get("id"),
                 "created_at": s.get("created_at"),
-                "user_msg": s.get("user_msg", "")[:200],
+                "user_msg": (s.get("user_msg") or "")[:200],
                 "summary": s.get("summary") or _summarize_html(s.get("html", "")),
                 "size": len(s.get("html") or ""),
+                "kind": s.get("kind") or "auto",
+                "label": s.get("label") or "",
+                "is_baseline": (s.get("kind") == "baseline"),
             })
         current_summary = _summarize_html(proj.get("current_html") or "")
         return {
@@ -6704,6 +6777,49 @@ def make_freebuild_chat_router(db, get_current_user):
             "snapshots": items,
             "current_summary": current_summary,
             "count": len(items),
+            "published_slug": proj.get("published_slug"),
+            "published_version": proj.get("published_version"),
+        }
+
+    @router.post("/project/{pid}/snapshots/manual")
+    async def create_manual_snapshot(
+        pid: str,
+        label: str = Form(""),
+        user=Depends(get_current_user),
+    ):
+        """Manual save — user clicks 'احفظ هذي النسخة' in the Archive tab.
+
+        Stores the current_html as a snapshot with kind=manual. Unlimited.
+        """
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "current_html": 1},
+        )
+        if not proj:
+            raise HTTPException(404)
+        html = proj.get("current_html") or ""
+        if not html:
+            raise HTTPException(400, "ما فيه تصميم محفوظ بعد")
+        snap = _make_snapshot_doc(
+            html,
+            user_msg="[حفظ يدوي من المستخدم]",
+            kind="manual",
+            label=(label or "حفظ يدوي").strip()[:80],
+        )
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$push": {"html_snapshots": {"$each": [snap]}}},
+        )
+        return {
+            "ok": True,
+            "snapshot": {
+                "id": snap["id"],
+                "created_at": snap["created_at"],
+                "summary": snap["summary"],
+                "label": snap["label"],
+                "kind": snap["kind"],
+                "size": len(html),
+            },
         }
 
     @router.get("/project/{pid}/snapshots/{sid}/preview")
@@ -6940,14 +7056,12 @@ For questions: legal@zenrex.ai
         push_doc: Dict[str, Any] = {}
         if proj.get("current_html"):
             push_doc["html_snapshots"] = {
-                "$each": [{
-                    "id": str(uuid.uuid4()),
-                    "html": proj["current_html"],
-                    "created_at": _now(),
-                    "user_msg": f"[نسخة محفوظة تلقائياً قبل استرجاع {sid[:8]}]",
-                    "summary": _summarize_html(proj["current_html"]),
-                }],
-                "$slice": -20,
+                "$each": [_make_snapshot_doc(
+                    proj["current_html"],
+                    user_msg=f"[نسخة محفوظة تلقائياً قبل استرجاع {sid[:8]}]",
+                    kind="pre_restore",
+                    label="قبل استرجاع نسخة سابقة",
+                )],
             }
         update_doc: Dict[str, Any] = {
             "$set": {"current_html": target["html"], "updated_at": _now()},
@@ -7042,7 +7156,17 @@ For questions: legal@zenrex.ai
                 _hist.add(_ph)
             update_set["phase_history"] = list(_hist)
         if snapshots:
-            push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
+            # UNLIMITED snapshots — user wants full design archive history.
+            # Normalize each snapshot with kind/label if the agent didn't set them.
+            _normalized = []
+            for _s in snapshots:
+                if not isinstance(_s, dict):
+                    continue
+                _s.setdefault("kind", "auto")
+                _s.setdefault("label", "قبل تعديل (وكيل)")
+                _normalized.append(_s)
+            if _normalized:
+                push_ops["html_snapshots"] = {"$each": _normalized}
         await db.freebuild_projects.update_one(
             {"id": pid},
             {"$push": push_ops, "$set": update_set},
@@ -7365,7 +7489,16 @@ For questions: legal@zenrex.ai
                         except Exception:
                             pass
                     if snapshots:
-                        push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
+                        # UNLIMITED snapshots in Design Archive.
+                        _normalized = []
+                        for _s in snapshots:
+                            if not isinstance(_s, dict):
+                                continue
+                            _s.setdefault("kind", "auto")
+                            _s.setdefault("label", "قبل تعديل (وكيل)")
+                            _normalized.append(_s)
+                        if _normalized:
+                            push_ops["html_snapshots"] = {"$each": _normalized}
                     await db.freebuild_projects.update_one(
                         {"id": pid},
                         {"$push": push_ops, "$set": update_set},
