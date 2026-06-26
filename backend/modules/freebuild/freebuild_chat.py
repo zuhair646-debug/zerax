@@ -7214,7 +7214,7 @@ For questions: legal@zenrex.ai
                         auth_token=_agent_token,
                         db=db,
                         is_owner=is_platform_owner_stream,
-                        max_iterations=40,
+                        max_iterations=60,
                         inject_workflow_addendum=False,
                     ):
                         if chunk.startswith("event: done\n"):
