@@ -1,6 +1,44 @@
 # Zitex Changelog
 
 
+### 💎 Feb 2026 — Independence Tier $799 — Phase 1 COMPLETE
+
+**The Reality Check**: $200 was too low for what we promised. Repriced to $79 / $199 / $799 tiers. The $799 Independence tier now delivers a real, enterprise-grade handover.
+
+**New Module** (`/app/backend/modules/freebuild/independence_kit.py` — ~400 lines):
+- `build_independence_kit(project, owner_email) -> Dict[str, str]` — returns 10 files for the ZIP.
+- Templated files: `Dockerfile` (nginx:alpine + healthcheck), `docker-compose.yml`, `nginx.conf` (gzip, cache, security headers), `deploy.sh` (one-shot Docker + Caddy HTTPS), `SECRETS.template.env`, `.gitignore`, `LICENSE` (MIT), `README.md` (project-specific), `HANDOVER.md` (formal delivery letter with $799 tier, customer email, project ID).
+- AI-generated `ARCHITECTURE.md` via Claude Sonnet 4.5 (timeout 110s, 4096 tokens) — produces ~11KB Arabic technical document covering Overview, File Structure, Tech Stack, Visual Design, Performance, Security, Future Expansion, DNS/SSL strategy, Troubleshooting. Falls back to static template if Claude fails.
+
+**Backend changes**:
+- `freebuild_chat.py:1858` — new AI system prompt context block for `tier=full_independence` with 6 mandatory handover phases (verify VPS → guide Hetzner signup → guide domain → deliver code → transfer GitHub → formal handover).
+- `freebuild_chat.py:7194` `/export-source` — when `tier=full_independence`, calls `build_independence_kit()` and bundles all 10 files into the ZIP. Headers `X-Tier` + `X-Kit-Files` for client introspection.
+- `freebuild_chat.py:3491` `/unlock` — accepts `tier=full_independence`, sets `independence_unlocked + independence_at`.
+- `STRIPE_PACKAGES` updated: `code_only=$79`, `guided=$199`, `full_independence=$799`. Webhook handler now processes all four tiers.
+- `finalize-options` returns 4 paths with new prices and CTAs.
+
+**Frontend changes** (`/app/frontend/src/pages/FreeBuildChat.js`):
+- New `<IndependenceBanner>` component renders at the top of the chat for `tier=full_independence` customers — gradient fuchsia/purple banner with one-click "تحميل Independence Kit" download button.
+- `<CodeActions>` panel gets fuchsia styling + "$799" badge + dedicated "💎 تحميل Independence Kit" button when tier=full_independence.
+- `CodeActions` also rendered inside website live-preview placeholder (not just app mode).
+- `FinalizeModal` renders 4-column grid with `lg:grid-cols-4`, $799 card has distinctive shadow + "💎 استقلال كامل" badge.
+
+**Pytest** (`/app/backend/tests/test_independence_kit.py`):
+- `test_slugify_basic` — verifies safe Docker slug generation.
+- `test_kit_contains_all_required_files` — locks in the 10-file contract, verifies HANDOVER.md contains email + $799 tag, deploy.sh starts with bash shebang + handles Caddy HTTPS, nginx.conf has security headers. Runs without hitting Claude.
+
+**Verified end-to-end on preview**:
+- ✅ `/unlock` with `tier=full_independence` sets `independence_unlocked: True`
+- ✅ `/export-source` returns 12.6 KB ZIP with 11 files (10 kit files + index.html)
+- ✅ ARCHITECTURE.md is 11,091 bytes (5+ pages of bespoke Arabic doc from Claude)
+- ✅ HANDOVER.md contains the customer email + $799 tier + project ID
+- ✅ UI: Independence Banner visible in chat tab with download button enabled
+- ✅ Service Worker bumped to `v19-2026-02-independence-kit`
+
+**Honest scope limit** — the kit currently bundles static HTML/CSS/JS only (no backend). Phase 2 will add Hetzner Cloud API one-click provisioning + GitHub repo ownership transfer. Phase 3 will add real Backend Builder (FastAPI/Node generation).
+
+
+
 ### 🧠 Feb 2026 (continued) — Discovery Brain UI + $200 Independence Path
 
 **Frontend (`/app/frontend/src/pages/FreeBuildChat.js`)** — Discovery Brain now renders end-to-end in the chat tab:

@@ -2128,7 +2128,11 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onU
         const err = await r.json().catch(() => ({}));
         throw new Error(err.detail || 'فشل التفعيل');
       }
-      toast.success(`✅ تم تفعيل باقة ${priceUsd > 0 ? `$${priceUsd}` : ''} — اربط حساباتك`);
+      if (tier === 'full_independence') {
+        toast.success('💎 تم تفعيل الاستقلال الكامل — اضغط "تحميل Kit" للحصول على Delivery Bundle');
+      } else {
+        toast.success(`✅ تم تفعيل باقة ${priceUsd > 0 ? `$${priceUsd}` : ''} — اربط حساباتك`);
+      }
       onUnlocked?.();
     } catch (e) {
       toast.error(e.message);
@@ -2574,6 +2578,37 @@ function CodeActions({ project, projectId, onOpenConnections }) {
     toast.success('✓ تم التنزيل');
   };
 
+  const [kitBusy, setKitBusy] = useState(false);
+  const downloadIndependenceKit = async () => {
+    setKitBusy(true);
+    try {
+      const token = localStorage.getItem('token');
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/export-source`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || 'فشل تحضير الحزمة');
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // Read filename from Content-Disposition if possible
+      const cd = r.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename="?([^"]+)"?/);
+      a.download = m ? m[1] : `zenrex-independence-${repoName || 'site'}.zip`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const kitFiles = r.headers.get('X-Kit-Files') || '0';
+      toast.success(`💎 تم تحميل Independence Kit (${kitFiles} ملف احترافي)`);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setKitBusy(false);
+    }
+  };
+
   const exportPdf = () => {
     // Print-to-PDF via opening the iframe content with auto print
     const win = window.open('', '_blank');
@@ -2612,10 +2647,20 @@ function CodeActions({ project, projectId, onOpenConnections }) {
   };
 
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/5 to-orange-500/5 p-3" data-testid="code-actions">
+    <div className={`rounded-xl border p-3 ${
+      project.tier === 'full_independence'
+        ? 'border-fuchsia-500/40 bg-gradient-to-r from-fuchsia-500/8 to-purple-500/8'
+        : 'border-amber-500/30 bg-gradient-to-r from-amber-500/5 to-orange-500/5'
+    }`} data-testid="code-actions">
       <div className="flex items-center justify-between mb-2.5">
-        <h4 className="text-sm font-black text-amber-200 flex items-center gap-2">
-          <Crown className="w-4 h-4 text-amber-400" /> <span>أدوات الاستقلالية</span>
+        <h4 className={`text-sm font-black flex items-center gap-2 ${
+          project.tier === 'full_independence' ? 'text-fuchsia-200' : 'text-amber-200'
+        }`}>
+          {project.tier === 'full_independence' ? (
+            <>💎 <span>أدوات الاستقلال الكامل</span><span className="text-[10px] px-1.5 py-0.5 rounded bg-fuchsia-500/30 text-fuchsia-100 font-bold">$799</span></>
+          ) : (
+            <><Crown className="w-4 h-4 text-amber-400" /> <span>أدوات الاستقلالية</span></>
+          )}
         </h4>
         <button
           type="button"
@@ -2627,6 +2672,18 @@ function CodeActions({ project, projectId, onOpenConnections }) {
         </button>
       </div>
       <div className="flex flex-wrap gap-2 mb-3">
+        {project.tier === 'full_independence' && (
+          <button
+            type="button"
+            onClick={downloadIndependenceKit}
+            disabled={kitBusy}
+            data-testid="download-independence-kit-btn"
+            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-fuchsia-500 to-purple-600 hover:from-fuchsia-400 hover:to-purple-500 text-white text-xs font-black flex items-center gap-1.5 shadow-md shadow-fuchsia-500/30 disabled:opacity-60"
+          >
+            {kitBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crown className="w-3.5 h-3.5" />}
+            💎 تحميل Independence Kit
+          </button>
+        )}
         <button type="button" onClick={copyAll} data-testid="code-copy-btn"
           className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 text-xs font-bold flex items-center gap-1.5">
           <Copy className="w-3.5 h-3.5" /> نسخ الكود
@@ -2662,6 +2719,75 @@ function CodeActions({ project, projectId, onOpenConnections }) {
           ✓ آخر دفعة: <a href={project.github_repo_url} target="_blank" rel="noreferrer" className="underline hover:text-emerald-300">{project.github_repo_url.replace('https://github.com/', '')}</a>
         </p>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 💎 Independence Tier Banner — premium customer always sees the
+// one-click Delivery Kit + Handover summary at the top of chat.
+// ─────────────────────────────────────────────────────────────
+function IndependenceBanner({ project, projectId }) {
+  const [busy, setBusy] = useState(false);
+  const downloadKit = async () => {
+    setBusy(true);
+    try {
+      const token = localStorage.getItem('token');
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/export-source`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || 'فشل تحضير الحزمة');
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const cd = r.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename="?([^"]+)"?/);
+      a.href = url;
+      a.download = m ? m[1] : `zenrex-independence-${project.name || 'site'}.zip`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      const n = r.headers.get('X-Kit-Files') || '0';
+      toast.success(`💎 تم تحميل Independence Kit (${n} ملف احترافي)`);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div
+      data-testid="independence-banner"
+      className="rounded-xl border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-500/15 via-purple-500/10 to-zinc-900 p-4 shadow-lg shadow-fuchsia-500/10"
+    >
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-400 to-purple-600 flex items-center justify-center text-xl shadow-md shadow-fuchsia-500/40 shrink-0">
+            💎
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-black text-fuchsia-100 truncate flex items-center gap-2">
+              الاستقلال الكامل مُفعّل
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-fuchsia-500/30 text-fuchsia-50 font-bold">$799</span>
+            </p>
+            <p className="text-[11px] text-fuchsia-200/70 leading-relaxed">
+              Delivery Kit جاهز — Dockerfile, nginx, deploy.sh, ARCHITECTURE.md (Claude) + HANDOVER.md
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={downloadKit}
+          disabled={busy || !project.current_html}
+          data-testid="banner-download-kit-btn"
+          className="px-4 py-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-purple-600 hover:from-fuchsia-400 hover:to-purple-500 disabled:opacity-50 text-white font-black text-xs flex items-center gap-2 whitespace-nowrap"
+        >
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          {project.current_html ? 'تحميل Independence Kit' : 'انتظر اكتمال الموقع'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -5239,6 +5365,10 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
           {/* Tab Content */}
           {activeTab === 'chat' && (
             <div ref={chatScrollRef} onScroll={onChatScroll} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" data-testid="chat-messages">
+              {/* 💎 Independence Tier — premium banner with one-click kit download. */}
+              {project.tier === 'full_independence' && (
+                <IndependenceBanner project={project} projectId={projectId} />
+              )}
               {/* 🧠 Discovery Brain — only in website-from-scratch mode.
                   Renders roadmap + progressive Q&A above the chat until
                   the customer confirms `ready_to_build`. */}
@@ -5941,8 +6071,8 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                       />
                     </div>
                   ) : (
-                    <div className="flex-1 flex items-center justify-center p-8 text-center">
-                      <div className="max-w-md">
+                    <div className="flex-1 overflow-auto p-8" data-testid="live-preview-empty">
+                      <div className="max-w-md mx-auto text-center mb-6">
                         <Eye className="w-16 h-16 mx-auto mb-4 text-zinc-700" />
                         <p className="text-zinc-300 font-bold mb-2">لم يُنشر الموقع بعد</p>
                         <p className="text-zinc-500 text-sm leading-7">
@@ -5956,6 +6086,18 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                           ← ارجع للمحادثة واطلب النشر
                         </button>
                       </div>
+                      {/* Premium tier owners see the Independence Kit / Code
+                          download tools here even before publishing — they
+                          paid, they should have access immediately. */}
+                      {project.code_unlocked && (
+                        <div className="max-w-2xl mx-auto" data-testid="code-actions-wrapper-website">
+                          <CodeActions
+                            project={project}
+                            projectId={projectId}
+                            onOpenConnections={() => setConnectionsOpen(true)}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

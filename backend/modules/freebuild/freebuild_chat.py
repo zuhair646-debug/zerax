@@ -1855,14 +1855,80 @@ def make_freebuild_chat_router(db, get_current_user):
 
         # Connection / deployment context (only in guided independence mode)
         guided_ctx = ""
-        if proj.get("code_unlocked") and proj.get("tier") == "guided":
+        if proj.get("tier") == "full_independence":
             conns = await db.freebuild_connections.find(
                 {"project_id": pid, "user_id": user["user_id"]},
                 {"_id": 0, "provider": 1, "mask": 1, "extra": 1},
             ).to_list(length=10)
             conn_map = {c["provider"]: c for c in conns}
             guided_ctx = (
-                "\n\n🚀 وضع الاستقلالية المُرشَدة (Premium Guided $99):\n"
+                "\n\n💎 **وضع الاستقلال الكامل ($799 — Premium Tier)**:\n"
+                "العميل دفع 10 أضعاف الباقة الأساسية. مستحق خدمة Premium حقيقية.\n"
+                "هدفك: تخرج العميل من Zenrex بكامل ملكيته على VPS مستقل في خلال جلسة واحدة.\n"
+                "\n"
+                "📋 حالة الاتصالات الحالية:\n"
+                f"  • GitHub: {'✅ مربوط (' + conn_map['github']['mask'] + ')' if 'github' in conn_map else '❌ يحتاج ربط'}\n"
+                f"  • Domain: {'✅ ' + conn_map['domain'].get('extra', '') if 'domain' in conn_map else '⚠️ اختياري'}\n"
+                f"  • VPS Provider: {conn_map.get('vps', {}).get('extra', 'لم يُختر بعد')}\n"
+                "\n"
+                "🎯 **خطوات التسليم الإلزامية (نفّذها بالترتيب — لا تتخطّى)**:\n"
+                "\n"
+                "**المرحلة ١ — التحقق من المتطلبات (سؤال واحد فقط):**\n"
+                "اسأل العميل: \"عندك VPS جاهز (Hetzner/DigitalOcean/AWS) ولا تحتاج إرشاد كامل؟\"\n"
+                "  - إذا قال 'عندي': اطلب IP السيرفر + نوع OS (Ubuntu 22+ مفضّل).\n"
+                "  - إذا قال 'محتاج إرشاد': انتقل للمرحلة ٢.\n"
+                "\n"
+                "**المرحلة ٢ — إرشاد شراء VPS (إذا احتاج):**\n"
+                "ارشده لـ Hetzner Cloud (الأنسب — €4.5/شهر):\n"
+                "  1. ادخل https://accounts.hetzner.com/signUp\n"
+                "  2. أنشئ مشروع جديد → Add Server → Ubuntu 22.04 → CX22 (€4.51/mo)\n"
+                "  3. أضف SSH key (اشرح له كيف يولّد واحد بـ ssh-keygen).\n"
+                "  4. بعد ما يجهز، يعطيك IP السيرفر (مثلاً 1.2.3.4).\n"
+                "بدائل: DigitalOcean ($6/mo), AWS Lightsail ($3.5/mo).\n"
+                "\n"
+                "**المرحلة ٣ — إرشاد الدومين (اختياري):**\n"
+                "إذا يبي دومين مخصص:\n"
+                "  1. Namecheap / Cloudflare Registrar / GoDaddy.\n"
+                "  2. أضف A record يشير لـ IP السيرفر.\n"
+                "  3. انتظر 5-30 دقيقة للـ DNS propagation.\n"
+                "\n"
+                "**المرحلة ٤ — تسليم الكود:**\n"
+                "  1. اطلب منه يضغط زر '💎 تحميل Independence Kit' في الواجهة → يحصل على ZIP فيه:\n"
+                "     - index.html, assets/, Dockerfile, docker-compose.yml, nginx.conf,\n"
+                "     - deploy.sh, README.md, ARCHITECTURE.md, HANDOVER.md, LICENSE\n"
+                "  2. اشرح له خطوات النشر:\n"
+                "     ```\n"
+                "     scp -r * root@<IP>:/opt/app/\n"
+                "     ssh root@<IP>\n"
+                "     cd /opt/app && chmod +x deploy.sh && ./deploy.sh <domain>\n"
+                "     ```\n"
+                "\n"
+                "**المرحلة ٥ — نقل ملكية GitHub:**\n"
+                "  1. اطلب من العميل GitHub username (مثلاً 'mohammed-abc').\n"
+                "  2. اطلب PAT (Personal Access Token) بصلاحية repo full.\n"
+                "  3. أنشئ repo جديد باسم العميل وادفع الكود (استعمل tool push_to_github).\n"
+                "  4. اشرح كيف يحوّل ملكية الـ repo لاسمه إن أردت ينقله من حسابك.\n"
+                "\n"
+                "**المرحلة ٦ — التسليم الرسمي:**\n"
+                "  1. اعطه ملف HANDOVER.md (موجود في الـ ZIP) كفاتورة تسليم.\n"
+                "  2. ذكّره: 'بعد هذي اللحظة، Zenrex ما عنده وصول لكودك. كل شي بإيدك.'\n"
+                "  3. اذكر بنود الدعم: 60 يوم عبر support@zenrex.ai (إصلاحات فقط، مو ميزات جديدة).\n"
+                "\n"
+                "✋ **قواعد حرجة**:\n"
+                "  - لا تخترع APIs أو خدمات غير موجودة في الكود.\n"
+                "  - لا تتجاوز المراحل — العميل دفع للتجربة الكاملة.\n"
+                "  - استخدم لهجة محترمة احترافية (مثل مستشار شركة، مو chatbot).\n"
+                "  - اذا العميل تسرّع، ذكّره بقيمة كل خطوة.\n"
+                "  - لا تَعِد بشيء غير قابل للتنفيذ (مثل: 'سأنشر السيرفر بنفسي' — لا تقدر).\n"
+            )
+        elif proj.get("code_unlocked") and proj.get("tier") == "guided":
+            conns = await db.freebuild_connections.find(
+                {"project_id": pid, "user_id": user["user_id"]},
+                {"_id": 0, "provider": 1, "mask": 1, "extra": 1},
+            ).to_list(length=10)
+            conn_map = {c["provider"]: c for c in conns}
+            guided_ctx = (
+                "\n\n🚀 وضع الاستقلالية المُرشَدة (Premium Guided $199):\n"
                 "العميل اشترى باقة الإرشاد الكامل. وظيفتك الآن مرشد نشر فعلي خطوة بخطوة.\n"
                 "📋 حالة الاتصالات الحالية:\n"
                 f"  • GitHub: {'✅ مربوط (' + conn_map['github']['mask'] + ')' if 'github' in conn_map else '❌ غير مربوط — اطلب من العميل ربطه من زر الاتصالات'}\n"
@@ -3268,7 +3334,7 @@ def make_freebuild_chat_router(db, get_current_user):
                 {
                     "id": "take_code_self",
                     "title": "💻 استلم الكود (مبرمج)",
-                    "price_usd": 49,
+                    "price_usd": 79,
                     "subtitle": "بتنشره بنفسك على GitHub/Vercel/Cloudflare — أنت محترف وعندك خبرة",
                     "features": [
                         "كل ملفات HTML/CSS/JS",
@@ -3276,12 +3342,12 @@ def make_freebuild_chat_router(db, get_current_user):
                         "ملف README فيه طريقة النشر",
                         "بدون أي إرشاد إضافي",
                     ],
-                    "cta": "اشترِ الكود بـ $49",
+                    "cta": "اشترِ الكود بـ $79",
                 },
                 {
                     "id": "take_code_guided",
                     "title": "🎓 الكود + إرشاد كامل",
-                    "price_usd": 99,
+                    "price_usd": 199,
                     "subtitle": "الذكاء يمشي معك خطوة بخطوة — يربط GitHub repo، يدفع لـVercel، يضبط الدومين",
                     "features": [
                         "كل اللي في الباقة السابقة",
@@ -3289,21 +3355,22 @@ def make_freebuild_chat_router(db, get_current_user):
                         "يضبط CI/CD ودومين مخصص",
                         "دعم 30 يوم على المشاكل التقنية",
                     ],
-                    "cta": "اشترِ الإرشاد الكامل بـ $99",
+                    "cta": "اشترِ الإرشاد الكامل بـ $199",
                 },
                 {
                     "id": "full_independence",
                     "title": "💎 الاستقلال الكامل",
-                    "price_usd": 200,
-                    "subtitle": "ملكية كاملة — سيرفر مستقل، نقل ملكية المستودع، فك الارتباط بـ Zenrex نهائياً",
+                    "price_usd": 799,
+                    "subtitle": "ملكية كاملة — Delivery Kit احترافي، نقل ملكية المستودع، نشر VPS، فك الارتباط بـ Zenrex نهائياً",
                     "features": [
-                        "كل ملفات Frontend + Backend + قاعدة البيانات",
+                        "Delivery Kit: Dockerfile + nginx.conf + deploy.sh",
+                        "ARCHITECTURE.md (5+ صفحات مولّدة بـ Claude)",
                         "نقل ملكية GitHub repo لاسمك",
-                        "نشر على VPS مستقل (Hetzner / DigitalOcean)",
-                        "تسليم بيانات الـ secrets + شرح كامل للبنية",
-                        "بدون أي اعتماد على Zenrex بعد التسليم",
+                        "إرشاد VPS كامل (Hetzner / DigitalOcean)",
+                        "SECRETS.template.env + LICENSE + README",
+                        "دعم 60 يوم + فاتورة تسليم رسمية",
                     ],
-                    "cta": "اشترِ الاستقلال الكامل بـ $200",
+                    "cta": "اشترِ الاستقلال الكامل بـ $799",
                 },
             ],
         }
@@ -3348,9 +3415,11 @@ def make_freebuild_chat_router(db, get_current_user):
     # Webhook /api/webhook/stripe and polling status endpoint included.
     # ═══════════════════════════════════════════════════════════════════════
     STRIPE_PACKAGES = {
-        "code_only":     {"amount": 100.00, "currency": "usd", "tier": "code_only"},
-        "code_pro":      {"amount": 249.00, "currency": "usd", "tier": "code_pro"},
-        "hosting_month": {"amount":  25.00, "currency": "usd", "tier": "hosting_month"},
+        "code_only":         {"amount":  79.00, "currency": "usd", "tier": "code_only"},
+        "code_pro":          {"amount": 249.00, "currency": "usd", "tier": "code_pro"},
+        "guided":            {"amount": 199.00, "currency": "usd", "tier": "guided"},
+        "full_independence": {"amount": 799.00, "currency": "usd", "tier": "full_independence"},
+        "hosting_month":     {"amount":  25.00, "currency": "usd", "tier": "hosting_month"},
     }
 
     @router.post("/project/{pid}/checkout")
@@ -3446,15 +3515,19 @@ def make_freebuild_chat_router(db, get_current_user):
         if status.payment_status == "paid" and not already_processed:
             tier = (txn or {}).get("tier") or status.metadata.get("tier") or "code_only"
             project_id = (txn or {}).get("project_id") or status.metadata.get("project_id")
-            if project_id and tier in ("code_only", "code_pro"):
+            if project_id and tier in ("code_only", "code_pro", "guided", "full_independence"):
+                update = {
+                    "code_unlocked": True,
+                    "tier": tier,
+                    "unlocked_at": _now(),
+                    "updated_at": _now(),
+                }
+                if tier == "full_independence":
+                    update["independence_unlocked"] = True
+                    update["independence_at"] = _now()
                 await db.freebuild_projects.update_one(
                     {"id": project_id},
-                    {"$set": {
-                        "code_unlocked": True,
-                        "tier": tier,
-                        "unlocked_at": _now(),
-                        "updated_at": _now(),
-                    }},
+                    {"$set": update},
                 )
             if project_id and tier == "hosting_month":
                 await db.freebuild_projects.update_one(
@@ -7363,13 +7436,32 @@ For questions: legal@zenrex.ai
 
         # Pack everything into a ZIP in memory
         buf = io.BytesIO()
+        # ─── 💎 Independence Tier — build the premium delivery kit ───
+        independence_files: Dict[str, str] = {}
+        if proj.get("tier") == "full_independence":
+            try:
+                from modules.freebuild.independence_kit import build_independence_kit
+                independence_files = await build_independence_kit(
+                    proj, owner_email=user.get("email") or user.get("user_id") or "—"
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.exception("independence_kit build failed: %s", e)
+                # graceful fallback — still ship base files
+                independence_files = {}
+
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("index.html", html)
-            zf.writestr("README.md", readme)
-            zf.writestr("LICENSE.txt", license_txt)
+            # Base README/LICENSE only when no premium kit (premium overrides them)
+            if "README.md" not in independence_files:
+                zf.writestr("README.md", readme)
+            if "LICENSE" not in independence_files and "LICENSE.txt" not in independence_files:
+                zf.writestr("LICENSE.txt", license_txt)
             for url, content in downloaded.items():
                 local_path = external_urls[url]
                 zf.writestr(local_path, content)
+            # Write all independence-kit files (Dockerfile, deploy.sh, etc.)
+            for fname, fcontent in independence_files.items():
+                zf.writestr(fname, fcontent)
             if failures:
                 zf.writestr(
                     "assets/MISSING_ASSETS.txt",
@@ -7379,13 +7471,17 @@ For questions: legal@zenrex.ai
 
         buf.seek(0)
         safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "-", proj.get("name") or "website")[:50] or "website"
+        is_independence = proj.get("tier") == "full_independence"
+        zip_prefix = "zenrex-independence" if is_independence else "zenrex"
         return StreamingResponse(
             iter([buf.getvalue()]),
             media_type="application/zip",
             headers={
-                "Content-Disposition": f'attachment; filename="zenrex-{safe_name}.zip"',
+                "Content-Disposition": f'attachment; filename="{zip_prefix}-{safe_name}.zip"',
                 "X-Assets-Downloaded": str(len(downloaded)),
                 "X-Assets-Failed": str(len(failures)),
+                "X-Tier": proj.get("tier") or "code_only",
+                "X-Kit-Files": str(len(independence_files)),
             },
         )
 
