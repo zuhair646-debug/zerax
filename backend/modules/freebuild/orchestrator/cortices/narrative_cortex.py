@@ -78,19 +78,36 @@ async def stream_narrative_cortex(
     yield _sse("cortex_step", {"cortex": "narrative", "step": "writing",
                                 "ar": "✍️ أكتب الآن بأسلوب احترافي..."})
 
+    # Load project memory for continuity
+    from ..shared_memory import load_memory, save_memory, memory_to_system_hint, history_to_messages
+    mem = await load_memory(db, (project or {}).get("id"))
+    mem_hint = memory_to_system_hint(mem)
+
     text_out = ""
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
         session_id = f"narrative_{uuid.uuid4().hex[:8]}"
+        sys_prompt = NARRATIVE_SYSTEM_PROMPT_AR
+        if mem_hint:
+            sys_prompt = sys_prompt + "\n\n" + mem_hint
         chat = LlmChat(api_key=emergent_key, session_id=session_id,
-                       system_message=NARRATIVE_SYSTEM_PROMPT_AR).with_model("anthropic", "claude-sonnet-4-5-20250929")
+                       system_message=sys_prompt).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        # Inject history as a context block in the user message (simpler than
+        # replaying — avoids alternating-role conflicts with LlmChat).
+        history_block = ""
+        recent = history_to_messages(history or [], max_pairs=3)
+        if recent:
+            history_block = "\n\n📜 **سياق المحادثة السابقة:**\n"
+            for m in recent:
+                history_block += f"  [{m['role']}]: {m['content'][:200]}\n"
         # Inject any shared assets as context (e.g. logo URL, video plan)
         ctx_block = ""
         if shared_assets:
             ctx_block = "\n\n📦 أصول جاهزة لو احتجتها:\n" + "\n".join(
                 f"  - {k}: {v}" for k, v in shared_assets.items()
             )
-        response = await chat.send_message(UserMessage(text=user_message + ctx_block))
+        final_msg = history_block + ctx_block + "\n\n🎯 **الطلب الحالي:** " + user_message
+        response = await chat.send_message(UserMessage(text=final_msg))
         text_out = response if isinstance(response, str) else str(response)
     except Exception as e:
         logger.warning(f"[narrative_cortex] LLM call failed: {e}")
@@ -105,6 +122,25 @@ async def stream_narrative_cortex(
 
     yield _sse("asset_produced", {"asset_type": "narrative_text", "asset_url": "inline",
                                    "text_preview": text_out[:200], "cortex": "narrative"})
+
+    # Persist to memory for next turn
+    await save_memory(db, (project or {}).get("id"), {
+        "past_outputs": [{
+            "cortex": "narrative",
+            "asset_url": "inline:narrative",
+            "prompt_excerpt": user_message[:200],
+            "output_excerpt": text_out[:300],
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }],
+        "last_message": user_message[:300],
+    })
+
+    # Apply Trade Secret scrubber so internal tool names don't leak
+    try:
+        from ...trade_secret import scrub_customer_text as scrub_output  # type: ignore
+        text_out = scrub_output(text_out)
+    except Exception:
+        pass
 
     try:
         if db is not None:

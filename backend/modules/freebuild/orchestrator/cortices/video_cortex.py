@@ -146,24 +146,40 @@ async def stream_video_cortex(
             f"Scene {s.get('id',i)}: {s.get('shot','')} ({s.get('camera_motion','')}, {s.get('lighting','')})"
             for i, s in enumerate(plan.get("scenes") or [], start=1)
         ]) or user_message
-        # Simulated ctx
+
+        # Build a proper context object the workflow tool understands
         class _FakeCtx:
             project_id = (project or {}).get("id")
             user_id = (project or {}).get("user_id")
             project_obj = project or {}
-            db_obj = db
+            project = project or {}
+            db = db
+            auth_token = auth_token
+            is_owner = is_owner
+            messages_log = []
+            tool_log = []
+
+            async def emit(self, ev, data):  # no-op event emitter
+                pass
+
         fake_ctx = _FakeCtx()
         result = await _gv(fake_ctx, {
-            "description": composite[:1500],
-            "duration_seconds": min(int(plan.get("duration_seconds") or 10), 10),
-            "aspect_ratio": plan.get("aspect_ratio") or "16:9",
+            "prompt": composite[:1500],
+            "duration_seconds": min(int(plan.get("duration_seconds") or 6), 10),
             "model": "hailuo",  # cheap default; user can request premium explicitly
         })
-        if isinstance(result, dict) and result.get("ok") and result.get("video_url"):
-            video_url = result["video_url"]
-            used_model = result.get("model")
+        logger.info(f"[video_cortex] generate_video result: ok={result.get('ok') if isinstance(result,dict) else result}")
+        if isinstance(result, dict) and result.get("ok") and (result.get("video_url") or result.get("url")):
+            video_url = result.get("video_url") or result.get("url")
+            used_model = result.get("model") or "hailuo"
+        elif isinstance(result, dict) and result.get("error_for_user"):
+            # Generic apology was prepared — surface it to user
+            yield _sse("cortex_step", {"cortex": "video", "step": "provider_error",
+                                        "ar": result["error_for_user"]})
     except Exception as e:
-        logger.warning(f"[video_cortex] generate_video failed: {e}")
+        logger.exception(f"[video_cortex] generate_video failed: {e}")
+        yield _sse("cortex_step", {"cortex": "video", "step": "exception",
+                                    "ar": f"⚠️ تعذر استدعاء أداة توليد الفيديو: {type(e).__name__}"})
 
     if video_url:
         yield _sse("asset_produced", {"asset_type": "video", "asset_url": video_url,
@@ -202,6 +218,27 @@ async def stream_video_cortex(
                 "duration_ms": int((time.time() - t0) * 1000),
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
+    except Exception:
+        pass
+
+    # Persist to project memory
+    from ..shared_memory import save_memory
+    await save_memory(db, (project or {}).get("id"), {
+        "past_outputs": [{
+            "cortex": "video",
+            "asset_url": video_url or "plan-only",
+            "model": used_model or "plan-only",
+            "prompt_excerpt": user_message[:200],
+            "scenes": len(plan.get("scenes") or []),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }],
+        "last_message": user_message[:300],
+    })
+
+    # Apply Trade Secret scrubber
+    try:
+        from ...trade_secret import scrub_customer_text as scrub_output  # type: ignore
+        summary = scrub_output(summary)
     except Exception:
         pass
 

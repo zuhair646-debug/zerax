@@ -96,6 +96,27 @@ async def stream_via_orchestrator(
 
     # Single-domain → dispatch to one cortex.
     cortex_fn = _get_cortex(intent.primary)
+    # 🛡️ Per-cortex rate limit
+    try:
+        from .rate_limit import check_and_record
+        uid = (project or {}).get("user_id") or ""
+        allowed, cur, lim = check_and_record(uid, intent.primary)
+        if not allowed:
+            yield _sse("cortex_rate_limited", {
+                "cortex": intent.primary,
+                "current": cur,
+                "limit_per_60s": lim,
+                "message": f"⏱️ تجاوزت {lim} طلبات/دقيقة لـ {intent.primary} cortex. انتظر قليلاً.",
+            })
+            yield _sse("done", {
+                "summary": f"⏱️ **حد المعدل** — تجاوزت {lim} استخدامات لـ {intent.primary} cortex خلال 60 ثانية. انتظر دقيقة وحاول مجدداً.",
+                "credits_charged": 0, "auto_refunded": True,
+                "model_used": "rate_limit", "iterations": 0, "options": [],
+                "inline_images": [],
+            })
+            return
+    except Exception:
+        pass
     try:
         async for chunk in cortex_fn(
             project=project,

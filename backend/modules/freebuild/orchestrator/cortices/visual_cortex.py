@@ -110,9 +110,12 @@ async def _generate_with_emergent_image_gen(prompt: str, size: str = "1024x1024"
         return None
 
 
-async def _refine_prompt_with_claude(user_message: str, user_language: str = "ar") -> Dict[str, Any]:
+async def _refine_prompt_with_claude(user_message: str, user_language: str = "ar",
+                                       history: Optional[List[Dict[str, Any]]] = None,
+                                       memory_hint: str = "") -> Dict[str, Any]:
     """Run a short Claude call to convert the Arabic brief into a polished
     English image-generation prompt + Arabic explanation for the user.
+    Uses chat history + project memory hint for continuity.
     """
     emergent_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
     if not emergent_key:
@@ -121,11 +124,24 @@ async def _refine_prompt_with_claude(user_message: str, user_language: str = "ar
 
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
+        from ..shared_memory import history_to_messages
+        # Reuse a stable session per project would be ideal, but session_id is per-LlmChat call
         session_id = f"visual_cortex_{uuid.uuid4().hex[:8]}"
+        sys_prompt = VISUAL_SYSTEM_PROMPT_AR
+        if memory_hint:
+            sys_prompt = sys_prompt + "\n\n" + memory_hint
         chat = LlmChat(api_key=emergent_key, session_id=session_id,
-                       system_message=VISUAL_SYSTEM_PROMPT_AR).with_model("anthropic", "claude-sonnet-4-5-20250929")
+                       system_message=sys_prompt).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        # Inject history as a context block (safer than role-replay).
+        history_block = ""
+        recent = history_to_messages(history or [], max_pairs=3)
+        if recent:
+            history_block = "\n\n📜 سياق سابق:\n" + "\n".join(
+                f"  [{m['role']}]: {m['content'][:150]}" for m in recent
+            ) + "\n"
         prompt_user = (
-            f"طلب العميل: «{user_message}»\n\n"
+            f"{history_block}\n"
+            f"طلب العميل الحالي: «{user_message}»\n\n"
             "أرجع JSON فقط بهذا الشكل:\n"
             "{\n"
             '  "english_prompt": "<the polished English image-gen prompt>",\n'
@@ -153,6 +169,54 @@ async def _refine_prompt_with_claude(user_message: str, user_language: str = "ar
                 "fallback": True}
 
 
+async def _generate_with_nano_banana(prompt: str) -> Optional[Dict[str, Any]]:
+    """Try Gemini 2.5 Flash Image Preview (Nano Banana) via emergentintegrations.
+    Returns dict with saved URL or None.
+    """
+    emergent_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+    if not emergent_key:
+        return None
+    try:
+        from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration  # type: ignore
+        # Some emergent versions ship a dedicated gemini image helper
+        try:
+            from emergentintegrations.llm.google.image_generation import GeminiImageGeneration  # type: ignore
+            client = GeminiImageGeneration(api_key=emergent_key)
+            result = await client.generate_images(
+                prompt=prompt, model="gemini-2.5-flash-image-preview", number_of_images=1,
+            )
+        except Exception:
+            # Fall through to generic OpenAIImageGeneration with gemini model name
+            client = OpenAIImageGeneration(api_key=emergent_key)
+            result = await client.generate_images(
+                prompt=prompt, model="gemini-2.5-flash-image-preview", number_of_images=1,
+            )
+        if isinstance(result, list) and result:
+            first = result[0]
+            if isinstance(first, (bytes, bytearray)):
+                fname = f"{uuid.uuid4().hex}.png"
+                fpath = _UPLOAD_DIR / fname
+                with open(fpath, "wb") as f:
+                    f.write(first)
+                return {"url": f"/uploads/visual_cortex/{fname}", "size_bytes": len(first),
+                        "model": "gemini-2.5-flash-image-preview"}
+            if isinstance(first, dict):
+                if first.get("url"):
+                    return {"url": first["url"], "model": "gemini-2.5-flash-image-preview"}
+                if first.get("b64_json"):
+                    data = base64.b64decode(first["b64_json"])
+                    fname = f"{uuid.uuid4().hex}.png"
+                    fpath = _UPLOAD_DIR / fname
+                    with open(fpath, "wb") as f:
+                        f.write(data)
+                    return {"url": f"/uploads/visual_cortex/{fname}", "size_bytes": len(data),
+                            "model": "gemini-2.5-flash-image-preview"}
+        return None
+    except Exception as e:
+        logger.warning(f"[visual_cortex] nano-banana failed: {e}")
+        return None
+
+
 def _sse(event: str, data: Dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -174,10 +238,20 @@ async def stream_visual_cortex(
     t0 = time.time()
     yield _sse("cortex_started", {"cortex": "visual", "message_excerpt": user_message[:120]})
 
+    # ── 0. Load project memory (Brand DNA + past outputs) ────────────
+    from ..shared_memory import load_memory, save_memory, memory_to_system_hint
+    mem = await load_memory(db, (project or {}).get("id"))
+    mem_hint = memory_to_system_hint(mem)
+    if mem_hint:
+        yield _sse("cortex_step", {"cortex": "visual", "step": "memory_loaded",
+                                    "past_outputs_count": len(mem.get("past_outputs") or []),
+                                    "has_brand_dna": bool(mem.get("brand_dna")),
+                                    "ar": "📚 حمّلت ذاكرة المشروع — Brand DNA + الأعمال السابقة."})
+
     # ── 1. Refine prompt via Claude ────────────────────────────────────
     yield _sse("cortex_step", {"cortex": "visual", "step": "prompt_refinement",
                                 "ar": "🧠 أحوّل وصفك إلى prompt احترافي بالإنجليزية..."})
-    refined = await _refine_prompt_with_claude(user_message, user_language)
+    refined = await _refine_prompt_with_claude(user_message, user_language, history=history, memory_hint=mem_hint)
     en_prompt = refined.get("english_prompt") or user_message
     ar_expl = refined.get("arabic_explanation") or ""
     suggested_size = refined.get("suggested_size") or "1024x1024"
@@ -187,22 +261,24 @@ async def stream_visual_cortex(
                                 "arabic_explanation": ar_expl[:400],
                                 "size": suggested_size})
 
-    # ── 2. Generate image ────────────────────────────────────────────
+    # ── 2. Generate image — Try Nano Banana FIRST (better quality), then gpt-image-1, then fal.ai ──
     yield _sse("cortex_step", {"cortex": "visual", "step": "generating",
-                                "ar": "🎨 أولّد الصورة الآن (gpt-image-1)..."})
-    result = await _generate_with_emergent_image_gen(en_prompt, size=suggested_size)
-
+                                "ar": "🎨 أولّد الصورة (Nano Banana → gpt-image-1 → fal.ai)..."})
+    result = await _generate_with_nano_banana(en_prompt)
     if not result:
-        # Fallback to existing fal.ai path used by freebuild_agent
+        yield _sse("cortex_step", {"cortex": "visual", "step": "trying_gpt_image",
+                                    "ar": "🔄 Nano Banana لم يعمل، أحاول gpt-image-1..."})
+        result = await _generate_with_emergent_image_gen(en_prompt, size=suggested_size)
+    if not result:
         yield _sse("cortex_step", {"cortex": "visual", "step": "fallback_fal",
-                                    "ar": "⚠️ Emergent image gen تعذر، أحاول fal.ai..."})
+                                    "ar": "⚠️ كل المزودات الذكية تعذرت، أحاول fal.ai..."})
         fal_url = await _fallback_fal_flux(en_prompt, suggested_size)
         if fal_url:
             result = {"url": fal_url, "model": "fal-ai/flux/schnell"}
         else:
             yield _sse("cortex_error", {"cortex": "visual", "error": "All image generators failed"})
             yield _sse("done", {
-                "summary": "❌ تعذّر توليد الصورة — الـ providers الخارجية غير متاحة حالياً. حاول لاحقاً.",
+                "summary": "❌ تعذّر توليد الصورة — كل المزودات الخارجية غير متاحة. حاول لاحقاً.",
                 "credits_charged": 0,
                 "auto_refunded": True,
                 "model_used": "visual_cortex",
@@ -214,6 +290,18 @@ async def stream_visual_cortex(
 
     img_url = result.get("url")
     model_used = result.get("model", "gpt-image-1")
+
+    # Save to project memory so subsequent turns have context
+    await save_memory(db, (project or {}).get("id"), {
+        "past_outputs": [{
+            "cortex": "visual",
+            "asset_url": img_url,
+            "model": model_used,
+            "prompt_excerpt": en_prompt[:200],
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }],
+        "last_message": user_message[:300],
+    })
 
     # Emit asset_produced so multi-domain coordination captures it
     yield _sse("asset_produced", {"asset_type": "image", "asset_url": img_url,
@@ -247,6 +335,13 @@ async def stream_visual_cortex(
         f"**الرابط:** {img_url}\n\n"
         f"💰 الرصيد المستهلك: ~{credits_to_charge} كريدت."
     )
+
+    # Apply trade-secret scrubber so internal tool names don't leak
+    try:
+        from ...trade_secret import scrub_customer_text as scrub_output  # type: ignore
+        summary = scrub_output(summary)
+    except Exception:
+        pass
 
     yield _sse("done", {
         "summary": summary,

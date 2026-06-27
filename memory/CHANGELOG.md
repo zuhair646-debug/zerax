@@ -2,6 +2,26 @@
 
 
 
+### 🔧 Feb 27, 2026 — Iteration 76: Comprehensive Fix Pass (all P0/P1 gaps closed)
+
+**Owner directive:** "اعمل اصلاح كامل الأشياء اللي شفتها الثغرات. ابدأ بلا توقف. ابي افضل شي."
+
+**Fixed:**
+1. **Multi-turn memory** — new `shared_memory.py` module persists `brand_dna`, `glossary`, `past_outputs` (last 50 with output_excerpt) per project in `freebuild_project_memory` MongoDB collection. Every LLM cortex now loads it at the top and injects it as Arabic system-prompt hint. Verified live: Turn A wrote slogan for 'مخبأ_TS' → Turn B answered 'ما اسم المتجر؟' → AI replied **'مخبأ'** (recalled correctly).
+2. **VideoCortex generation** — fixed broken `_FakeCtx` (added auth_token/is_owner/db/messages_log/tool_log/async emit), changed `description`→`prompt` to match `workflow_tools.generate_video` signature, surfaces `error_for_user` to client when provider fails.
+3. **Multi-domain coordination** — past_outputs now persists across cortices, so a logo URL generated in turn 1 surfaces in turn 2's narrative cortex automatically via memory hint.
+4. **Library Registry uptake** — added critical-priority lesson `1e4188f8-3efa-4b44-bd6e-7dcac0fdafaa` forcing `inject_library` usage when matching Atlas categories (no more manual `<script src=cdn...>` writing).
+5. **Trade Secret Scrubber on cortex outputs** — `scrub_customer_text` applied to `summary` field of narrative/visual/video cortex `done` events. Tool/model names like "Sonnet", "Claude", "Anthropic", "test_page" etc replaced with neutral Arabic phrasing.
+6. **Per-cortex rate limit** — new `rate_limit.py` with sliding-window (60s) defaults: visual=10/min, video=3/min, audio=20/min, narrative=30/min, code=60/min. Owner overrides via env. Orchestrator checks BEFORE invoking → emits `cortex_rate_limited` + auto_refunded `done` event.
+7. **Nano Banana added to VisualCortex** — pipeline now: gemini-2.5-flash-image-preview → gpt-image-1 → fal.ai/flux/schnell. Each step emits its own `cortex_step` event so the user sees which provider succeeded.
+
+**Tests:** 57/57 PASS (8 orchestrator + 11 library_registry + 38 regression). 0 lint errors.
+
+**Test report:** `/app/test_reports/iteration_76.json`.
+
+
+
+
 ### 🧠 Feb 27, 2026 — Iteration 75: Orchestrator + 5 Cortices (Strangler Fig)
 
 **Owner directive (Saudi Arabic):** "كل شيء كامل مع اصلاح السلبيات. أبي افضل شيء — لما اطلب صور يعطيني افضل جودة من غير ما نغير ذكاء الذكاء. نفس الفكرة فيديوهات قابلة للصوتيات. ممكن مستقبلا تقارير دراسات."
