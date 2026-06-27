@@ -581,25 +581,49 @@ async def handle_inject_integration(args: Dict[str, Any], ctx: Any = None) -> Di
     return {"ok": True, "integration": fn()}
 
 
+async def _project_brand_dna(ctx: Any) -> Dict[str, Any]:
+    """Helper: load brand_dna from project doc if not explicitly passed.
+    Lets tools like generate_nextjs_project / build_capacitor_app pick up the
+    brand identity automatically from the auto-extracted memory."""
+    if ctx is None:
+        return {}
+    db = getattr(ctx, "db", None)
+    pid = getattr(ctx, "project_id", None)
+    # IMPORTANT: Motor/PyMongo Database objects raise NotImplementedError on
+    # bool(); use explicit `is None` checks instead.
+    if db is None or not pid:
+        return {}
+    try:
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid}, {"brand_dna": 1, "_id": 0},
+        )
+        return (proj or {}).get("brand_dna") or {}
+    except Exception:
+        return {}
+
+
 async def handle_generate_nextjs_project(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     from .orchestrator.nextjs_cortex import (
         generate_nextjs_project, default_package_json, default_tailwind_config,
     )
+    # Auto-pull brand_dna from project if not explicitly provided
+    brand_dna = args.get("brand_dna") or await _project_brand_dna(ctx)
     result = await generate_nextjs_project(
         args["brief"],
-        brand_dna=args.get("brand_dna"),
+        brand_dna=brand_dna,
         architecture=args.get("architecture"),
     )
     if result and result.get("files"):
-        return {"ok": True, **result}
+        return {"ok": True, "brand_dna_used": bool(brand_dna), **result}
     # LLM failed → return minimal defaults so caller can still scaffold
     return {
         "ok": False,
         "error": "LLM generation failed — falling back to defaults",
+        "brand_dna_used": bool(brand_dna),
         "fallback_files": {
             "package.json": default_package_json("zenrex-app"),
             "tailwind.config.ts": default_tailwind_config(
-                ((args.get("brand_dna") or {}).get("palette") or None)
+                ((brand_dna or {}).get("palette") or None)
             ),
         },
     }
@@ -610,8 +634,13 @@ async def handle_build_capacitor_app(args: Dict[str, Any], ctx: Any = None) -> D
         build_capacitor_config, capacitor_package_json,
         build_instructions_ar, push_native_snippet_js,
     )
+    # Optionally personalize splash/theme color from brand_dna
+    brand_dna = await _project_brand_dna(ctx)
+    primary_color = ((brand_dna.get("palette") or {}).get("primary") if brand_dna else None) or "#0EA5E9"
     return {
         "ok": True,
+        "brand_dna_used": bool(brand_dna),
+        "primary_color": primary_color,
         "files": {
             "capacitor.config.ts": build_capacitor_config(
                 args["app_id"], args["app_name"], args.get("web_dir", "dist"),

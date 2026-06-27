@@ -248,6 +248,104 @@
         {"key": "FAL_API_KEY", "ar_label": "FAL API Key", "is_secret": true}
       ],
       "note_ar": "💡 نوفّر FAL key افتراضي — تحتاج هذا فقط لاستخدام رصيدك الخاص"
+    },
+    "e2b_sandbox": {
+      "id": "e2b_sandbox",
+      "ar_label": "تنفيذ كود في سحابة E2B",
+      "en_label": "E2B Cloud Sandbox",
+      "category": "compute",
+      "triggers": {
+        "ar": ["sandbox سحابي", "تنفيذ ubuntu", "e2b", "linux vm", "compile c++", "تشغيل binary"],
+        "en": ["e2b sandbox", "cloud sandbox", "linux vm", "run binary", "apt install"]
+      },
+      "required_credentials": [
+        {
+          "key": "E2B_API_KEY",
+          "ar_label": "E2B API Key",
+          "en_label": "E2B API Key",
+          "where_to_get": {
+            "ar": "1. روح e2b.dev وسجّل (مجاني، 100 hours/month)\n2. ادخل e2b.dev/dashboard\n3. اضغط 'Keys' من القائمة الجانبية\n4. انسخ مفتاحك (يبدأ بـ 'e2b_')",
+            "en": "1. Go to e2b.dev and sign up (free, 100 hours/month)\n2. Open e2b.dev/dashboard\n3. Click 'Keys' in the sidebar\n4. Copy your key (starts with 'e2b_')"
+          },
+          "validation_url": "https://api.e2b.dev/health",
+          "validation_header": "X-API-KEY: {token}",
+          "is_secret": true
+        }
+      ],
+      "cost_to_user": {
+        "free_tier": "100 hours/month free",
+        "paid": "Starting $0.10/hour for premium"
+      },
+      "prerequisites_ar": ["حساب e2b.dev (مجاني)"],
+      "prerequisites_en": ["e2b.dev account (free)"],
+      "common_mistakes_ar": [
+        "نسخ المفتاح بفراغ في الآخر — استخدم خاصية النسخ من الموقع",
+        "استخدام المفتاح في الـ frontend — هذا backend فقط"
+      ],
+      "common_mistakes_en": [
+        "Copying key with trailing whitespace — use the site's copy button",
+        "Using the key in frontend code — backend only"
+      ]
+    },
+    "ssh_deploy": {
+      "id": "ssh_deploy",
+      "ar_label": "نشر مباشر للسيرفر (SSH)",
+      "en_label": "Direct Server Deploy (SSH)",
+      "category": "deployment",
+      "triggers": {
+        "ar": ["انشر على السيرفر", "ssh", "vps", "hetzner", "digitalocean", "نشر مباشر", "deploy direct"],
+        "en": ["deploy to server", "ssh", "vps", "hetzner", "digitalocean", "deploy direct"]
+      },
+      "required_credentials": [
+        {
+          "key": "SSH_HOST",
+          "ar_label": "SSH Host (IP أو domain)",
+          "en_label": "SSH Host (IP or domain)",
+          "where_to_get": {
+            "ar": "مثال: 142.93.45.10 أو myserver.com — من لوحة تحكم الـ VPS",
+            "en": "Example: 142.93.45.10 or myserver.com — from your VPS dashboard"
+          },
+          "is_secret": false
+        },
+        {
+          "key": "SSH_USERNAME",
+          "ar_label": "اسم المستخدم",
+          "en_label": "Username",
+          "where_to_get": {
+            "ar": "غالباً 'root' أو 'ubuntu' أو 'admin'",
+            "en": "Usually 'root', 'ubuntu', or 'admin'"
+          },
+          "is_secret": false
+        },
+        {
+          "key": "SSH_PASSWORD",
+          "ar_label": "كلمة السر (أو استخدم Private Key بدلاً)",
+          "en_label": "Password (or use Private Key instead)",
+          "where_to_get": {
+            "ar": "كلمة السر اللي استخدمتها لما أنشأت السيرفر — أو اتركها فاضية واستخدم Private Key",
+            "en": "Password set when you created the VPS — or leave empty and use Private Key"
+          },
+          "is_secret": true
+        }
+      ],
+      "optional_credentials": [
+        {"key": "SSH_PORT", "ar_label": "Port (افتراضي 22)", "needed_for": "Non-standard ports"},
+        {"key": "SSH_PRIVATE_KEY", "ar_label": "SSH Private Key (PEM)", "needed_for": "Key-based auth (أكثر أماناً من كلمة السر)"}
+      ],
+      "cost_to_user": {
+        "free_tier": "حسب مزوّد VPS (Hetzner: من $4/شهر، DigitalOcean: من $4/شهر)",
+        "paid": "متغيّر"
+      },
+      "prerequisites_ar": ["سيرفر VPS جاهز", "صلاحية SSH على المنفذ المطلوب"],
+      "prerequisites_en": ["A ready VPS server", "SSH access on the desired port"],
+      "common_mistakes_ar": [
+        "نسخ المفتاح الخاص بدون السطر -----BEGIN/END----- — لازم تنسخه كاملاً",
+        "Firewall يمنع SSH — تأكد أن port 22 مفتوح"
+      ],
+      "common_mistakes_en": [
+        "Copying private key without -----BEGIN/END----- lines — copy the entire file",
+        "Firewall blocking SSH — ensure port 22 is open"
+      ]
     }
   }
 }

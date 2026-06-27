@@ -69,10 +69,12 @@ def project_id(auth_headers):
 # ─────────────── Tests ───────────────
 class TestConciergeIntegrations:
     def test_integrations_list_returns_9(self):
+        # NOTE: iter-81 expanded to 11 (added e2b_sandbox + ssh_deploy).
+        # Assertion updated to 11; legacy IDs still verified below.
         r = requests.get(f"{LOCAL_URL}/api/concierge/integrations/list", timeout=45)
         assert r.status_code == 200, r.text
         data = r.json()
-        assert data["count"] == 9, f"expected 9 integrations, got {data['count']}"
+        assert data["count"] == 11, f"expected 11 integrations, got {data['count']}"
         ids = {i["id"] for i in data["integrations"]}
         for expected in ("expo_eas_build", "liveblocks_realtime", "stripe_payments",
                          "mapbox_maps", "openai_api", "resend_email"):

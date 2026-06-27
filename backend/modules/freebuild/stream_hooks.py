@@ -22,6 +22,38 @@ logger = logging.getLogger("zenrex.stream_hooks")
 
 
 # ─────────────────────────────────────────────────────────────
+# Concierge precheck — Block agent invocation if 3rd-party keys
+# are missing for the requested feature. Streams wizard cards.
+# ─────────────────────────────────────────────────────────────
+async def run_concierge_precheck(
+    *,
+    db: Any,
+    user_id: str,
+    project_id: str,
+    user_message: str,
+    event_queue: _asyncio.Queue,
+) -> bool:
+    """Return True if the build was paused (caller must stop)."""
+    try:
+        from .concierge_hooks import precheck_integrations, stream_wizard_as_sse
+        check = await precheck_integrations(
+            db=db, user_id=user_id, project_id=project_id, user_message=user_message,
+        )
+        if not check.get("should_block_build"):
+            return False
+        for evt in stream_wizard_as_sse(check):
+            await event_queue.put(evt)
+        pending_ids = [p["integration_id"] for p in check["pending"]]
+        await event_queue.put(
+            f"event: done\ndata: {json.dumps({'paused_for_setup': True, 'pending_integrations': pending_ids, 'summary': '⏸️ بانتظار إعداد المفاتيح المطلوبة. أكمل الـ Setup Wizard بالأعلى ثم سأكمل البناء فوراً.', 'credits_charged': 0, 'auto_refunded': True, 'model_used': 'concierge', 'iterations': 0, 'options': [], 'inline_images': []}, ensure_ascii=False)}\n\n"
+        )
+        return True
+    except Exception as ce:
+        logger.warning(f"[concierge_precheck] skipped: {ce}")
+        return False
+
+
+# ─────────────────────────────────────────────────────────────
 # Gap #1 — Classifier fast-paths (architect / review)
 # ─────────────────────────────────────────────────────────────
 async def run_classifier_fast_paths(

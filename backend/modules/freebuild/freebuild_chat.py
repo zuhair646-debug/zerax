@@ -8255,23 +8255,17 @@ For questions: legal@zenrex.ai
                 pass
             # ────── 🆕 CONCIERGE PRECHECK ──────
             # Detect if the request needs 3rd-party keys (EAS / Liveblocks /
-            # Stripe / Mapbox / OpenAI / Resend / etc.). If so, stream the
-            # setup wizard cards instead of running the agent.
-            try:
-                from .concierge_hooks import precheck_integrations, stream_wizard_as_sse
-                _check = await precheck_integrations(
-                    db=db, user_id=user["user_id"], project_id=pid, user_message=message,
-                )
-                if _check.get("should_block_build"):
-                    for _evt in stream_wizard_as_sse(_check):
-                        await event_queue.put(_evt)
-                    await event_queue.put(
-                        f"event: done\ndata: {json.dumps({'paused_for_setup': True, 'pending_integrations': [p['integration_id'] for p in _check['pending']], 'summary': '⏸️ بانتظار إعداد المفاتيح المطلوبة. أكمل الـ Setup Wizard بالأعلى ثم سأكمل البناء فوراً.', 'credits_charged': 0, 'auto_refunded': True, 'model_used': 'concierge', 'iterations': 0, 'options': [], 'inline_images': []}, ensure_ascii=False)}\n\n"
-                    )
-                    await event_queue.put(None)  # close
-                    return
-            except Exception as _ce:
-                logger.warning(f"[agent-chat-stream] concierge precheck skipped: {_ce}")
+            # Stripe / Mapbox / OpenAI / Resend / E2B / SSH / etc.). If so,
+            # stream the setup wizard cards instead of running the agent.
+            # ⚠️ Implementation lives in stream_hooks.py for testability.
+            from .stream_hooks import run_concierge_precheck
+            _paused = await run_concierge_precheck(
+                db=db, user_id=user["user_id"], project_id=pid,
+                user_message=message, event_queue=event_queue,
+            )
+            if _paused:
+                await event_queue.put(None)  # close
+                return
             # ────────────────────────────────────
             # 🆕 INTENT CLASSIFIER ROUTING (architect/review fast-paths)
             # Before invoking stream_agent_turn, classify the user message.

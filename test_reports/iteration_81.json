@@ -1,0 +1,59 @@
+{
+  "summary": "Iteration 81 — V4 final verification BEFORE declaring AI 100% complete. 14/15 new v4 tests PASS + 26/26 regression (iter-77 + iter-80) tests PASS after one legacy assertion update. FOUND & FIXED 1 CRITICAL BUG in cortex_tools._project_brand_dna (Motor Database bool() raised NotImplementedError — broke EVERY ctx-using call to generate_nextjs_project + build_capacitor_app). FOUND 1 REMAINING bug in fallback path of handle_generate_nextjs_project (default_tailwind_config crashes on dict palette). All other expected behavior verified: 11 integrations (incl. e2b_sandbox + ssh_deploy), refactor (run_concierge_precheck) preserves SSE pause behavior, brand_dna auto-injection works for build_capacitor_app (primary_color=#FF0066 from seeded brand_dna), 4 stream_hooks importable with correct signatures, TOOLS_SCHEMA=176, TOOL_HANDLERS=31.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "cortex_tools._project_brand_dna / dispatch(generate_nextjs_project|build_capacitor_app, args, ctx_with_motor_db)",
+        "issue": "FIXED by testing agent. Helper used `getattr(ctx, 'db', None)` in a truthy expression; Motor/PyMongo Database raises NotImplementedError on bool(). This meant 100% of real-world calls (where ctx.db is a Motor Database) crashed with 'NotImplementedError: Database objects do not implement truth value testing'. Replaced with explicit `db is None or not pid` check.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "cortex_tools.handle_generate_nextjs_project (fallback path when LLM fails)",
+        "issue": "When LLM generation fails AND brand_dna has a palette dict (per the brand_dna schema {primary, secondary, ...}), default_tailwind_config(palette) crashes with `TypeError: unhashable type: 'slice'` at nextjs_cortex.py:133 (`palette[:5]`). The fallback expects palette to be a list/array but receives a dict. Result: `{ok: False, error: \"TypeError: unhashable type: 'slice'\"}` with no brand_dna_used flag set. Fix: make default_tailwind_config accept both list and dict palettes (e.g., `if isinstance(palette, dict): palette = list(palette.values())`).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/concierge/integrations/ssh_deploy",
+        "issue": "wizard_cards Arabic instructions mention 'VPS' (good) but do NOT name specific providers Hetzner/DigitalOcean (test requirement). The providers appear in the triggers list but not in user-facing prerequisites_ar / setup_intro. Consider adding a hint like 'مثل Hetzner أو DigitalOcean' to ssh_deploy.prerequisites_ar in concierge_knowledge.json."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_v4_final.py",
+    "/app/test_reports/pytest/v4_final.xml",
+    "/app/test_reports/pytest/v4_regression.xml",
+    "/app/backend/tests/test_concierge_wiring.py",
+    "/app/backend/tests/test_v3_sandbox_tools.py"
+  ],
+  "action_items": [
+    "Fix default_tailwind_config in /app/backend/modules/freebuild/orchestrator/nextjs_cortex.py line ~133 to accept dict palette (currently slices `palette[:5]` which fails on dict).",
+    "Optional polish: add Hetzner/DigitalOcean hint to ssh_deploy.prerequisites_ar in /app/backend/data/concierge_knowledge.json.",
+    "Optional: continue refactor — freebuild_chat.py is still ~8800 lines; the new run_concierge_precheck() extraction sets a good pattern."
+  ],
+  "critical_code_review_comments": [
+    "BUG (CRITICAL — fixed by testing agent): cortex_tools._project_brand_dna used `ctx and getattr(ctx,'db',None) and ...` truthy chain. Motor Database raises NotImplementedError on bool() — this would have broken every real production call. Replaced with explicit None checks.",
+    "BUG (HIGH): handle_generate_nextjs_project fallback crashes when brand_dna palette is the canonical dict shape. Fallback path is only reached on LLM failure, so this can hide under successful LLM runs but will surface under budget/key issues.",
+    "REFACTOR is clean: run_concierge_precheck signature is well-defined, kwargs-only, returns bool, preserves SSE event semantics. Regression suite (iter-77 mobile pause + iter-80 sandbox tools) passes 26/26.",
+    "concierge_knowledge.json data quality: e2b_sandbox entry is excellent (mentions e2b.dev, 100 hours/month free tier, validation_url, regex hints). ssh_deploy is slightly weaker (no specific provider hint in user-facing AR text).",
+    "Counts confirmed: TOOLS_SCHEMA=176, CORTEX_TOOL_NAMES=31, integrations=11. All 31 handlers callable (no signature errors).",
+    "freebuild_chat.py still ~8800 lines — recommend continuing the extraction pattern. Now 4 hooks live in stream_hooks.py; next candidates: classifier orchestration, vault, design_archive."
+  ],
+  "updated_files": [
+    "/app/backend/modules/freebuild/cortex_tools.py (FIX: _project_brand_dna — replaced truthy Motor Database check with `db is None or not pid`)",
+    "/app/backend/tests/test_v4_final.py (NEW — 15 tests covering integrations expansion, e2b/ssh detection, SSE refactor, brand_dna auto-injection direct dispatch, stream_hooks 4-function import, sanity counts)",
+    "/app/backend/tests/test_concierge_wiring.py (legacy iter-77 test_integrations_list_returns_9 updated to expect 11 — keeps regression coverage while aligning with iter-81 expansion)"
+  ],
+  "success_rate": {
+    "backend": "97.5% — 40/41 tests pass (14/15 new + 26/26 regression). 1 failure on test_nextjs_auto_loads_brand_dna due to underlying fallback bug in default_tailwind_config (not a test issue).",
+    "frontend": "not tested (backend-only per request)"
+  },
+  "test_credentials": "owner@zerax.com / owner123 — login works via /api/auth/login",
+  "seed_data_creation": "Per-test TEST_v4_*, TEST_v4_branddna_*, TEST_v4_e2b_* freebuild projects created and cleaned up (brand_dna seed docs deleted in finally block).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter-81 verified the 3 categories of iter-81 changes: (a) +2 integrations (e2b_sandbox + ssh_deploy) — data + detection + wizard cards all wired correctly. (b) brand_dna auto-injection — CONFIRMED working for build_capacitor_app (Capacitor test: primary_color went from #0EA5E9 default → #FF0066 from seeded brand_dna). For generate_nextjs_project, helper IS loading brand_dna correctly, but a separate bug in the fallback path (default_tailwind_config dict→slice crash) masks it when LLM fails. (c) refactor extracting run_concierge_precheck — ZERO REGRESSION. Iter-77 mobile pause flow + iter-80 sandbox dispatch tests pass 26/26. CRITICAL FIX APPLIED: cortex_tools._project_brand_dna had a Motor Database truthy-check bug that would have broken every production call — fixed in place. After main agent fixes default_tailwind_config (palette dict handling), re-run /app/backend/tests/test_v4_final.py::TestBrandDnaAutoInjection::test_nextjs_auto_loads_brand_dna to confirm full coverage.",
+  "rca of the issue": "RCA #1 (FIXED): `_project_brand_dna` helper at cortex_tools.py:584 used `if not (ctx and getattr(ctx, 'db', None) and getattr(ctx, 'project_id', None))`. Python evaluates `and` chain by calling bool() on each operand. For a Motor AsyncIOMotorDatabase, __bool__ explicitly raises NotImplementedError to prevent the common pymongo pitfall of treating Database as truthy. This bug only manifests when ctx contains a real DB object (which is the production path) — unit tests using None ctx never hit it. Fix: explicit `if db is None or not pid: return {}`. Verified: build_capacitor_app now correctly returns brand_dna_used=True with primary_color=#FF0066 sourced from seeded freebuild_projects doc. RCA #2 (NOT fixed — for main agent): handle_generate_nextjs_project fallback constructs default_tailwind_config from `(brand_dna or {}).get('palette')` — which returns the dict {primary, secondary, ...} per the standard brand_dna schema. default_tailwind_config at nextjs_cortex.py:133 does `for i, c in enumerate(palette[:5])` assuming list semantics. dict[:5] raises TypeError. Fix should normalize palette to a list (e.g., extract `[v for k,v in palette.items() if isinstance(v, str)]` for hex colors)."
+}
