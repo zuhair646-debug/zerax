@@ -5180,6 +5180,16 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               // mixed/stale URL again.
               liveSteps.push({ kind: 'auto_published', ...payload });
               scheduleUpdate();
+            } else if (eventName === 'project_status') {
+              // 📋 Sticky honest status footer — what's still pending +
+              // the 4 deploy options. Appended to every assistant message.
+              liveSteps.push({ kind: 'project_status', ...payload });
+              scheduleUpdate();
+            } else if (eventName === 'supervisor') {
+              // 👁️ Silent Supervisor intervention — log silently into the
+              // debug panel. We do NOT surface this to the customer.
+              liveSteps.push({ kind: 'supervisor', ...payload });
+              scheduleUpdate();
             } else if (eventName === 'build_plan') {
               // AI #2.1 — Planner produced a structured plan.
               liveSteps.push({ kind: 'build_plan', ...payload });
@@ -6323,6 +6333,87 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                                 )}
                               </div>
                             );
+                          }
+                          if (s.kind === 'project_status') {
+                            // 📋 Sticky honest status footer — appended under every assistant message.
+                            // Shows what's still pending + the 4 deploy options.
+                            const isComplete = !!s.is_complete;
+                            const pending = s.pending_items || [];
+                            const deploys = s.deploy_options || [];
+                            return (
+                              <div
+                                key={sIdx}
+                                data-testid={`project-status-${sIdx}`}
+                                className={`my-3 rounded-xl border p-3.5 ${
+                                  isComplete
+                                    ? 'border-emerald-400/40 bg-gradient-to-br from-emerald-500/10 to-zinc-900/80'
+                                    : 'border-amber-400/40 bg-gradient-to-br from-amber-500/10 to-zinc-900/80'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                                  <div className="flex items-center gap-2 text-[12px] font-black">
+                                    <span>{isComplete ? '✅' : '🚧'}</span>
+                                    <span className={isComplete ? 'text-emerald-200' : 'text-amber-200'}>
+                                      {s.honest_note_ar}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[10px]">
+                                    <span className="px-2 py-0.5 rounded-full bg-zinc-800/60 border border-zinc-700 text-zinc-300">
+                                      {s.pages_substantive}/{s.pages_total} صفحة
+                                    </span>
+                                    {s.supervisor_interventions > 0 && (
+                                      <span
+                                        className="px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-200"
+                                        title="مراقب تلقائي تدخّل بصمت"
+                                        data-testid={`supervisor-badge-${sIdx}`}
+                                      >
+                                        🛡️ {s.supervisor_interventions}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                {pending.length > 0 && (
+                                  <ul className="text-[11px] text-amber-100/90 mb-3 space-y-1 list-disc pr-5" data-testid={`status-pending-${sIdx}`}>
+                                    {pending.map((p, pi) => (
+                                      <li key={pi}>{p}</li>
+                                    ))}
+                                  </ul>
+                                )}
+                                <div className="border-t border-zinc-700/40 pt-2.5">
+                                  <p className="text-[10px] font-bold text-zinc-300 mb-1.5">🚀 خيارات النشر:</p>
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    {deploys.map((d, di) => (
+                                      <button
+                                        key={d.id || di}
+                                        type="button"
+                                        data-testid={`deploy-option-${d.id}`}
+                                        onClick={() => {
+                                          // Auto-fill the chat input with the right prompt
+                                          if (d.id === 'zenrex') {
+                                            setMessage('انشر الموقع على Zenrex');
+                                          } else if (d.id === 'vercel') {
+                                            setMessage('انشره على Vercel');
+                                          } else if (d.id === 'cloudflare_pages') {
+                                            setMessage('انشره على Cloudflare Pages');
+                                          } else if (d.id === 'github_pages') {
+                                            setMessage('انشره على GitHub Pages');
+                                          }
+                                        }}
+                                        className="text-right rounded-lg border border-zinc-700/60 bg-zinc-900/60 hover:bg-cyan-500/10 hover:border-cyan-400/50 transition px-2 py-1.5 group"
+                                      >
+                                        <div className="text-[11px] font-bold text-cyan-200 group-hover:text-cyan-100">{d.name_ar}</div>
+                                        <div className="text-[9px] text-zinc-400 group-hover:text-zinc-300 truncate">{d.tagline_ar}</div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'supervisor') {
+                            // Silent — only show a tiny pill in debug mode (hidden by default).
+                            // The customer never sees this; admin debug view does via dev-tools.
+                            return null;
                           }
                           if (s.kind === 'build_plan') {
                             // AI #2.1 — Planner card.

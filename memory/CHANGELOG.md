@@ -1,6 +1,44 @@
 # Zitex Changelog
 
 
+### 🛡️ Feb 27, 2026 — Honesty Wrapper + Escalation Bridge + Status Footer UI (Autonomy v3)
+
+**Owner directive (Saudi Arabic):** keep pushing autonomy. Render the project-status footer in the UI as a card under every reply. Block the AI from lying (claims of completion without verification). When all autonomous mitigations fail, email the operator silently.
+
+**Frontend — Project Status Footer UI**
+- `/app/frontend/src/pages/FreeBuildChat.js`
+  - New SSE event handlers: `project_status`, `supervisor` (silent, debug-only), `honesty_check`, `escalation`.
+  - New renderer card for `kind === 'project_status'`:
+    • Color-coded header (emerald=complete, amber=incomplete) with honest one-liner ("جاهز للنشر" / "لم يكتمل بعد").
+    • Pages count pill (`{substantive}/{total} صفحة`) + supervisor-interventions pill if any (`🛡️ N`).
+    • Bulleted pending-items list (audit issues / weak pages / missing index).
+    • **4 clickable deploy cards** (Zenrex / Vercel / Cloudflare Pages / GitHub Pages) — each click auto-fills the chat input with the right prompt (`انشر على Vercel` etc.) so the AI executes the matching deploy tool.
+  - All cards carry `data-testid` for automated UI testing.
+
+**Backend — Honesty Wrapper**
+- New `/app/backend/modules/freebuild/honesty_wrapper.py`
+  - `claims_completion(text)` — detects 16+ Arabic + English completion phrases ("خلصت / جاهز / يشتغل / نشرت / it works / deployed successfully").
+  - `verification_evidence(tool_log)` — proves verification by scanning for `test_page` / `verify_my_work` / `validate_html` / `audit_html` / `recursive_test_agent` calls, OR a successful deploy tool that returned `ok:true` with a URL.
+  - `build_honesty_violation_nudge()` — produces a strict Arabic correction the AI sees on its next turn.
+- Wired into `freebuild_agent.py` right before the project-status emission. On violation: emits `honesty_check {verified:false}` SSE event, persists a lesson, and the lesson is auto-injected into the next session's system prompt by the Silent Supervisor's lesson pipeline.
+
+**Backend — Escalation Bridge**
+- New `/app/backend/modules/freebuild/escalation_bridge.py`
+  - `should_escalate()` — fires when: 3+ supervisor interventions, OR honesty violation, OR explicit give-up.
+  - `create_escalation()` — idempotent within a 5-minute window per (project, reason). Writes to:
+    • `ai_escalations` — full event log.
+    • `owner_notifications` — surfaces in `AdminNotifications.js` via the existing `/api/owner/notifications` endpoint (schema-compatible: `created_at`, `read`, `title`, `message`).
+  - Sends Resend email to `OWNER_EMAIL` (or `OPERATOR_EMAIL`) with RTL-styled Arabic body. Skips silently if Resend keys aren't configured.
+- Wired into `freebuild_agent.py` immediately after the honesty check; emits an `escalation` SSE event so the chat UI can show a tiny banner.
+
+**Tests (all passing)**
+- New `/app/backend/tests/test_honesty_and_escalation.py` — 11 cases: claim detection (Arabic + English + negative), verification evidence parsing (test_page, deploy success, no verification, failed deploy), escalation thresholds (healthy, honesty violation, thrashing severity progression, give-up).
+- Combined suite: `test_supervisor_and_deploy.py` (11) + `test_honesty_and_escalation.py` (11) + `test_cancellation_quota_retention.py` (4) → **26/26 pass**.
+
+**Service worker:** bumped to `v43-2026-02-honesty-escalation`.
+
+
+
 ### 🤖 Feb 27, 2026 — Multi-Deploy + Silent Supervisor + Status Footer (Owner-Mandated Autonomy Push)
 
 **Owner directive (Saudi Arabic):**

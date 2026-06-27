@@ -11042,6 +11042,105 @@ async def _stream_one_provider(
         logger.warning(f"[agent-stream] auto-republish skipped: {_ar_e}")
 
     # ─────────────────────────────────────────────────────────────────────────
+    # 🛡️ HONESTY WRAPPER — scan the final assistant text for completion claims
+    # ("خلّصت / جاهز / يشتغل / نشرت") and verify that at least one verification
+    # tool actually ran during this turn. If not → persist a lesson + emit a
+    # `honesty_check` event so the next turn carries a corrective nudge.
+    # ─────────────────────────────────────────────────────────────────────────
+    try:
+        from .honesty_wrapper import (
+            claims_completion,
+            verification_evidence,
+            build_honesty_violation_nudge,
+        )
+        _final_text = "\n".join(all_text_chunks or [])
+        if claims_completion(_final_text):
+            _ev = verification_evidence(ctx.tool_log or [])
+            if not _ev.get("verified"):
+                # Find the excerpt around the claim
+                _excerpt = ""
+                _low = _final_text.lower()
+                for _phrase in ("خلصت", "خلّصت", "جاهز", "يشتغل", "نشرت", "أنجزت"):
+                    idx = _low.find(_phrase.lower())
+                    if idx >= 0:
+                        _excerpt = _final_text[max(0, idx - 30):idx + 80]
+                        break
+                _nudge = build_honesty_violation_nudge(_excerpt, _ev)
+                # Persist as a learned lesson so next session carries it.
+                try:
+                    from .silent_supervisor import persist_lesson
+                    if db is not None:
+                        await persist_lesson(
+                            db,
+                            ctx.project_id,
+                            _nudge,
+                            {"pattern": "honesty_violation", "excerpt": _excerpt},
+                        )
+                except Exception:
+                    pass
+                logger.warning(
+                    f"[honesty] violation: project={ctx.project_id} excerpt={_excerpt[:60]!r}"
+                )
+                yield _sse("honesty_check", {
+                    "verified": False,
+                    "claim_excerpt": _excerpt,
+                    "verification_tools_used": [],
+                })
+            else:
+                yield _sse("honesty_check", {
+                    "verified": True,
+                    "verification_tools_used": _ev.get("verification_tools_used", []),
+                    "deploys_succeeded": _ev.get("deploys_succeeded", []),
+                })
+    except Exception as _he:
+        logger.debug(f"[honesty] check skipped: {_he}")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 🚨 ESCALATION BRIDGE — if Silent Supervisor intervened 3+ times OR the
+    # honesty wrapper just flagged a violation OR the AI explicitly gave up,
+    # auto-create an `ai_escalations` doc + admin notification + Resend email
+    # to the operator. The customer is not interrupted; the operator is alerted.
+    # ─────────────────────────────────────────────────────────────────────────
+    try:
+        from .escalation_bridge import should_escalate, create_escalation
+        from .silent_supervisor import detect_stuck_pattern as _dsp
+        _sup_state = getattr(ctx, "_supervisor", None)
+        _last_pat = _dsp(_sup_state) if _sup_state else None
+        # Honesty violation flag — set above when the wrapper found one
+        _honesty_violated = False
+        try:
+            # Re-check using the same logic (cheap)
+            from .honesty_wrapper import claims_completion, verification_evidence
+            _ft = "\n".join(all_text_chunks or [])
+            if claims_completion(_ft):
+                _ev2 = verification_evidence(ctx.tool_log or [])
+                _honesty_violated = not _ev2.get("verified")
+        except Exception:
+            pass
+        _esc = should_escalate(
+            supervisor_state=_sup_state,
+            honesty_violation=_honesty_violated,
+            last_pattern=_last_pat,
+        )
+        if _esc and db is not None:
+            r = await create_escalation(
+                db=db,
+                project_id=ctx.project_id,
+                user_id=(ctx.user.get("user_id") if getattr(ctx, "user", None) else None),
+                reason=_esc["reason"],
+                severity=_esc.get("severity", "medium"),
+                context=_esc.get("context") or {"reason_detail": _esc["reason"]},
+            )
+            yield _sse("escalation", {
+                "reason": _esc["reason"],
+                "severity": _esc.get("severity", "medium"),
+                "escalated": bool(r.get("ok")),
+                "suppressed": bool(r.get("suppressed")),
+            })
+    except Exception as _ee:
+        logger.debug(f"[escalation] dispatch failed: {_ee}")
+
+    # ─────────────────────────────────────────────────────────────────────────
     # 📋 PROJECT-STATUS FOOTER — emitted before `done` so the frontend can
     # render an Arabic banner under every assistant message that shows:
     #   • What's still pending (honest list of incomplete pages / audit issues)
