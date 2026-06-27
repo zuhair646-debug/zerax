@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { HardDrive, Check, Loader2, ArrowLeft, Archive, Clock, ShieldCheck, AlertTriangle, XCircle, Info } from 'lucide-react';
+import { HardDrive, Check, Loader2, ArrowLeft, Archive, Clock, ShieldCheck, AlertTriangle, XCircle, Info, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -28,6 +28,7 @@ export default function BillingStorage() {
   const [usage, setUsage] = useState(null);
   const [busyPlanId, setBusyPlanId] = useState(null);
   const [busyRecovery, setBusyRecovery] = useState(false);
+  const [busyVerify, setBusyVerify] = useState(false);
 
   const reload = async () => {
     setLoading(true);
@@ -58,10 +59,39 @@ export default function BillingStorage() {
     // PayPal return: capture the pending transaction so the subscription
     // actually flips to active (PayPal does not call our server directly).
     const status = params.get('status');
+    const subscribed = params.get('subscribed');
+    const cancelled = params.get('cancelled');
     const txn = params.get('txn');
     const orderId = params.get('paymentId') || params.get('orderID') || params.get('token');
     const payerId = params.get('PayerID');
-    if (status === 'success' && txn) {
+
+    // ─── PayPal Subscriptions return — verify NOW (don't wait for webhook) ──
+    // The user just approved on PayPal. PayPal may have already charged
+    // them but our webhook can be delayed. Poll PayPal directly to sync.
+    if (subscribed === '1') {
+      (async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const r = await fetch(`${API}/api/storage/verify-subscription`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          });
+          const d = await r.json();
+          if (r.ok && d.local_status === 'active') {
+            toast.success('تم تفعيل اشتراكك ✅ المساحة الجديدة جاهزة الآن.');
+          } else if (r.ok && d.paypal_status === 'APPROVAL_PENDING') {
+            toast.info('لم تكتمل الموافقة في PayPal بعد. أكمل العملية ثم ارجع.');
+          } else {
+            toast.warn('تم استلام الدفع، نزامن مع PayPal...');
+          }
+          await reload();
+        } catch (e) {
+          toast.error('تعذر التحقق من PayPal — اضغط زر «تحديث الحالة».');
+        }
+      })();
+    } else if (cancelled === '1') {
+      toast.info('ألغيت عملية الاشتراك. يمكنك المحاولة مجدداً متى أردت.');
+    } else if (status === 'success' && txn) {
       (async () => {
         try {
           const token = localStorage.getItem('token');
@@ -93,6 +123,32 @@ export default function BillingStorage() {
       })();
     }
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Manual "Refresh from PayPal" button — for users stuck in pending_approval
+  const verifyWithPayPal = async () => {
+    const token = localStorage.getItem('token');
+    setBusyVerify(true);
+    try {
+      const r = await fetch(`${API}/api/storage/verify-subscription`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل التحقق');
+      if (d.local_status === 'active') {
+        toast.success('✅ تم تفعيل اشتراكك. المساحة الجديدة جاهزة.');
+      } else if (d.paypal_status === 'APPROVAL_PENDING') {
+        toast.warning('لازلت تنتظر الموافقة في PayPal. أكمل العملية أولاً.');
+      } else {
+        toast.info(`حالة PayPal: ${d.paypal_status} — حالتنا: ${d.local_status}`);
+      }
+      await reload();
+    } catch (e) {
+      toast.error(e?.message || 'فشل التحقق من PayPal');
+    } finally {
+      setBusyVerify(false);
+    }
+  };
 
   const startCheckout = async (planId) => {
     const token = localStorage.getItem('token');
@@ -285,14 +341,27 @@ export default function BillingStorage() {
                       </>
                     )}
                   </p>
-                  <button
-                    onClick={cancelSubscription}
-                    data-testid="cancel-subscription-btn"
-                    className="px-4 py-2 rounded-lg border border-rose-500/40 hover:bg-rose-500/10 text-rose-300 text-xs font-black inline-flex items-center gap-2"
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    {sub.status === 'pending_approval' ? 'إلغاء قبل الدفع' : 'إلغاء الاشتراك'}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    {sub.status === 'pending_approval' && (
+                      <button
+                        onClick={verifyWithPayPal}
+                        disabled={busyVerify}
+                        data-testid="verify-paypal-btn"
+                        className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-black inline-flex items-center gap-2"
+                      >
+                        {busyVerify ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        تحديث الحالة من PayPal
+                      </button>
+                    )}
+                    <button
+                      onClick={cancelSubscription}
+                      data-testid="cancel-subscription-btn"
+                      className="px-4 py-2 rounded-lg border border-rose-500/40 hover:bg-rose-500/10 text-rose-300 text-xs font-black inline-flex items-center gap-2"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      {sub.status === 'pending_approval' ? 'إلغاء قبل الدفع' : 'إلغاء الاشتراك'}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

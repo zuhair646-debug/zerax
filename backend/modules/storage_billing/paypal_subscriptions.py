@@ -218,6 +218,83 @@ def register_paypal_subscriptions(app, db, get_current_user, STORAGE_PLANS, GRAC
         )
         return {"approval_url": approval, "subscription_id": data["id"], "plan_id": body.plan_id}
 
+    # ─── POST /api/storage/verify-subscription ─────────────────────────
+    # Self-healing endpoint — polls PayPal directly to check the live
+    # status of the user's subscription and syncs it into our DB. Used
+    # when the webhook delivery is delayed or wasn't configured in the
+    # PayPal dashboard. Called automatically by the frontend right after
+    # the user is redirected back from PayPal approval.
+    @router.post("/verify-subscription")
+    async def verify_subscription(user=Depends(get_current_user)):
+        sub = await db.storage_subscriptions.find_one(
+            {"user_id": user["user_id"]}, {"_id": 0},
+        )
+        if not sub or not sub.get("paypal_subscription_id"):
+            raise HTTPException(400, "لا يوجد اشتراك للتحقق")
+
+        pp_sub_id = sub["paypal_subscription_id"]
+        token = await _pp_token()
+        async with httpx.AsyncClient(timeout=15.0) as c:
+            r = await c.get(
+                f"{_pp_base_url()}/v1/billing/subscriptions/{pp_sub_id}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if r.status_code >= 400:
+            log.error(f"[paypal-subs] verify error {r.status_code}: {r.text[:300]}")
+            raise HTTPException(500, f"فشل الاستعلام من PayPal ({r.status_code})")
+        data = r.json()
+        pp_status = (data.get("status") or "").upper()
+        next_billing = (data.get("billing_info") or {}).get("next_billing_time")
+        pp_plan_id = data.get("plan_id")
+        local_plan = await db.paypal_plans.find_one(
+            {"paypal_plan_id": pp_plan_id}, {"_id": 0, "plan_id": 1},
+        ) or {}
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        updates = {"updated_at": now_iso}
+
+        if pp_status == "ACTIVE":
+            updates.update({
+                "status": "active",
+                "plan_id": local_plan.get("plan_id") or sub.get("plan_id"),
+                "current_period_end": next_billing or (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+                "grace_started_at": None,
+                "archived_at": None,
+                "auto_renew": True,
+            })
+            await db.users.update_one(
+                {"id": user["user_id"]},
+                {"$set": {"storage_archived": False}},
+            )
+        elif pp_status == "APPROVAL_PENDING":
+            # Still waiting on the user — keep our state as pending_approval
+            updates["status"] = "pending_approval"
+        elif pp_status == "APPROVED":
+            # Approved but not yet billed (rare). Treat as active.
+            updates.update({
+                "status": "active",
+                "plan_id": local_plan.get("plan_id") or sub.get("plan_id"),
+                "current_period_end": next_billing or (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+                "auto_renew": True,
+            })
+        elif pp_status == "SUSPENDED":
+            updates.update({"status": "past_due", "grace_started_at": now_iso, "auto_renew": True})
+        elif pp_status in ("CANCELLED", "EXPIRED"):
+            updates.update({"status": "cancelled", "auto_renew": False, "cancelled_at": now_iso})
+
+        await db.storage_subscriptions.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": updates},
+            upsert=True,
+        )
+        log.info(f"[paypal-subs] verified for {user['user_id']} → pp_status={pp_status} → local={updates.get('status')}")
+        return {
+            "ok": True,
+            "paypal_status": pp_status,
+            "local_status": updates.get("status"),
+            "next_billing_time": next_billing,
+        }
+
     # ─── POST /api/storage/cancel-subscription ─────────────────────────
     @router.post("/cancel-subscription")
     async def cancel_subscription(user=Depends(get_current_user)):
