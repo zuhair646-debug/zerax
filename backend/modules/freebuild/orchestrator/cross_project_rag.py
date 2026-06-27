@@ -32,17 +32,39 @@ logger = logging.getLogger("zenrex.cross_project_rag")
 
 
 async def _get_embedding(text: str) -> Optional[List[float]]:
-    """Use OpenAI text-embedding-3-small via Emergent key."""
-    emergent_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
-    if not emergent_key or not text:
+    """Get text embedding via litellm (uses EMERGENT_LLM_KEY internally for
+    OpenAI/Anthropic/Gemini providers). Falls back to direct OpenAI API if
+    litellm isn't available."""
+    if not text:
         return None
+    text = text[:8000]
+    emergent_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+    if not emergent_key:
+        return None
+    # Preferred path: litellm with Emergent proxy
+    try:
+        import litellm
+        # litellm.aembedding routes through OpenAI provider transparently
+        os.environ.setdefault("OPENAI_API_KEY", emergent_key)
+        # litellm.aembedding can route through the Emergent proxy if base_url is set
+        emergent_base = os.environ.get("EMERGENT_LLM_BASE_URL", "").strip()
+        kwargs = {"model": "text-embedding-3-small", "input": text}
+        if emergent_base:
+            kwargs["api_base"] = emergent_base
+        resp = await litellm.aembedding(**kwargs)
+        emb = resp.data[0]["embedding"] if hasattr(resp, "data") and resp.data else None
+        if emb:
+            return emb
+    except Exception as e:
+        logger.debug(f"[rag] litellm embedding failed (will fallback): {e}")
+    # Fallback: direct OpenAI call (works only if EMERGENT_LLM_KEY is a real OpenAI key)
     try:
         import httpx
         async with httpx.AsyncClient(timeout=30) as cl:
             r = await cl.post(
                 "https://api.openai.com/v1/embeddings",
                 headers={"Authorization": f"Bearer {emergent_key}", "Content-Type": "application/json"},
-                json={"model": "text-embedding-3-small", "input": text[:8000]},
+                json={"model": "text-embedding-3-small", "input": text},
             )
         if r.status_code != 200:
             logger.warning(f"[rag] embedding HTTP {r.status_code}: {r.text[:200]}")

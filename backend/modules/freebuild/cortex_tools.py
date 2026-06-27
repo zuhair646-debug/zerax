@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("zenrex.cortex_tools")
 
@@ -408,10 +408,13 @@ async def handle_extract_brand_dna(args: Dict[str, Any], ctx: Any = None) -> Dic
     from .orchestrator.brand_dna import extract_brand_dna, render_brand_dna_hint
     dna = await extract_brand_dna(args["brief"])
     # Persist into shared_memory if ctx has db/project_id
-    if ctx and getattr(ctx, "db", None) and getattr(ctx, "project_id", None):
+    # ⚠️ Motor Database raises NotImplementedError on bool() — use explicit None checks
+    db = getattr(ctx, "db", None) if ctx else None
+    pid = getattr(ctx, "project_id", None) if ctx else None
+    if db is not None and pid:
         try:
             from .orchestrator.shared_memory import save_memory
-            await save_memory(ctx.db, ctx.project_id, {"brand_dna": dna})
+            await save_memory(db, pid, {"brand_dna": dna})
         except Exception:
             pass
     return {"ok": True, "brand_dna": dna, "hint": render_brand_dna_hint(dna)}
@@ -516,9 +519,10 @@ async def handle_inject_liveblocks(args: Dict[str, Any], ctx: Any = None) -> Dic
 async def handle_trigger_eas_build(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     from .executors.eas_build import trigger_build, render_user_instructions_ar
     from .concierge.credential_vault import get_credential
-    if not (ctx and getattr(ctx, "db", None) and getattr(ctx, "user_id", None)):
+    db, uid, _ = _ctx_auth(ctx)
+    if db is None or not uid:
         return {"ok": False, "error": "no auth context"}
-    token = await get_credential(ctx.db, ctx.user_id, "EAS_ACCESS_TOKEN")
+    token = await get_credential(db, uid, "EAS_ACCESS_TOKEN")
     if not token:
         return {"ok": False, "error": "EAS_ACCESS_TOKEN not in vault — run Concierge setup first"}
     result = await trigger_build(token, args["project_id_expo"], args.get("platform", "android"))
@@ -532,21 +536,19 @@ async def handle_trigger_eas_build(args: Dict[str, Any], ctx: Any = None) -> Dic
 
 async def handle_run_in_webcontainer(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     from .executors.webcontainer_executor import enqueue_execution
-    if not (ctx and getattr(ctx, "db", None)):
+    db, uid, pid = _ctx_auth(ctx)
+    if db is None:
         return {"ok": False, "error": "no db context"}
-    uid = getattr(ctx, "user_id", "anon")
-    pid = getattr(ctx, "project_id", "default")
     files = args.get("files") or {"index.js": args["code"]}
-    return await enqueue_execution(ctx.db, uid, pid, args["code"], files)
+    return await enqueue_execution(db, uid or "anon", pid or "default", args["code"], files)
 
 
 async def handle_run_in_pyodide(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     from .executors.pyodide_executor import enqueue_python
-    if not (ctx and getattr(ctx, "db", None)):
+    db, uid, pid = _ctx_auth(ctx)
+    if db is None:
         return {"ok": False, "error": "no db context"}
-    uid = getattr(ctx, "user_id", "anon")
-    pid = getattr(ctx, "project_id", "default")
-    return await enqueue_python(ctx.db, uid, pid, args["code"], args.get("packages"))
+    return await enqueue_python(db, uid or "anon", pid or "default", args["code"], args.get("packages"))
 
 
 async def handle_generate_tests(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
@@ -600,6 +602,20 @@ async def _project_brand_dna(ctx: Any) -> Dict[str, Any]:
         return (proj or {}).get("brand_dna") or {}
     except Exception:
         return {}
+
+
+def _ctx_auth(ctx: Any) -> Tuple[Any, Optional[str], Optional[str]]:
+    """Helper: extract (db, user_id, project_id) from ctx safely.
+    Returns (None, None, None) when ctx is missing. Use this instead of the
+    `if ctx and getattr(ctx, "db", None)` truthy chain which CRASHES with
+    Motor Database (raises NotImplementedError on bool())."""
+    if ctx is None:
+        return None, None, None
+    return (
+        getattr(ctx, "db", None),
+        getattr(ctx, "user_id", None),
+        getattr(ctx, "project_id", None),
+    )
 
 
 async def handle_generate_nextjs_project(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
@@ -667,13 +683,14 @@ async def handle_recommend_state_management(args: Dict[str, Any], ctx: Any = Non
 
 async def handle_search_past_projects(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     from .orchestrator.cross_project_rag import retrieve_lessons, render_lessons_hint_ar
-    if not (ctx and getattr(ctx, "db", None)):
+    db, _, pid = _ctx_auth(ctx)
+    if db is None:
         return {"ok": False, "error": "no db context"}
     lessons = await retrieve_lessons(
-        ctx.db, args["query"],
+        db, args["query"],
         top_k=int(args.get("top_k", 5)),
         tags_filter=args.get("tags_filter"),
-        exclude_project_id=getattr(ctx, "project_id", None),
+        exclude_project_id=pid,
     )
     return {"ok": True, "lessons": lessons, "hint_ar": render_lessons_hint_ar(lessons), "count": len(lessons)}
 
@@ -681,9 +698,10 @@ async def handle_search_past_projects(args: Dict[str, Any], ctx: Any = None) -> 
 async def handle_run_in_e2b_sandbox(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     from .executors.e2b_executor import run_full_workflow
     from .concierge.credential_vault import get_credential
-    if not (ctx and getattr(ctx, "db", None) and getattr(ctx, "user_id", None)):
+    db, uid, _ = _ctx_auth(ctx)
+    if db is None or not uid:
         return {"ok": False, "error": "no auth context"}
-    api_key = await get_credential(ctx.db, ctx.user_id, "E2B_API_KEY")
+    api_key = await get_credential(db, uid, "E2B_API_KEY")
     if not api_key:
         return {"ok": False, "error": "E2B_API_KEY not in vault — run Concierge setup first"}
     return await run_full_workflow(
@@ -698,17 +716,18 @@ async def handle_run_in_e2b_sandbox(args: Dict[str, Any], ctx: Any = None) -> Di
 async def handle_deploy_via_ssh(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     from .executors.ssh_executor import run_workflow
     from .concierge.credential_vault import get_credential
-    if not (ctx and getattr(ctx, "db", None) and getattr(ctx, "user_id", None)):
+    db, uid, _ = _ctx_auth(ctx)
+    if db is None or not uid:
         return {"ok": False, "error": "no auth context"}
-    host = await get_credential(ctx.db, ctx.user_id, "SSH_HOST")
+    host = await get_credential(db, uid, "SSH_HOST")
     if not host:
         return {"ok": False, "error": "SSH_HOST not in vault — run Concierge setup first"}
-    port = await get_credential(ctx.db, ctx.user_id, "SSH_PORT") or "22"
-    username = await get_credential(ctx.db, ctx.user_id, "SSH_USERNAME")
+    port = await get_credential(db, uid, "SSH_PORT") or "22"
+    username = await get_credential(db, uid, "SSH_USERNAME")
     if not username:
         return {"ok": False, "error": "SSH_USERNAME not in vault"}
-    password = await get_credential(ctx.db, ctx.user_id, "SSH_PASSWORD")
-    private_key = await get_credential(ctx.db, ctx.user_id, "SSH_PRIVATE_KEY")
+    password = await get_credential(db, uid, "SSH_PASSWORD")
+    private_key = await get_credential(db, uid, "SSH_PRIVATE_KEY")
     if not (password or private_key):
         return {"ok": False, "error": "Need SSH_PASSWORD or SSH_PRIVATE_KEY in vault"}
     return await run_workflow(
