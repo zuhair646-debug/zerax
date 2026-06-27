@@ -1,0 +1,253 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-02",
+  "description": "Concierge Knowledge Base — lessons for AI on how to guide customer through each integration. Multi-language (ar + en).",
+  "integrations": {
+    "expo_eas_build": {
+      "id": "expo_eas_build",
+      "ar_label": "بناء تطبيق موبايل (EAS)",
+      "en_label": "Mobile App Build (EAS)",
+      "category": "mobile_build",
+      "triggers": {
+        "ar": ["تطبيق موبايل", "android", "ios", "apk", "ipa", "appstore", "google play"],
+        "en": ["mobile app", "android app", "ios app", "apk", "ipa", "app store", "google play"]
+      },
+      "required_credentials": [
+        {
+          "key": "EAS_ACCESS_TOKEN",
+          "ar_label": "EAS Access Token",
+          "en_label": "EAS Access Token",
+          "where_to_get": {
+            "ar": "1. روح expo.dev وسجّل (مجاني)\n2. ادخل expo.dev/settings/access-tokens\n3. اضغط 'Create Token'\n4. سمّيه 'Zenrex' واحفظ التوكن",
+            "en": "1. Go to expo.dev and sign up (free)\n2. Visit expo.dev/settings/access-tokens\n3. Click 'Create Token'\n4. Name it 'Zenrex' and copy the token"
+          },
+          "validation_url": "https://api.expo.dev/v2/me",
+          "validation_header": "Authorization: Bearer {token}",
+          "is_secret": true
+        }
+      ],
+      "optional_credentials": [
+        {"key": "APPLE_TEAM_ID", "ar_label": "Apple Developer Team ID", "needed_for": "iOS App Store publishing"},
+        {"key": "GOOGLE_SERVICE_ACCOUNT_JSON", "ar_label": "Google Play Service Account", "needed_for": "Google Play publishing"}
+      ],
+      "cost_to_user": {
+        "free_tier": "30 builds/month free",
+        "paid": "$29/month for unlimited",
+        "store_fees": {"apple": "$99/year", "google": "$25 one-time"}
+      },
+      "prerequisites_ar": [
+        "حساب expo.dev (مجاني)",
+        "للنشر iOS: حساب Apple Developer ($99/سنة)",
+        "للنشر Android: حساب Google Play Console ($25 مرة وحدة)"
+      ],
+      "prerequisites_en": [
+        "expo.dev account (free)",
+        "For iOS publishing: Apple Developer account ($99/year)",
+        "For Android publishing: Google Play Console ($25 one-time)"
+      ],
+      "build_time_estimate": "8-12 minutes per platform",
+      "common_mistakes_ar": [
+        "نسيان تفعيل الـ token (لازم تختار scope: write)",
+        "ربط حساب Apple خطأ — لازم Team ID مش Apple ID",
+        "محاولة بناء iOS بدون حساب developer"
+      ],
+      "common_mistakes_en": [
+        "Forgetting to grant write scope on token",
+        "Wrong Apple account linking — needs Team ID not Apple ID",
+        "Attempting iOS build without developer account"
+      ]
+    },
+    "liveblocks_realtime": {
+      "id": "liveblocks_realtime",
+      "ar_label": "تعاون مباشر (Liveblocks)",
+      "en_label": "Realtime Collaboration (Liveblocks)",
+      "category": "realtime",
+      "triggers": {
+        "ar": ["تعاون مباشر", "live cursors", "وقت حقيقي", "متعدد المستخدمين", "presence", "comments collab"],
+        "en": ["live cursors", "realtime collab", "multiplayer", "presence", "collaborative editing"]
+      },
+      "required_credentials": [
+        {
+          "key": "LIVEBLOCKS_SECRET_KEY",
+          "ar_label": "Liveblocks Secret Key",
+          "en_label": "Liveblocks Secret Key",
+          "where_to_get": {
+            "ar": "1. سجّل في liveblocks.io (مجاني)\n2. أنشئ Project\n3. Settings → Secret Keys\n4. انسخ الـ sk_dev_... أو sk_prod_...",
+            "en": "1. Sign up at liveblocks.io (free)\n2. Create a Project\n3. Settings → Secret Keys\n4. Copy sk_dev_... or sk_prod_..."
+          },
+          "validation_url": "https://api.liveblocks.io/v2/rooms?limit=1",
+          "validation_header": "Authorization: Bearer {token}",
+          "is_secret": true,
+          "format_regex": "^sk_(dev|prod)_[a-zA-Z0-9_-]{20,}$"
+        }
+      ],
+      "cost_to_user": {
+        "free_tier": "100 MAU + unlimited rooms",
+        "paid": "$20/month for 1000 MAU, then $0.02/MAU"
+      },
+      "prerequisites_ar": ["حساب liveblocks.io مجاني"],
+      "prerequisites_en": ["Free liveblocks.io account"],
+      "common_mistakes_ar": [
+        "استخدام pk_... بدل sk_... (pk هو للـ frontend فقط، نحن نحتاج secret)",
+        "نسخ token من مشروع آخر"
+      ]
+    },
+    "stripe_payments": {
+      "id": "stripe_payments",
+      "ar_label": "مدفوعات (Stripe)",
+      "en_label": "Payments (Stripe)",
+      "category": "payments",
+      "triggers": {
+        "ar": ["دفع", "اشتراك", "stripe", "بطاقة بنكية", "تحصيل", "ecommerce checkout"],
+        "en": ["payment", "subscription", "stripe", "checkout", "billing", "credit card"]
+      },
+      "required_credentials": [
+        {
+          "key": "STRIPE_SECRET_KEY",
+          "ar_label": "Stripe Secret Key",
+          "where_to_get": {
+            "ar": "1. سجّل في stripe.com\n2. Dashboard → Developers → API Keys\n3. انسخ Secret Key (sk_test_... أو sk_live_...)\n4. ابدأ بـ test mode دائماً",
+            "en": "1. Sign up at stripe.com\n2. Dashboard → Developers → API Keys\n3. Copy Secret Key (sk_test_... or sk_live_...)\n4. Always start in test mode"
+          },
+          "validation_url": "https://api.stripe.com/v1/balance",
+          "validation_header": "Authorization: Bearer {token}",
+          "is_secret": true,
+          "format_regex": "^sk_(test|live)_[a-zA-Z0-9]{20,}$"
+        },
+        {
+          "key": "STRIPE_WEBHOOK_SECRET",
+          "ar_label": "Stripe Webhook Secret",
+          "is_secret": true,
+          "where_to_get": {
+            "ar": "Dashboard → Developers → Webhooks → Add endpoint → انسخ Signing secret (whsec_...)",
+            "en": "Dashboard → Developers → Webhooks → Add endpoint → Copy Signing secret (whsec_...)"
+          }
+        }
+      ],
+      "cost_to_user": {
+        "transaction_fee": "2.9% + $0.30 per successful charge",
+        "no_monthly_fee": true
+      },
+      "prerequisites_ar": ["حساب Stripe (مجاني للتسجيل)", "للحساب الحقيقي: حساب بنكي + رقم ضريبي للإقامة"],
+      "common_mistakes_ar": [
+        "خلط مفاتيح test و live",
+        "نسيان إعداد Webhook → الاشتراكات ما تتجدد تلقائياً"
+      ]
+    },
+    "mapbox_maps": {
+      "id": "mapbox_maps",
+      "ar_label": "خرائط (Mapbox)",
+      "en_label": "Maps (Mapbox)",
+      "category": "maps",
+      "triggers": {
+        "ar": ["خريطة", "موقع جغرافي", "مكان", "geolocation", "map"],
+        "en": ["map", "geolocation", "directions", "place search"]
+      },
+      "required_credentials": [
+        {
+          "key": "MAPBOX_ACCESS_TOKEN",
+          "ar_label": "Mapbox Public Token",
+          "where_to_get": {
+            "ar": "1. سجّل في mapbox.com\n2. Account → Access Tokens\n3. انسخ default public token (pk.eyJ...)",
+            "en": "1. Sign up at mapbox.com\n2. Account → Access Tokens\n3. Copy default public token (pk.eyJ...)"
+          },
+          "validation_url": "https://api.mapbox.com/tokens/v2?access_token={token}",
+          "is_secret": false,
+          "format_regex": "^pk\\.[a-zA-Z0-9._-]+$"
+        }
+      ],
+      "cost_to_user": {
+        "free_tier": "50,000 map loads/month",
+        "paid": "$0.50 per 1,000 loads after"
+      }
+    },
+    "openai_api": {
+      "id": "openai_api",
+      "ar_label": "OpenAI API (الحساب الخاص بالعميل)",
+      "en_label": "OpenAI API (customer's own account)",
+      "category": "llm",
+      "triggers": {
+        "ar": ["chatgpt", "openai", "ai chat", "ذكاء صناعي شات"],
+        "en": ["chatgpt", "openai key", "use my openai"]
+      },
+      "required_credentials": [
+        {
+          "key": "OPENAI_API_KEY",
+          "ar_label": "OpenAI API Key",
+          "where_to_get": {
+            "ar": "1. platform.openai.com\n2. API Keys → Create new\n3. انسخ sk-...",
+            "en": "1. platform.openai.com\n2. API Keys → Create new\n3. Copy sk-..."
+          },
+          "validation_url": "https://api.openai.com/v1/models",
+          "validation_header": "Authorization: Bearer {token}",
+          "is_secret": true,
+          "format_regex": "^sk-[a-zA-Z0-9_-]{20,}$"
+        }
+      ],
+      "note_ar": "💡 ملاحظة: نحن نوفّر Emergent LLM Key المجاني — لا تحتاج هذا إلا إذا كنت تريد دفع من حسابك الخاص.",
+      "note_en": "💡 Note: We provide a free Emergent LLM Key — you only need this if you want to pay from your own account."
+    },
+    "resend_email": {
+      "id": "resend_email",
+      "ar_label": "بريد إلكتروني (Resend)",
+      "en_label": "Email Sending (Resend)",
+      "category": "email",
+      "triggers": {
+        "ar": ["إرسال بريد", "ايميل", "نشرة", "newsletter"],
+        "en": ["send email", "newsletter", "transactional email"]
+      },
+      "required_credentials": [
+        {
+          "key": "RESEND_API_KEY",
+          "ar_label": "Resend API Key",
+          "where_to_get": {
+            "ar": "1. resend.com (مجاني)\n2. API Keys → Create\n3. انسخ re_...",
+            "en": "1. resend.com (free)\n2. API Keys → Create\n3. Copy re_..."
+          },
+          "validation_url": "https://api.resend.com/domains",
+          "validation_header": "Authorization: Bearer {token}",
+          "is_secret": true,
+          "format_regex": "^re_[a-zA-Z0-9_-]{20,}$"
+        }
+      ],
+      "cost_to_user": {"free_tier": "3000 emails/month", "paid": "$20/month for 50,000"}
+    },
+    "twilio_sms": {
+      "id": "twilio_sms",
+      "ar_label": "SMS (Twilio)",
+      "en_label": "SMS (Twilio)",
+      "category": "sms",
+      "triggers": {"ar": ["sms", "رسالة نصية", "otp"], "en": ["sms", "text message", "otp"]},
+      "required_credentials": [
+        {"key": "TWILIO_ACCOUNT_SID", "ar_label": "Account SID", "is_secret": false},
+        {"key": "TWILIO_AUTH_TOKEN", "ar_label": "Auth Token", "is_secret": true},
+        {"key": "TWILIO_FROM_NUMBER", "ar_label": "Twilio Phone Number", "is_secret": false}
+      ],
+      "cost_to_user": {"trial": "$15 free credit", "sms_cost": "$0.0079 per SMS (varies by country)"}
+    },
+    "supabase_db": {
+      "id": "supabase_db",
+      "ar_label": "قاعدة بيانات (Supabase)",
+      "en_label": "Database (Supabase)",
+      "category": "database",
+      "triggers": {"ar": ["supabase", "postgres", "قاعدة بيانات"], "en": ["supabase", "postgres backend"]},
+      "required_credentials": [
+        {"key": "SUPABASE_URL", "ar_label": "Project URL", "is_secret": false},
+        {"key": "SUPABASE_ANON_KEY", "ar_label": "Anon Key", "is_secret": false},
+        {"key": "SUPABASE_SERVICE_KEY", "ar_label": "Service Role Key", "is_secret": true}
+      ],
+      "cost_to_user": {"free_tier": "500MB DB + 50K MAU", "paid": "$25/month"}
+    },
+    "fal_video_gen": {
+      "id": "fal_video_gen",
+      "ar_label": "توليد فيديو (FAL)",
+      "en_label": "Video Generation (FAL)",
+      "category": "ai_video",
+      "triggers": {"ar": ["فيديو AI", "video generation", "sora"], "en": ["ai video", "video generation"]},
+      "required_credentials": [
+        {"key": "FAL_API_KEY", "ar_label": "FAL API Key", "is_secret": true}
+      ],
+      "note_ar": "💡 نوفّر FAL key افتراضي — تحتاج هذا فقط لاستخدام رصيدك الخاص"
+    }
+  }
+}

@@ -3879,6 +3879,17 @@ try:
 except Exception as _fb2e:
     logging.getLogger(__name__).error(f"Failed to register freebuild v2 module: {_fb2e}", exc_info=True)
 
+# ============== CONCIERGE + REMOTE EXECUTION (2026-02) ==============
+try:
+    app.state.db = db  # ensure routes can find db
+    from modules.freebuild.concierge import include_concierge_routes
+    include_concierge_routes(app)
+    from modules.freebuild.execution_routes import include_execution_routes
+    include_execution_routes(app)
+    logging.getLogger(__name__).info("Concierge + Execution routes registered")
+except Exception as _ce:
+    logging.getLogger(__name__).error(f"Concierge registration failed: {_ce}", exc_info=True)
+
 # ============== AUTOCODER (Owner-only AI that programs Zenrex itself) ==============
 try:
     from modules.autocoder import create_autocoder_router
