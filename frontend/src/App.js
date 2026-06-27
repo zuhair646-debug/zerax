@@ -111,6 +111,7 @@ import AdminIndependence from '@/pages/AdminIndependence';
 import AdminAIReadiness from '@/pages/AdminAIReadiness';
 import AdminLearning from '@/pages/AdminLearning';
 import AdminNotifications from '@/pages/AdminNotifications';
+import AdminLessons from '@/pages/AdminLessons';
 import StoragePage from '@/pages/StoragePage';
 import TrashPage from '@/pages/TrashPage';
 import SecurityControlRoom from '@/pages/SecurityControlRoom';
@@ -248,6 +249,7 @@ function App() {
           <Route path="/admin/credits" element={<ProtectedRoute adminOnly><AdminCredits user={user} /></ProtectedRoute>} />
           <Route path="/admin/training" element={<ProtectedRoute adminOnly><AdminTraining user={user} /></ProtectedRoute>} />
           <Route path="/admin/notifications" element={<ProtectedRoute adminOnly><AdminNotifications user={user} /></ProtectedRoute>} />
+          <Route path="/admin/lessons" element={<ProtectedRoute adminOnly><AdminLessons user={user} /></ProtectedRoute>} />
           <Route path="/admin/guardian" element={<ProtectedRoute adminOnly><GuardianDashboard user={user} /></ProtectedRoute>} />
           <Route path="/freebuild/checkout/:pid" element={<ProtectedRoute><FreebuildCheckout user={user} /></ProtectedRoute>} />
           <Route path="/freebuild/checkout/:pid/success" element={<ProtectedRoute><FreebuildCheckout user={user} /></ProtectedRoute>} />

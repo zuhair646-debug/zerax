@@ -1,6 +1,57 @@
 # Zitex Changelog
 
 
+### 🔒 Feb 27, 2026 — Trade-Secret Lock + Admin Lessons UI
+
+**Owner directive (Saudi Arabic):** the system must run itself — operator shouldn't have to manage lessons via curl. And critically: the AI must NEVER reveal which AI provider we use (Claude/Anthropic/OpenAI/Gemini), what internal tool names exist, or any architectural detail. Instead it always brands itself as "الذكاء الصناعي Zenrex" and steers customers toward integrating that AI into their site as a paid upsell.
+
+**Backend — Trade-Secret Protection**
+- New `/app/backend/modules/freebuild/trade_secret.py`
+  - `scrub_customer_text()` — final-pass regex scrubber. Replaces 30+ leaked provider/tool/path patterns with generic Arabic substitutes:
+    • `Claude / Anthropic / Sonnet / GPT / Gemini / Nano-Banana / Emergent` → `الذكاء الصناعي Zenrex`
+    • `test_page / verify_my_work / deploy_to_vercel / troubleshoot_agent / …` (50+ tool names) → `أداتي الداخلية`
+    • `Tavily / Perplexity / Brave Search` → `محرك البحث الداخلي`
+    • `/app/backend/...` paths → `وحدتنا الداخلية`
+    • `EMERGENT_LLM_KEY / API_KEY` → `مفتاحنا الموحد`
+    • `api.anthropic.com / api.openai.com / api.tavily.com` URLs → `خدمتنا الداخلية`
+  - `TRADE_SECRET_SEED_LESSONS` — 6 critical-priority always-on lessons:
+    1. No provider disclosure ever (even if asked directly)
+    2. No tool names in customer-facing text
+    3. No architecture leaks (paths, DB names, APIs)
+    4. AI upsell strategy (recommend customer integrate Zenrex AI into their finished site)
+    5. Engineering mindset (read context → test → don't claim → status with %)
+    6. Proactive consulting (suggest delivery for supermarket, admin for store, etc.)
+  - `seed_trade_secret_lessons()` — idempotent seeder; runs on every server startup.
+- `freebuild_agent.py` integration:
+  - `text_delta` SSE event now scrubs every token chunk before emission.
+  - Final `summary` field in the `done` event is scrubbed before persistence.
+- `server.py` registers a `@app.on_event("startup")` hook that seeds the 6 lessons (idempotent).
+
+**Frontend — Admin Lessons UI**
+- New `/app/frontend/src/pages/AdminLessons.js`
+  - Route: `/admin/lessons` (admin-only via `ProtectedRoute adminOnly`)
+  - Create form: textarea + priority dropdown (critical / high / medium / low) → POSTs to `/api/admin/lessons`.
+  - Lessons list sorted by priority + effectiveness; weak lessons (eff < 0.5 with 3+ injections) get a red "يحتاج إعادة صياغة" badge so the operator can rewrite.
+  - Inline edit / delete per row.
+  - Shows source labels: `mراقب تلقائي` / `فحص الصدق` / `🤝 مراجعة E1` / `✍️ يدوي`.
+  - All elements carry `data-testid` for QA automation.
+- `App.js` route registered.
+
+**Verified live**
+- ✅ 6 trade-secret lessons inserted automatically on startup (log: `Seeded 6 trade-secret critical lessons`).
+- ✅ `GET /api/admin/lessons` returns 8 items (7 manual_operator + 1 legacy); critical lessons lead the sort.
+- ✅ Scrubber spot-test on 6 leak patterns:
+  • "استخدمت Claude Sonnet 4.5" → "استخدمت الذكاء الصناعي Zenrex"
+  • "سأستدعي test_page و verify_my_work" → "سأستدعي أداتي الداخلية و أداتي الداخلية"
+  • "البحث عبر Tavily" → "البحث عبر محرك البحث الداخلي"
+  • "deploy_to_vercel" → "أداتي الداخلية"
+  • "Anthropic + Emergent" → "Zenrex AI + Zenrex Platform"
+  • "/app/backend/modules/.../freebuild_agent.py" → "وحدتنا الداخلية"
+
+**Service worker:** bumped to `v46-2026-02-trade-secret-lock`.
+
+
+
 ### 🧠 Feb 27, 2026 — Autonomy v4: Learning Robustness Push (~95% Target)
 
 **Owner directive (Saudi Arabic):** push autonomy to ~95% by closing the 5 learning-system gaps. The AI must actually internalize lessons across sessions, not just "see" the last 5 chronologically.

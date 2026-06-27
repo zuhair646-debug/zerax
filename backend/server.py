@@ -3779,6 +3779,19 @@ try:
 except Exception as _le:
     logging.getLogger(__name__).error(f"Failed to register lessons_admin: {_le}", exc_info=True)
 
+# ── Trade-Secret Seed Lessons (always-on, critical priority) ──
+# Seeds 6 lessons that lock down disclosure of providers/tools and push
+# the AI-upsell strategy. Idempotent — safe to run on every startup.
+@app.on_event("startup")
+async def _seed_trade_secret_lessons():
+    try:
+        from modules.freebuild.trade_secret import seed_trade_secret_lessons
+        n = await seed_trade_secret_lessons(db)
+        if n:
+            logging.getLogger(__name__).info(f"Seeded {n} trade-secret critical lessons")
+    except Exception as _tse:
+        logging.getLogger(__name__).warning(f"trade-secret seeding skipped: {_tse}")
+
 # ============== CARE PORTAL (post-delivery client dashboard + Mobile App upgrade) ==============
 try:
     from modules.care_portal import create_care_router

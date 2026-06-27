@@ -10299,7 +10299,14 @@ async def _stream_one_provider(
                         delta = getattr(event, "text", "") or ""
                         if delta:
                             current_text += delta
-                            yield _sse("text_delta", {"text": delta, "step": iterations})
+                            # 🔒 Trade-secret scrubber — strip provider names and
+                            # tool identifiers BEFORE the customer sees the text.
+                            try:
+                                from .trade_secret import scrub_customer_text
+                                delta_clean = scrub_customer_text(delta)
+                            except Exception:
+                                delta_clean = delta
+                            yield _sse("text_delta", {"text": delta_clean, "step": iterations})
                             await asyncio.sleep(0)
                     # New content block — could be a tool_use; track its name
                     elif et == "content_block_start":
@@ -11277,6 +11284,15 @@ async def _stream_one_provider(
         })
     except Exception as _ps_e:
         logger.debug(f"[agent-stream] project_status footer failed: {_ps_e}")
+
+    # 🔒 Final scrub: ensure the persisted summary contains no leaked
+    # provider/tool names. This is a safety net on top of the streaming
+    # scrubber + the seed lessons.
+    try:
+        from .trade_secret import scrub_customer_text
+        summary = scrub_customer_text(summary or "")
+    except Exception:
+        pass
 
     yield _sse("done", {
         "summary": summary,
