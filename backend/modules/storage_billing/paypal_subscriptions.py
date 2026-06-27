@@ -203,7 +203,11 @@ def register_paypal_subscriptions(app, db, get_current_user, STORAGE_PLANS, GRAC
         if not approval:
             raise HTTPException(500, "PayPal لم يرجع رابط الموافقة")
 
-        # Save the pending subscription so we can match it back on webhook
+        # Save the pending subscription so we can match it back on webhook.
+        # Important: CLEAR cancelled_at (and other lifecycle fields) — the
+        # user is starting a fresh subscription, so the previous cancellation
+        # is no longer relevant. Otherwise the UI would still treat them as
+        # "cancelled" and hide the cancel button.
         await db.storage_subscriptions.update_one(
             {"user_id": user["user_id"]},
             {"$set": {
@@ -212,6 +216,9 @@ def register_paypal_subscriptions(app, db, get_current_user, STORAGE_PLANS, GRAC
                 "status": "pending_approval",
                 "paypal_subscription_id": data["id"],
                 "auto_renew": True,
+                "cancelled_at": None,
+                "grace_started_at": None,
+                "archived_at": None,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }},
             upsert=True,
@@ -260,6 +267,7 @@ def register_paypal_subscriptions(app, db, get_current_user, STORAGE_PLANS, GRAC
                 "current_period_end": next_billing or (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
                 "grace_started_at": None,
                 "archived_at": None,
+                "cancelled_at": None,
                 "auto_renew": True,
             })
             await db.users.update_one(
@@ -275,6 +283,7 @@ def register_paypal_subscriptions(app, db, get_current_user, STORAGE_PLANS, GRAC
                 "status": "active",
                 "plan_id": local_plan.get("plan_id") or sub.get("plan_id"),
                 "current_period_end": next_billing or (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+                "cancelled_at": None,
                 "auto_renew": True,
             })
         elif pp_status == "SUSPENDED":
@@ -405,6 +414,7 @@ def register_paypal_subscriptions(app, db, get_current_user, STORAGE_PLANS, GRAC
                         "auto_renew": True,
                         "grace_started_at": None,
                         "archived_at": None,
+                        "cancelled_at": None,
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                     }},
                     upsert=True,

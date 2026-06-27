@@ -320,7 +320,10 @@ export default function BillingStorage() {
               </div>
             )}
 
-            {/* Cancelled subscription — sub.auto_renew=false + has cancellation date */}
+            {/* Cancelled subscription — show only when the user is truly
+                in cancelled state (auto_renew=false). If they re-subscribed
+                after a previous cancellation, auto_renew will be true and
+                this block stays hidden. */}
             {!isArchived && sub.cancelled_at && sub.auto_renew === false && sub.status === 'active' && (
               <div className="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-4 flex items-start gap-3" data-testid="cancelled-block">
                 <div className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
@@ -361,8 +364,11 @@ export default function BillingStorage() {
               </div>
             )}
 
-            {/* Active subscription management (cancel button) — hidden once cancelled */}
-            {!isArchived && !sub.cancelled_at && ['pending_approval', 'active', 'past_due'].includes(sub.status) && (
+            {/* Active subscription management — show whenever the user is
+                actively subscribed (auto_renew=true) OR pending. Stale
+                `cancelled_at` from a previous cancellation is ignored when
+                auto_renew=true (which means user re-subscribed). */}
+            {!isArchived && (sub.auto_renew !== false) && ['pending_approval', 'active', 'past_due'].includes(sub.status) && (
               <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 flex items-start gap-3" data-testid="cancel-subscription-block">
                 <Info className="w-5 h-5 text-zinc-400 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
