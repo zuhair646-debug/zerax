@@ -18,6 +18,24 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **🗂️ Design Archive (المحفوظات)** — visual snapshot history per project.
 
 
+## 🆕 2026-02-27 (V3 — Same Day) — Admin Visibility + Polish ✅
+
+### Added: Cortex Usage Stats Dashboard
+- **New endpoint**: `GET /api/usage/admin/cortex-stats?days=7` in `usage_meter.py:351-413`. Aggregates `db.cortex_usage_stats` (populated automatically by each cortex) and returns:
+  - `by_cortex[]`: per-cortex calls/avg_duration/total_mb/unique_users/unique_projects
+  - `top_models[]`: most-used LLM/image models (Sora, gpt-image-1, Claude, etc.)
+  - `recent_activity[]`: last 20 cortex invocations with timestamps + prompt excerpts
+  - `total_calls`: aggregate across all cortices
+- **Frontend** `AdminUsageDashboard.jsx` now renders a new "نشاط الـ Cortex" section with:
+  - 4 stat cards (total calls, active cortex types, models used, last activity)
+  - Breakdown table with per-cortex metrics
+  - Top model badges
+- Verified live: 27 narrative + 4 video + 3 visual calls aggregated, gpt-image-1 model surfaced.
+
+### Old bug `ownedMoviesList` → resolved (file deleted in prior session, no code remaining).
+
+
+
 ## 🆕 2026-02-27 (Same Day, V2) — 4 Critical Gaps CLOSED & VERIFIED ✅
 After deep audit, found 4 real gaps in the AI's capabilities. ALL CLOSED + tested:
 

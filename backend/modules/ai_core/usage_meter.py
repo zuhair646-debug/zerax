@@ -347,4 +347,67 @@ def make_usage_router(db, get_current_user):
             "last_30d": {"tokens": d30.get("tokens", 0), "cost_usd": round(d30.get("cost", 0), 4), "calls": d30.get("calls", 0)},
         }
 
+    @router.get("/admin/cortex-stats")
+    async def cortex_stats(days: int = 7, user=Depends(get_current_user)):
+        """Cortex-level usage breakdown (visual/audio/video/narrative/architect/review).
+        Reads from db.cortex_usage_stats (populated by each cortex on every call)."""
+        _ensure_admin(user)
+        since = (datetime.now(timezone.utc) - timedelta(days=int(days))).isoformat()
+        # Aggregate by cortex
+        pipeline = [
+            {"$match": {"created_at": {"$gte": since}}},
+            {"$group": {
+                "_id": "$cortex",
+                "calls": {"$sum": 1},
+                "avg_duration_ms": {"$avg": "$duration_ms"},
+                "total_bytes": {"$sum": {"$ifNull": ["$size_bytes", 0]}},
+                "unique_users": {"$addToSet": "$user_id"},
+                "unique_projects": {"$addToSet": "$project_id"},
+            }},
+            {"$sort": {"calls": -1}},
+        ]
+        try:
+            results = await db.cortex_usage_stats.aggregate(pipeline).to_list(length=20)
+        except Exception:
+            results = []
+        by_cortex = []
+        for r in results:
+            by_cortex.append({
+                "cortex": r["_id"] or "unknown",
+                "calls": r["calls"],
+                "avg_duration_ms": int(r.get("avg_duration_ms") or 0),
+                "total_mb": round((r.get("total_bytes") or 0) / (1024 * 1024), 2),
+                "unique_users": len([u for u in (r.get("unique_users") or []) if u]),
+                "unique_projects": len([p for p in (r.get("unique_projects") or []) if p]),
+            })
+        # Recent activity feed (last 20)
+        try:
+            recent_cursor = db.cortex_usage_stats.find(
+                {"created_at": {"$gte": since}},
+                {"_id": 0, "cortex": 1, "project_id": 1, "user_id": 1,
+                 "model": 1, "duration_ms": 1, "created_at": 1, "prompt_excerpt": 1},
+            ).sort("created_at", -1).limit(20)
+            recent = await recent_cursor.to_list(length=20)
+        except Exception:
+            recent = []
+        # Top models used
+        try:
+            model_pipeline = [
+                {"$match": {"created_at": {"$gte": since}, "model": {"$ne": None}}},
+                {"$group": {"_id": "$model", "calls": {"$sum": 1}}},
+                {"$sort": {"calls": -1}},
+                {"$limit": 10},
+            ]
+            models = await db.cortex_usage_stats.aggregate(model_pipeline).to_list(length=10)
+            top_models = [{"model": m["_id"], "calls": m["calls"]} for m in models]
+        except Exception:
+            top_models = []
+        return {
+            "since_days": int(days),
+            "by_cortex": by_cortex,
+            "top_models": top_models,
+            "recent_activity": recent,
+            "total_calls": sum(c["calls"] for c in by_cortex),
+        }
+
     return router

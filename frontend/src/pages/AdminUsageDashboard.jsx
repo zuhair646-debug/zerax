@@ -10,7 +10,7 @@
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DollarSign, Activity, Users, FolderKanban, Loader2, ArrowLeft, RefreshCw, AlertTriangle } from 'lucide-react';
+import { DollarSign, Activity, Users, FolderKanban, Loader2, ArrowLeft, RefreshCw, AlertTriangle, Brain, Zap } from 'lucide-react';
 import ZenrexBrand from '../components/ZenrexBrand';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -36,6 +36,7 @@ export default function AdminUsageDashboard() {
   const [totals, setTotals] = useState(null);
   const [spenders, setSpenders] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [cortexStats, setCortexStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -46,15 +47,17 @@ export default function AdminUsageDashboard() {
     if (!token) { navigate('/login'); return; }
     const headers = { Authorization: `Bearer ${token}` };
     try {
-      const [tRes, sRes, pRes] = await Promise.all([
+      const [tRes, sRes, pRes, cRes] = await Promise.all([
         fetch(`${API}/api/usage/admin/totals`, { headers }),
         fetch(`${API}/api/usage/admin/top-spenders?limit=20`, { headers }),
         fetch(`${API}/api/usage/admin/by-project?limit=20`, { headers }),
+        fetch(`${API}/api/usage/admin/cortex-stats?days=7`, { headers }),
       ]);
       if (tRes.status === 403) { setError('forbidden'); return; }
       setTotals((await tRes.json()) || null);
       setSpenders((await sRes.json()).items || []);
       setProjects((await pRes.json()).items || []);
+      setCortexStats(cRes.ok ? await cRes.json() : null);
     } catch (e) {
       setError('fetch_failed');
     } finally {
@@ -210,6 +213,70 @@ export default function AdminUsageDashboard() {
                     </tbody>
                   </table>
                 </div>
+              )}
+            </section>
+
+            {/* Cortex Usage Stats — Gap #5 (Admin visibility) */}
+            <section className="mt-10" data-testid="cortex-stats-section">
+              <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                <Brain className="w-5 h-5 text-cyan-300" />
+                نشاط الـ Cortex (آخر 7 أيام)
+              </h2>
+              {(!cortexStats || (cortexStats.by_cortex || []).length === 0) ? (
+                <p className="text-sm text-zinc-500 text-center py-8 border border-dashed border-white/10 rounded-xl" data-testid="cortex-stats-empty">
+                  ما في نشاط cortex بعد — لما يبدأ المستخدمين باستخدام image/video/audio راح يبينون هنا.
+                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                    <StatCard accent="amber"   label="إجمالي طلبات Cortex" value={cortexStats.total_calls} sub="آخر 7 أيام" />
+                    <StatCard accent="emerald" label="عدد أنواع Cortex النشطة" value={(cortexStats.by_cortex || []).length} sub="visual/audio/video..." />
+                    <StatCard accent="purple"  label="نماذج مستخدمة" value={(cortexStats.top_models || []).length} sub="Claude/Sora/Banana..." />
+                    <StatCard accent="rose"    label="آخر طلب" value={(cortexStats.recent_activity || [])[0]?.cortex || '—'} sub={(cortexStats.recent_activity || [])[0]?.created_at?.slice(0, 16) || ''} />
+                  </div>
+                  {/* Cortex breakdown table */}
+                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 overflow-hidden mb-6" data-testid="cortex-breakdown-table">
+                    <table className="w-full text-xs">
+                      <thead className="bg-black/40 text-zinc-400">
+                        <tr>
+                          <th className="text-right px-3 py-2 font-bold">Cortex</th>
+                          <th className="text-right px-3 py-2 font-bold">الطلبات</th>
+                          <th className="text-right px-3 py-2 font-bold">متوسط الزمن</th>
+                          <th className="text-right px-3 py-2 font-bold">حجم البيانات</th>
+                          <th className="text-right px-3 py-2 font-bold">مستخدمين</th>
+                          <th className="text-right px-3 py-2 font-bold">مشاريع</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cortexStats.by_cortex.map((c) => (
+                          <tr key={c.cortex} data-testid={`cortex-row-${c.cortex}`} className="border-t border-white/5 hover:bg-white/5">
+                            <td className="px-3 py-2 font-bold text-cyan-300 uppercase">{c.cortex}</td>
+                            <td className="px-3 py-2 text-zinc-300">{c.calls}</td>
+                            <td className="px-3 py-2 text-zinc-400">{c.avg_duration_ms} ms</td>
+                            <td className="px-3 py-2 text-zinc-400">{c.total_mb} MB</td>
+                            <td className="px-3 py-2 text-zinc-300">{c.unique_users}</td>
+                            <td className="px-3 py-2 text-zinc-300">{c.unique_projects}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Top Models */}
+                  {(cortexStats.top_models || []).length > 0 && (
+                    <div className="mb-4">
+                      <h3 className="text-sm font-bold text-zinc-300 mb-2 flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-300" /> النماذج الأكثر استخداماً
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {cortexStats.top_models.map((m) => (
+                          <span key={m.model} data-testid={`top-model-${m.model}`} className="text-[11px] font-bold px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                            {m.model} <span className="opacity-60">· {m.calls}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </section>
           </>
