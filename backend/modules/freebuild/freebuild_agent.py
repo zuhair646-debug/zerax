@@ -1825,6 +1825,22 @@ TOOLS_SCHEMA.append(GLOBAL_KNOWLEDGE_TOOL_SCHEMA)
 TOOLS_SCHEMA.extend(PHASE5_TOOL_SCHEMAS)
 TOOLS_SCHEMA.extend(DESKTOP_TOOL_SCHEMAS)
 
+# 📚 Library Registry — vetted CDN libraries the AI can inject in one tool call.
+try:
+    from .library_registry import (
+        LIBRARY_TOOL_SCHEMA,
+        inject_library as _inject_library,
+        library_summary_for_prompt,
+    )
+    TOOLS_SCHEMA.append(LIBRARY_TOOL_SCHEMA)
+    LIBRARY_REGISTRY_TOOL_NAMES = {"inject_library"}
+except Exception as _e:
+    logger.warning(f"library_registry module unavailable: {_e}")
+    LIBRARY_REGISTRY_TOOL_NAMES = set()
+    _inject_library = None
+    def library_summary_for_prompt(max_chars: int = 2400) -> str:  # type: ignore
+        return ""
+
 # Specialized expert sub-agents (design / testing / troubleshoot / integration)
 # Each one is a focused single-shot LLM call with its own system prompt.
 try:
@@ -3834,7 +3850,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     "batch_replace_in_pages", "update_pages_theme",
                     "inject_global_css", "list_all_pages_summary",
                     "insert_html_at", "reorder_sections",
-                    "sync_preview_to_published") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES or name in PHASE5_TOOL_NAMES or name in DESKTOP_TOOL_NAMES:
+                    "sync_preview_to_published") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES or name in PHASE5_TOOL_NAMES or name in DESKTOP_TOOL_NAMES or name in LIBRARY_REGISTRY_TOOL_NAMES:
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
@@ -5832,6 +5848,10 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
         # ── Advanced capability tools (shell, FS, DB, deploy, e2e, msg, video) ──
         if name in ADVANCED_TOOL_NAMES:
             return await dispatch_advanced(ctx, name, args)
+
+        # ── 📚 Library Registry (inject_library — vetted CDN libs) ──
+        if name in LIBRARY_REGISTRY_TOOL_NAMES and _inject_library is not None:
+            return await _inject_library(ctx, args)
 
         # ── Workflow tools (ask_user_inline, plan_task, delegate) ──
         if name in WORKFLOW_TOOL_NAMES:
@@ -9078,6 +9098,20 @@ def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
 
     if is_owner:
         base += DESKTOP_OWNER_ADDENDUM
+
+    # ── 📚 Capability Atlas (Library Registry) ─────────────────────────
+    # Embed a compact summary of vetted CDN libraries the AI can inject
+    # via `inject_library(category, variant, page)`. This stops the AI
+    # from hallucinating CDN URLs or writing `<script src=...>` by hand.
+    try:
+        atlas = library_summary_for_prompt(max_chars=2400)
+        if atlas:
+            base += "\n\n══════════════════════════════════════════════════════════════\n"
+            base += atlas
+            base += "\n══════════════════════════════════════════════════════════════\n"
+    except Exception:
+        pass
+
     return base
 
 
@@ -9736,6 +9770,10 @@ TOOL_LABELS_AR["save_learning"] = {"running": "🌱 يحفظ خبرة جديدة
                                     "done": "✅ خبرة جديدة لـ Zenrex"}
 TOOL_LABELS_AR.update(PHASE5_TOOL_LABELS_AR)
 TOOL_LABELS_AR.update(DESKTOP_TOOL_LABELS_AR)
+TOOL_LABELS_AR["inject_library"] = {
+    "running": "📚 يحقن مكتبة معتمدة من سجل القدرات...",
+    "done": "✅ المكتبة جاهزة (CDN + boilerplate)",
+}
 
 
 def _sse(event: str, data: Dict[str, Any]) -> str:

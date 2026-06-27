@@ -116,5 +116,28 @@ def register_lessons_admin(app, db, get_current_user, is_owner_check):
             items.append(d)
         return {"ok": True, "items": items}
 
+    # ─────────────────────────────────────────────────────────────────
+    # 📚 Library Registry endpoints (read-only registry view + usage)
+    # ─────────────────────────────────────────────────────────────────
+    @router.get("/library-registry")
+    async def get_library_registry(user=Depends(_require_owner)):
+        """Return the current registry JSON (for the admin UI)."""
+        from modules.freebuild.library_registry import LIBRARY_REGISTRY
+        return {"ok": True, "registry": LIBRARY_REGISTRY}
+
+    @router.get("/library-usage")
+    async def get_library_usage(user=Depends(_require_owner)):
+        """Track how often each library was injected (registry + tavily-discovered)."""
+        cursor = db.library_usage_stats.find({}, {"_id": 0}).sort("injects", -1).limit(200)
+        items = []
+        async for d in cursor:
+            items.append(d)
+        # promotion queue (Tavily libs with 3+ successes awaiting owner approval)
+        promo_cursor = db.library_promotion_queue.find({"status": "pending"}, {"_id": 0})
+        promos = []
+        async for d in promo_cursor:
+            promos.append(d)
+        return {"ok": True, "items": items, "promotion_queue": promos, "count": len(items)}
+
     app.include_router(router)
     log.info("AI Lessons admin module registered (/api/admin/lessons/*)")

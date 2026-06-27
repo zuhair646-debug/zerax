@@ -1,0 +1,587 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-06-27",
+  "schema": {
+    "primary": "default first pick - fastest/lightest",
+    "alternative": "use when primary doesn't fit (heavier or different model)",
+    "experimental": "cutting edge / advanced needs",
+    "_fields": {
+      "lib": "library name (lowercase, hyphenated)",
+      "version": "exact semver",
+      "cdn_js": "list of <script> URLs to add at end of <body> with defer",
+      "cdn_css": "list of <link rel=stylesheet> URLs to add in <head>",
+      "use_when": "Arabic guidance for when to pick this variant",
+      "bundle_kb": "approx gzipped size",
+      "dom_anchor_hint": "DOM element the lib expects (e.g. '#map', 'canvas')",
+      "init_snippet": "minimal boilerplate JS to wire the lib (with TEMPLATE_PLACEHOLDERS)",
+      "free_tier_note": "what's free (for SaaS-backed libs)"
+    }
+  },
+  "categories": {
+    "charts": {
+      "ar_label": "شارت بياني",
+      "keywords": ["chart", "graph", "شارت", "رسم بياني", "إحصائيات", "dashboard", "kpi", "تقارير"],
+      "variants": {
+        "primary": {
+          "lib": "chart.js",
+          "version": "4.4.1",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 75,
+          "use_when": "شارت بسيط (line/bar/pie/doughnut). أداء عالي على الموبايل.",
+          "dom_anchor_hint": "<canvas id=\"chart_TPL\"></canvas>",
+          "init_snippet": "const ctx = document.getElementById('chart_TPL'); new Chart(ctx, { type:'line', data:{ labels:['يناير','فبراير','مارس'], datasets:[{ label:'مبيعات', data:[12,19,3], borderColor:'#0ea5e9', backgroundColor:'rgba(14,165,233,0.1)', tension:0.4 }] }, options:{ responsive:true, plugins:{ legend:{ position:'top' } } } });"
+        },
+        "alternative": {
+          "lib": "echarts",
+          "version": "5.5.0",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 320,
+          "use_when": "شارت تداول/مالية (candlestick, heatmap, treemap, sankey, تكبير وتمرير).",
+          "dom_anchor_hint": "<div id=\"chart_TPL\" style=\"width:100%;height:400px\"></div>",
+          "init_snippet": "const chart = echarts.init(document.getElementById('chart_TPL')); chart.setOption({ tooltip:{}, xAxis:{ data:['يناير','فبراير','مارس'] }, yAxis:{}, series:[{ name:'مبيعات', type:'bar', data:[120,200,150] }] }); window.addEventListener('resize', ()=>chart.resize());"
+        },
+        "experimental": {
+          "lib": "d3",
+          "version": "7.8.5",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 280,
+          "use_when": "تصور بيانات مخصص بالكامل، شارت غير قياسي، علاقات شبكية.",
+          "dom_anchor_hint": "<svg id=\"chart_TPL\" width=\"600\" height=\"400\"></svg>",
+          "init_snippet": "const svg = d3.select('#chart_TPL'); const data = [12,19,3,5,2,3]; svg.selectAll('rect').data(data).enter().append('rect').attr('x',(d,i)=>i*60).attr('y',d=>400-d*15).attr('width',50).attr('height',d=>d*15).attr('fill','#0ea5e9');"
+        }
+      }
+    },
+    "maps": {
+      "ar_label": "خرائط",
+      "keywords": ["map", "خريطة", "موقع", "لوكيشن", "delivery", "uber", "كريم", "طلبات", "خرائط"],
+      "variants": {
+        "primary": {
+          "lib": "leaflet",
+          "version": "1.9.4",
+          "cdn_js": ["https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"],
+          "cdn_css": ["https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"],
+          "bundle_kb": 42,
+          "use_when": "خريطة بسيطة مع تيلز مجانية من OpenStreetMap. لا يتطلب API key.",
+          "dom_anchor_hint": "<div id=\"map_TPL\" style=\"height:400px;width:100%\"></div>",
+          "init_snippet": "const map = L.map('map_TPL').setView([24.7136, 46.6753], 12); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© OpenStreetMap' }).addTo(map); L.marker([24.7136, 46.6753]).addTo(map).bindPopup('الرياض').openPopup();",
+          "free_tier_note": "OpenStreetMap tiles مجانية 100% بدون مفتاح"
+        },
+        "alternative": {
+          "lib": "maplibre-gl",
+          "version": "4.5.0",
+          "cdn_js": ["https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.js"],
+          "cdn_css": ["https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.css"],
+          "bundle_kb": 220,
+          "use_when": "خريطة vector عالية الجودة، 3D buildings، تدوير وميل. بديل Mapbox مجاني تماماً.",
+          "dom_anchor_hint": "<div id=\"map_TPL\" style=\"height:400px;width:100%\"></div>",
+          "init_snippet": "const map = new maplibregl.Map({ container:'map_TPL', style:'https://demotiles.maplibre.org/style.json', center:[46.6753, 24.7136], zoom:11 });",
+          "free_tier_note": "MapLibre مجاني تماماً، open-source fork من Mapbox"
+        },
+        "experimental": {
+          "lib": "deck.gl",
+          "version": "9.0.0",
+          "cdn_js": ["https://unpkg.com/deck.gl@9.0.0/dist.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 480,
+          "use_when": "تصور geospatial متقدم (heatmap، arc، hexagon). تحليل بيانات كبيرة.",
+          "dom_anchor_hint": "<div id=\"map_TPL\" style=\"height:500px\"></div>",
+          "init_snippet": "const {DeckGL, ScatterplotLayer} = deck; new DeckGL({ container:'map_TPL', initialViewState:{ longitude:46.6753, latitude:24.7136, zoom:10 }, controller:true, layers:[ new ScatterplotLayer({ data:[{position:[46.67,24.71], color:[255,0,0], radius:1000}], getPosition:d=>d.position, getColor:d=>d.color, getRadius:d=>d.radius }) ] });"
+        }
+      }
+    },
+    "realtime": {
+      "ar_label": "تحديثات لحظية مشتركة",
+      "keywords": ["realtime", "live", "websocket", "تحديث مباشر", "chat", "متابعة لحظية", "presence", "تعاوني"],
+      "variants": {
+        "primary": {
+          "lib": "firebase",
+          "version": "10.12.0",
+          "cdn_js": [
+            "https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js",
+            "https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"
+          ],
+          "cdn_css": [],
+          "bundle_kb": 180,
+          "use_when": "أبسط حل realtime. listeners فورية، auth، rules بسيطة. مجاني حتى 1GB.",
+          "dom_anchor_hint": "بدون عنصر مرئي معين",
+          "init_snippet": "firebase.initializeApp({ apiKey:'YOUR_FIREBASE_KEY', databaseURL:'https://YOUR_PROJECT-default-rtdb.firebaseio.com', projectId:'YOUR_PROJECT' }); const db = firebase.database(); db.ref('messages').on('value', snap=>{ console.log('live:', snap.val()); }); function sendMsg(text){ db.ref('messages').push({ text, ts:Date.now() }); }",
+          "free_tier_note": "Spark plan: 1GB storage + 10GB/month bandwidth مجاني. يحتاج Firebase project من العميل."
+        },
+        "alternative": {
+          "lib": "supabase",
+          "version": "2.43.0",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.0/dist/umd/supabase.js"],
+          "cdn_css": [],
+          "bundle_kb": 95,
+          "use_when": "تحتاج SQL + RLS + auth. Postgres حقيقي. منصة open-source.",
+          "dom_anchor_hint": "بدون عنصر مرئي معين",
+          "init_snippet": "const sb = supabase.createClient('https://YOUR_PROJECT.supabase.co','YOUR_ANON_KEY'); const channel = sb.channel('room').on('postgres_changes',{event:'*',schema:'public',table:'messages'}, p=>console.log('live:',p)).subscribe();",
+          "free_tier_note": "500MB DB + 2GB bandwidth + 50K MAU مجاني"
+        },
+        "experimental": {
+          "lib": "yjs",
+          "version": "13.6.14",
+          "cdn_js": [
+            "https://cdn.jsdelivr.net/npm/yjs@13.6.14/dist/yjs.mjs",
+            "https://cdn.jsdelivr.net/npm/y-websocket@2.0.2/dist/y-websocket.cjs"
+          ],
+          "cdn_css": [],
+          "bundle_kb": 60,
+          "use_when": "CRDT للتحرير المتزامن (Figma/Google Docs). يحل تعارضات تلقائياً.",
+          "dom_anchor_hint": "بدون عنصر مرئي معين",
+          "init_snippet": "import * as Y from 'yjs'; const ydoc = new Y.Doc(); const ytext = ydoc.getText('shared'); ytext.observe(e=>console.log('text:',ytext.toString()));"
+        }
+      }
+    },
+    "animation": {
+      "ar_label": "أنميشن سينمائي",
+      "keywords": ["animation", "motion", "scroll", "parallax", "موشن", "أنيميشن", "تأثيرات", "Apple style", "Awwwards"],
+      "variants": {
+        "primary": {
+          "lib": "gsap",
+          "version": "3.12.5",
+          "cdn_js": [
+            "https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js",
+            "https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"
+          ],
+          "cdn_css": [],
+          "bundle_kb": 70,
+          "use_when": "موشن سينمائي مع scroll-driven animation. معيار صناعي (Apple, Stripe, Awwwards).",
+          "dom_anchor_hint": "أي عنصر بـ class .hero, .reveal, .pin",
+          "init_snippet": "gsap.registerPlugin(ScrollTrigger); gsap.from('.hero', { y:80, opacity:0, duration:1, ease:'power3.out' }); gsap.utils.toArray('.reveal').forEach(el => { gsap.from(el, { y:60, opacity:0, scrollTrigger:{ trigger:el, start:'top 80%' } }); });"
+        },
+        "alternative": {
+          "lib": "motion",
+          "version": "11.0.0",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/motion@11.0.0/dist/motion.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 25,
+          "use_when": "أصغر من GSAP، API بسيط مبني على Web Animations API الأصلي.",
+          "dom_anchor_hint": "أي عنصر",
+          "init_snippet": "const { animate, scroll } = Motion; animate('.hero', { y:[80,0], opacity:[0,1] }, { duration:1, easing:'ease-out' }); scroll(animate('.parallax', { y:[0,-200] }));"
+        },
+        "experimental": {
+          "lib": "lenis",
+          "version": "1.1.6",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/lenis@1.1.6/dist/lenis.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 14,
+          "use_when": "Smooth scroll مع GSAP. ضع مع primary لتجربة كاملة (Stripe-grade).",
+          "dom_anchor_hint": "<body>",
+          "init_snippet": "const lenis = new Lenis({ duration:1.2, smoothTouch:true }); function raf(t){ lenis.raf(t); requestAnimationFrame(raf); } requestAnimationFrame(raf); lenis.on('scroll', ScrollTrigger.update);"
+        }
+      }
+    },
+    "3d": {
+      "ar_label": "ثلاثي الأبعاد",
+      "keywords": ["3d", "three.js", "ثلاثي الأبعاد", "model", "WebGL", "VR", "AR", "cad"],
+      "variants": {
+        "primary": {
+          "lib": "three.js",
+          "version": "0.165.0",
+          "cdn_js": [],
+          "cdn_css": [],
+          "bundle_kb": 600,
+          "use_when": "أي شي 3D. المعيار الصناعي. يستخدم importmap.",
+          "dom_anchor_hint": "<canvas id=\"three_TPL\"></canvas>",
+          "init_snippet": "<script type=\"importmap\">{ \"imports\": { \"three\": \"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js\", \"three/addons/\": \"https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/\" } }</script>\n<script type=\"module\">\nimport * as THREE from 'three';\nimport { OrbitControls } from 'three/addons/controls/OrbitControls.js';\nconst scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000); camera.position.z = 5;\nconst renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three_TPL'), antialias:true }); renderer.setSize(innerWidth, innerHeight);\nconst geom = new THREE.BoxGeometry(); const mat = new THREE.MeshNormalMaterial(); const cube = new THREE.Mesh(geom, mat); scene.add(cube);\nconst controls = new OrbitControls(camera, renderer.domElement);\nfunction animate(){ requestAnimationFrame(animate); cube.rotation.x+=0.01; cube.rotation.y+=0.01; renderer.render(scene,camera); } animate();\n</script>"
+        },
+        "alternative": {
+          "lib": "babylon.js",
+          "version": "7.10.0",
+          "cdn_js": ["https://cdn.babylonjs.com/babylon.js"],
+          "cdn_css": [],
+          "bundle_kb": 900,
+          "use_when": "ألعاب 3D، PBR materials، physics محرّك. أقوى من three.js لكن أثقل.",
+          "dom_anchor_hint": "<canvas id=\"renderCanvas\" touch-action=\"none\"></canvas>",
+          "init_snippet": "const canvas = document.getElementById('renderCanvas'); const engine = new BABYLON.Engine(canvas, true); const scene = new BABYLON.Scene(engine); new BABYLON.HemisphericLight('l', new BABYLON.Vector3(0,1,0), scene); const cam = new BABYLON.ArcRotateCamera('c', 0, 1, 5, BABYLON.Vector3.Zero(), scene); cam.attachControl(canvas); BABYLON.MeshBuilder.CreateBox('box',{},scene); engine.runRenderLoop(()=>scene.render());"
+        },
+        "experimental": {
+          "lib": "model-viewer",
+          "version": "3.5.0",
+          "cdn_js": ["https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 200,
+          "use_when": "عرض GLB/GLTF بسطر HTML واحد. AR على الموبايل تلقائي.",
+          "dom_anchor_hint": "<model-viewer src=\"...glb\"></model-viewer>",
+          "init_snippet": "<model-viewer src=\"YOUR_MODEL.glb\" alt=\"3D model\" auto-rotate camera-controls ar ar-modes=\"webxr scene-viewer quick-look\" style=\"width:100%;height:500px\"></model-viewer>"
+        }
+      }
+    },
+    "canvas_editor": {
+      "ar_label": "محرر canvas / whiteboard",
+      "keywords": ["canvas", "whiteboard", "draw", "تحرير", "design tool", "figma", "رسم", "تصميم"],
+      "variants": {
+        "primary": {
+          "lib": "fabric.js",
+          "version": "5.3.0",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 280,
+          "use_when": "محرر تصميم (شكل، نص، صور، تحويلات). API ثري + JSON serialization.",
+          "dom_anchor_hint": "<canvas id=\"editor_TPL\" width=\"800\" height=\"600\"></canvas>",
+          "init_snippet": "const canvas = new fabric.Canvas('editor_TPL'); canvas.add(new fabric.Rect({ left:100, top:100, fill:'#0ea5e9', width:120, height:80 })); canvas.add(new fabric.IText('اكتب هنا',{ left:200, top:300, fontFamily:'Tajawal', fill:'#111' })); window.exportJSON = ()=>JSON.stringify(canvas.toJSON()); window.exportPNG = ()=>canvas.toDataURL('image/png');"
+        },
+        "alternative": {
+          "lib": "konva",
+          "version": "9.3.6",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/konva@9.3.6/konva.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 165,
+          "use_when": "أداء عالي لعدد كبير من الأشكال (ألعاب 2D، diagramming).",
+          "dom_anchor_hint": "<div id=\"container_TPL\"></div>",
+          "init_snippet": "const stage = new Konva.Stage({ container:'container_TPL', width:800, height:600 }); const layer = new Konva.Layer(); stage.add(layer); const rect = new Konva.Rect({ x:100, y:100, width:120, height:80, fill:'#0ea5e9', draggable:true }); layer.add(rect);"
+        },
+        "experimental": {
+          "lib": "tldraw",
+          "version": "2.4.0",
+          "cdn_js": ["https://unpkg.com/tldraw@2.4.0/dist/index.js"],
+          "cdn_css": ["https://unpkg.com/tldraw@2.4.0/dist/style.css"],
+          "bundle_kb": 450,
+          "use_when": "whiteboard كامل جاهز (مثل Excalidraw). إيماءات touch + multi-user مدمج.",
+          "dom_anchor_hint": "<div id=\"tldraw_TPL\" style=\"width:100vw;height:100vh\"></div>",
+          "init_snippet": "// tldraw يحتاج React عادة - استخدم primary fabric.js لمشاريع vanilla JS"
+        }
+      }
+    },
+    "code_editor": {
+      "ar_label": "محرر كود",
+      "keywords": ["code editor", "IDE", "محرر كود", "snippets", "programming", "syntax highlighting"],
+      "variants": {
+        "primary": {
+          "lib": "codemirror",
+          "version": "6.0.0",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/codemirror@6.65.7/dist/index.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 250,
+          "use_when": "محرر كود مدمج (snippets، تعليقات، ملاحظات). أخف بكثير من Monaco.",
+          "dom_anchor_hint": "<div id=\"editor_TPL\"></div>",
+          "init_snippet": "// Use CodeMirror 6 via ESM bundle (see https://codemirror.net/examples/bundle/) - أو استخدم alternative monaco للـ IDE كامل"
+        },
+        "alternative": {
+          "lib": "monaco-editor",
+          "version": "0.50.0",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs/loader.js"],
+          "cdn_css": [],
+          "bundle_kb": 1500,
+          "use_when": "IDE كامل في المتصفح (VS Code core). IntelliSense + multi-cursor.",
+          "dom_anchor_hint": "<div id=\"monaco_TPL\" style=\"height:500px;width:100%\"></div>",
+          "init_snippet": "require.config({ paths:{ vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs' } }); require(['vs/editor/editor.main'], function(){ window.editor = monaco.editor.create(document.getElementById('monaco_TPL'), { value:'// اكتب كودك هنا', language:'javascript', theme:'vs-dark', automaticLayout:true, minimap:{ enabled:true } }); });"
+        },
+        "experimental": {
+          "lib": "ace",
+          "version": "1.32.7",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/ace-builds@1.32.7/src-min-noconflict/ace.js"],
+          "cdn_css": [],
+          "bundle_kb": 320,
+          "use_when": "حل وسط: أخف من Monaco، أغنى من CodeMirror. مستخدم في Cloud9.",
+          "dom_anchor_hint": "<div id=\"ace_TPL\" style=\"height:400px\"></div>",
+          "init_snippet": "const editor = ace.edit('ace_TPL'); editor.setTheme('ace/theme/monokai'); editor.session.setMode('ace/mode/javascript'); editor.setValue('// اكتب كودك هنا', -1);"
+        }
+      }
+    },
+    "tables": {
+      "ar_label": "جداول بيانات",
+      "keywords": ["table", "datagrid", "جدول", "spreadsheet", "صفوف كثيرة", "fixed header", "sort filter"],
+      "variants": {
+        "primary": {
+          "lib": "tabulator",
+          "version": "6.2.5",
+          "cdn_js": ["https://unpkg.com/tabulator-tables@6.2.5/dist/js/tabulator.min.js"],
+          "cdn_css": ["https://unpkg.com/tabulator-tables@6.2.5/dist/css/tabulator.min.css"],
+          "bundle_kb": 220,
+          "use_when": "جدول vanilla JS بميزات كاملة (sort, filter, pagination, export Excel).",
+          "dom_anchor_hint": "<div id=\"table_TPL\"></div>",
+          "init_snippet": "const table = new Tabulator('#table_TPL', { data:[{id:1,name:'منتج أ',price:50},{id:2,name:'منتج ب',price:30}], layout:'fitColumns', pagination:'local', paginationSize:10, columns:[ {title:'#',field:'id',sorter:'number',width:80}, {title:'الاسم',field:'name',editor:'input'}, {title:'السعر',field:'price',sorter:'number',formatter:'money',formatterParams:{symbol:'ر.س '}} ] });"
+        },
+        "alternative": {
+          "lib": "ag-grid-community",
+          "version": "31.3.2",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/ag-grid-community@31.3.2/dist/ag-grid-community.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 1100,
+          "use_when": "أقوى جدول enterprise. virtualization لـ 100K صف. tree data، pivots.",
+          "dom_anchor_hint": "<div id=\"ag_TPL\" class=\"ag-theme-alpine\" style=\"height:500px;width:100%\"></div>",
+          "init_snippet": "const gridOptions = { rowData:[{id:1,name:'أ',price:50}], columnDefs:[{field:'id'},{field:'name'},{field:'price'}], pagination:true }; new agGrid.createGrid(document.getElementById('ag_TPL'), gridOptions);"
+        },
+        "experimental": {
+          "lib": "gridjs",
+          "version": "6.2.0",
+          "cdn_js": ["https://unpkg.com/gridjs@6.2.0/dist/gridjs.umd.js"],
+          "cdn_css": ["https://unpkg.com/gridjs@6.2.0/dist/theme/mermaid.min.css"],
+          "bundle_kb": 90,
+          "use_when": "خفيف جداً. مناسب لصفحات لا تحتاج إعدادات معقدة.",
+          "dom_anchor_hint": "<div id=\"gridjs_TPL\"></div>",
+          "init_snippet": "new gridjs.Grid({ columns:['#','الاسم','السعر'], data:[[1,'منتج أ',50],[2,'منتج ب',30]], search:true, sort:true, pagination:{ limit:10 } }).render(document.getElementById('gridjs_TPL'));"
+        }
+      }
+    },
+    "calendar": {
+      "ar_label": "تقويم وحجز مواعيد",
+      "keywords": ["calendar", "تقويم", "حجز", "booking", "appointment", "schedule", "calendly", "events"],
+      "variants": {
+        "primary": {
+          "lib": "fullcalendar",
+          "version": "6.1.15",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 290,
+          "use_when": "تقويم بميزات كاملة (drag-drop، recurring، multi-view). معيار صناعي.",
+          "dom_anchor_hint": "<div id=\"cal_TPL\"></div>",
+          "init_snippet": "const cal = new FullCalendar.Calendar(document.getElementById('cal_TPL'), { initialView:'dayGridMonth', locale:'ar', direction:'rtl', headerToolbar:{ start:'prev,next today', center:'title', end:'dayGridMonth,timeGridWeek,timeGridDay' }, events:[{ title:'موعد العميل أحمد', start:'2026-07-15T10:00:00' }], selectable:true, select:info=>{ const t = prompt('عنوان الحدث؟'); if(t) cal.addEvent({ title:t, start:info.start, end:info.end }); } }); cal.render();"
+        },
+        "alternative": {
+          "lib": "tui-calendar",
+          "version": "2.1.3",
+          "cdn_js": ["https://uicdn.toast.com/calendar/latest/toastui-calendar.min.js"],
+          "cdn_css": ["https://uicdn.toast.com/calendar/latest/toastui-calendar.min.css"],
+          "bundle_kb": 380,
+          "use_when": "Outlook-style. ميزة timeline أحسن لإدارة الفريق.",
+          "dom_anchor_hint": "<div id=\"tui_TPL\" style=\"height:600px\"></div>",
+          "init_snippet": "const cal = new tui.Calendar('#tui_TPL', { defaultView:'week', useFormPopup:true, useDetailPopup:true });"
+        },
+        "experimental": {
+          "lib": "rrule",
+          "version": "2.8.1",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/rrule@2.8.1/dist/es5/rrule.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 35,
+          "use_when": "مساعد للأحداث المتكررة (RFC 5545). استخدم مع FullCalendar.",
+          "dom_anchor_hint": "بدون عنصر مرئي",
+          "init_snippet": "const rule = new rrule.RRule({ freq:rrule.RRule.WEEKLY, byweekday:[rrule.RRule.MO, rrule.RRule.WE], dtstart:new Date(2026,6,1), until:new Date(2026,11,31) }); const dates = rule.all();"
+        }
+      }
+    },
+    "forms": {
+      "ar_label": "نماذج معقدة شرطية",
+      "keywords": ["form", "نموذج", "wizard", "multi-step", "conditional", "ضرائب", "تأمين", "schema"],
+      "variants": {
+        "primary": {
+          "lib": "alpinejs",
+          "version": "3.14.0",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/alpinejs@3.14.0/dist/cdn.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 14,
+          "use_when": "نماذج تفاعلية بسيطة شرطية (show/hide حقول). أخف من React.",
+          "dom_anchor_hint": "x-data attributes",
+          "init_snippet": "<form x-data=\"{ step:1, type:'فرد' }\">\n  <select x-model=\"type\"><option>فرد</option><option>شركة</option></select>\n  <input x-show=\"type==='شركة'\" placeholder=\"رقم السجل التجاري\">\n  <button @click.prevent=\"step++\">التالي ({{ step }})</button>\n</form>"
+        },
+        "alternative": {
+          "lib": "survey-jquery",
+          "version": "1.10.6",
+          "cdn_js": [
+            "https://code.jquery.com/jquery-3.7.1.min.js",
+            "https://unpkg.com/survey-jquery@1.10.6/survey.jquery.min.js"
+          ],
+          "cdn_css": ["https://unpkg.com/survey-core@1.10.6/defaultV2.min.css"],
+          "bundle_kb": 380,
+          "use_when": "استبيانات/نماذج كبيرة JSON-driven مع شروط متشعبة.",
+          "dom_anchor_hint": "<div id=\"survey_TPL\"></div>",
+          "init_snippet": "const survey = new Survey.Model({ pages:[{ name:'page1', elements:[{ type:'text', name:'name', title:'الاسم' },{ type:'radiogroup', name:'kind', choices:['فرد','شركة'] },{ type:'text', name:'cr', title:'رقم السجل', visibleIf:'{kind}=\"شركة\"' }] }] }); $('#survey_TPL').Survey({ model:survey, onComplete:r=>console.log(r.data) });"
+        },
+        "experimental": {
+          "lib": "json-editor",
+          "version": "2.15.1",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/@json-editor/json-editor@2.15.1/dist/jsoneditor.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 220,
+          "use_when": "نموذج كامل من JSON Schema (مفيد للضرائب/تأمين معقد).",
+          "dom_anchor_hint": "<div id=\"je_TPL\"></div>",
+          "init_snippet": "const editor = new JSONEditor(document.getElementById('je_TPL'), { schema:{ type:'object', properties:{ name:{type:'string',title:'الاسم'}, amount:{type:'number',title:'المبلغ'} } } });"
+        }
+      }
+    },
+    "checkout": {
+      "ar_label": "دفع بدون backend",
+      "keywords": ["checkout", "payment", "دفع", "stripe", "cart", "تسوق", "متجر", "ecommerce"],
+      "variants": {
+        "primary": {
+          "lib": "snipcart",
+          "version": "3.7.1",
+          "cdn_js": ["https://cdn.snipcart.com/themes/v3.7.1/default/snipcart.js"],
+          "cdn_css": ["https://cdn.snipcart.com/themes/v3.7.1/default/snipcart.css"],
+          "bundle_kb": 380,
+          "use_when": "Stripe checkout بدون backend. add-to-cart عبر attributes فقط.",
+          "dom_anchor_hint": "<div hidden id=\"snipcart\" data-api-key=\"YOUR_PUBLIC_KEY\"></div>",
+          "init_snippet": "<!-- في كل button: -->\n<button class=\"snipcart-add-item\" data-item-id=\"p1\" data-item-name=\"موز عضوي\" data-item-price=\"12.50\" data-item-url=\"/products.html\" data-item-image=\"/img/banana.jpg\">أضف للسلة</button>",
+          "free_tier_note": "Snipcart مجاني للاختبار، 2% commission + $20/شهر للإنتاج"
+        },
+        "alternative": {
+          "lib": "stripe-pricing-table",
+          "version": "v3",
+          "cdn_js": ["https://js.stripe.com/v3/pricing-table.js"],
+          "cdn_css": [],
+          "bundle_kb": 50,
+          "use_when": "اشتراكات شهرية فقط (SaaS). جدول أسعار من Stripe Dashboard مباشرة.",
+          "dom_anchor_hint": "<stripe-pricing-table></stripe-pricing-table>",
+          "init_snippet": "<stripe-pricing-table pricing-table-id=\"YOUR_TABLE_ID\" publishable-key=\"pk_live_...\"></stripe-pricing-table>",
+          "free_tier_note": "مفتاح Stripe من العميل، 2.9%+30¢ لكل عملية"
+        },
+        "experimental": {
+          "lib": "lemonsqueezy",
+          "version": "0.6",
+          "cdn_js": ["https://app.lemonsqueezy.com/js/lemon.js"],
+          "cdn_css": [],
+          "bundle_kb": 35,
+          "use_when": "Merchant of Record يتولى الضرائب VAT/زكاة عالمياً. مناسب للسعودية.",
+          "dom_anchor_hint": "<a class=\"lemonsqueezy-button\" href=\"...\">",
+          "init_snippet": "<a class=\"lemonsqueezy-button\" href=\"https://YOUR_STORE.lemonsqueezy.com/checkout/buy/PRODUCT_ID\">اشترِ الآن</a>\n<script>window.createLemonSqueezy();</script>",
+          "free_tier_note": "5% + 50¢ per transaction، لكنه يعفيك من VAT registration"
+        }
+      }
+    },
+    "wallet_web3": {
+      "ar_label": "محفظة Web3",
+      "keywords": ["web3", "wallet", "crypto", "محفظة", "blockchain", "nft", "metamask", "ethereum"],
+      "variants": {
+        "primary": {
+          "lib": "ethers",
+          "version": "6.13.1",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.umd.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 130,
+          "use_when": "تكامل أساسي مع MetaMask و wallets. للقراءة من smart contracts.",
+          "dom_anchor_hint": "<button id=\"connect_TPL\">اتصل بالمحفظة</button>",
+          "init_snippet": "document.getElementById('connect_TPL').onclick = async () => { if(!window.ethereum) return alert('ثبّت MetaMask'); const provider = new ethers.BrowserProvider(window.ethereum); const signer = await provider.getSigner(); const addr = await signer.getAddress(); document.getElementById('connect_TPL').textContent = addr.slice(0,6)+'...'+addr.slice(-4); };"
+        },
+        "alternative": {
+          "lib": "web3modal",
+          "version": "1.9.12",
+          "cdn_js": ["https://unpkg.com/web3modal@1.9.12/dist/index.js"],
+          "cdn_css": [],
+          "bundle_kb": 280,
+          "use_when": "UI جاهز لاختيار wallet من 10+ خيارات (WalletConnect, Coinbase).",
+          "dom_anchor_hint": "<button id=\"connect_TPL\">اتصل</button>",
+          "init_snippet": "const Web3Modal = window.Web3Modal.default; const w3m = new Web3Modal({ network:'mainnet', cacheProvider:true }); document.getElementById('connect_TPL').onclick = async () => { const provider = await w3m.connect(); };"
+        },
+        "experimental": {
+          "lib": "thirdweb",
+          "version": "5.50.0",
+          "cdn_js": ["https://unpkg.com/thirdweb@5.50.0/dist/thirdweb.umd.js"],
+          "cdn_css": [],
+          "bundle_kb": 420,
+          "use_when": "Full-stack web3 (NFT mint، marketplace، embed wallet للمبتدئين).",
+          "dom_anchor_hint": "<div id=\"tw_TPL\"></div>",
+          "init_snippet": "// thirdweb يحتاج clientId من dashboard - راجع وثائق thirdweb.com"
+        }
+      }
+    },
+    "video_audio": {
+      "ar_label": "فيديو وصوت",
+      "keywords": ["video", "audio", "فيديو", "صوت", "podcast", "موسيقى", "wave", "player"],
+      "variants": {
+        "primary": {
+          "lib": "video.js",
+          "version": "8.16.1",
+          "cdn_js": ["https://vjs.zencdn.net/8.16.1/video.min.js"],
+          "cdn_css": ["https://vjs.zencdn.net/8.16.1/video-js.min.css"],
+          "bundle_kb": 280,
+          "use_when": "مشغل فيديو احترافي (HLS, DASH, captions, subtitles).",
+          "dom_anchor_hint": "<video id=\"vid_TPL\" class=\"video-js\" controls preload=\"auto\"></video>",
+          "init_snippet": "const player = videojs('vid_TPL', { sources:[{ src:'YOUR_VIDEO.m3u8', type:'application/x-mpegURL' }], controls:true, fluid:true });"
+        },
+        "alternative": {
+          "lib": "wavesurfer.js",
+          "version": "7.8.2",
+          "cdn_js": ["https://unpkg.com/wavesurfer.js@7.8.2/dist/wavesurfer.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 140,
+          "use_when": "عرض waveform للصوت (podcast، music، voice notes).",
+          "dom_anchor_hint": "<div id=\"wave_TPL\"></div>",
+          "init_snippet": "const ws = WaveSurfer.create({ container:'#wave_TPL', waveColor:'#0ea5e9', progressColor:'#0c4a6e', url:'YOUR_AUDIO.mp3' }); ws.on('ready', ()=>console.log('جاهز')); document.getElementById('play_TPL')?.addEventListener('click', ()=>ws.playPause());"
+        },
+        "experimental": {
+          "lib": "ffmpeg-wasm",
+          "version": "0.12.10",
+          "cdn_js": ["https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"],
+          "cdn_css": [],
+          "bundle_kb": 600,
+          "use_when": "تحرير فيديو/صوت في المتصفح (قص، دمج، تحويل صيغ). يحتاج Web Worker.",
+          "dom_anchor_hint": "بدون عنصر مرئي",
+          "init_snippet": "const { FFmpeg } = window.FFmpegWASM; const ffmpeg = new FFmpeg(); await ffmpeg.load(); await ffmpeg.writeFile('in.mp4', await fetchFile('input.mp4')); await ffmpeg.exec(['-i','in.mp4','-t','10','out.mp4']); const data = await ffmpeg.readFile('out.mp4');"
+        }
+      }
+    },
+    "search": {
+      "ar_label": "بحث ذكي",
+      "keywords": ["search", "بحث", "filter", "instant", "fuzzy", "algolia", "elasticsearch"],
+      "variants": {
+        "primary": {
+          "lib": "fuse.js",
+          "version": "7.0.0",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 17,
+          "use_when": "بحث fuzzy محلي على JSON. أفضل خيار لقوائم < 10K عنصر.",
+          "dom_anchor_hint": "<input id=\"q_TPL\" placeholder=\"بحث...\">",
+          "init_snippet": "const items = [{ name:'موز', price:5 }, { name:'تفاح', price:8 }]; const fuse = new Fuse(items, { keys:['name'], threshold:0.3 }); document.getElementById('q_TPL').addEventListener('input', e=>{ const results = fuse.search(e.target.value); console.log(results); });"
+        },
+        "alternative": {
+          "lib": "minisearch",
+          "version": "7.1.0",
+          "cdn_js": ["https://cdn.jsdelivr.net/npm/minisearch@7.1.0/dist/umd/index.min.js"],
+          "cdn_css": [],
+          "bundle_kb": 25,
+          "use_when": "Full-text search مع prefix matching + ranking. أسرع من Fuse للقوائم الكبيرة.",
+          "dom_anchor_hint": "<input id=\"q_TPL\">",
+          "init_snippet": "const ms = new MiniSearch({ fields:['name','description'], storeFields:['name','price'] }); ms.addAll([{ id:1, name:'موز', description:'فاكهة طازجة', price:5 }]); const results = ms.search('موز', { prefix:true, fuzzy:0.2 });"
+        },
+        "experimental": {
+          "lib": "instantsearch.js",
+          "version": "4.73.4",
+          "cdn_js": [
+            "https://cdn.jsdelivr.net/npm/algoliasearch@5.0.0/dist/algoliasearch-lite.umd.js",
+            "https://cdn.jsdelivr.net/npm/instantsearch.js@4.73.4/dist/instantsearch.production.min.js"
+          ],
+          "cdn_css": ["https://cdn.jsdelivr.net/npm/instantsearch.css@8.4.0/themes/satellite-min.css"],
+          "bundle_kb": 180,
+          "use_when": "بحث instant عالمي مع facets، typo tolerance، analytics (Algolia).",
+          "dom_anchor_hint": "<div id=\"searchbox_TPL\"></div><div id=\"hits_TPL\"></div>",
+          "init_snippet": "const search = instantsearch({ indexName:'products', searchClient:algoliasearch('YOUR_APP_ID','YOUR_SEARCH_KEY') }); search.addWidgets([ instantsearch.widgets.searchBox({ container:'#searchbox_TPL' }), instantsearch.widgets.hits({ container:'#hits_TPL' }) ]); search.start();",
+          "free_tier_note": "Algolia: 10K records + 10K searches/شهر مجاني"
+        }
+      }
+    },
+    "llm_proxy": {
+      "ar_label": "بروكسي LLM آمن",
+      "keywords": ["llm proxy", "openai proxy", "chatgpt", "ai chat", "بروكسي ذكاء", "ai assistant"],
+      "variants": {
+        "primary": {
+          "lib": "cloudflare-workers-pattern",
+          "version": "n/a",
+          "cdn_js": [],
+          "cdn_css": [],
+          "bundle_kb": 0,
+          "use_when": "خوادم proxy على Cloudflare Workers لإخفاء مفتاح OpenAI/Anthropic.",
+          "dom_anchor_hint": "بدون عنصر مرئي",
+          "init_snippet": "// Frontend: const r = await fetch('https://YOUR_WORKER.workers.dev/chat', { method:'POST', body:JSON.stringify({ messages:[{role:'user',content:input}] }) }); const { reply } = await r.json();\n// Worker (Cloudflare):\n// export default { async fetch(req, env){ const body = await req.json(); const r = await fetch('https://api.openai.com/v1/chat/completions', { method:'POST', headers:{ 'Authorization':'Bearer '+env.OPENAI_KEY, 'Content-Type':'application/json' }, body:JSON.stringify({ model:'gpt-4o-mini', messages:body.messages }) }); const d = await r.json(); return new Response(JSON.stringify({ reply: d.choices[0].message.content }), { headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'} }); } }",
+          "free_tier_note": "Cloudflare Workers: 100K طلب/يوم مجاني"
+        },
+        "alternative": {
+          "lib": "vercel-ai-sdk-pattern",
+          "version": "3.4.0",
+          "cdn_js": [],
+          "cdn_css": [],
+          "bundle_kb": 0,
+          "use_when": "Vercel Edge Functions مع streaming SSE. يحتاج Vercel deployment.",
+          "dom_anchor_hint": "بدون عنصر مرئي",
+          "init_snippet": "// api/chat.js (Vercel Edge): export const runtime='edge'; export default async function(req){ const { messages } = await req.json(); const r = await fetch('https://api.openai.com/v1/chat/completions', { method:'POST', headers:{ 'Authorization':`Bearer ${process.env.OPENAI_KEY}`, 'Content-Type':'application/json' }, body:JSON.stringify({ model:'gpt-4o-mini', stream:true, messages }) }); return new Response(r.body, { headers:{'Content-Type':'text/event-stream'} }); }",
+          "free_tier_note": "Vercel Hobby: 100GB bandwidth + 100K invocations مجاني"
+        },
+        "experimental": {
+          "lib": "browser-only-byok",
+          "version": "n/a",
+          "cdn_js": [],
+          "cdn_css": [],
+          "bundle_kb": 0,
+          "use_when": "العميل النهائي يلصق مفتاحه الخاص. لا يوجد proxy. لمنتجات أدوات developer.",
+          "dom_anchor_hint": "<input id=\"apikey_TPL\" type=\"password\" placeholder=\"OpenAI API Key\">",
+          "init_snippet": "const key = localStorage.getItem('user_openai_key'); if(!key) { /* prompt user to enter */ } async function chat(msg){ const r = await fetch('https://api.openai.com/v1/chat/completions',{ method:'POST', headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'}, body:JSON.stringify({ model:'gpt-4o-mini', messages:[{role:'user',content:msg}] }) }); return (await r.json()).choices[0].message.content; }"
+        }
+      }
+    }
+  }
+}

@@ -2,6 +2,67 @@
 
 
 
+### 📚 Feb 27, 2026 — Iteration 73: Capability Atlas (Library Registry + inject_library)
+
+**Owner directive (Saudi Arabic):** "أبدا نحط له مكاتب يستردها — لا نقفل الأشياء الصعبة، نعلمه يحلها. أنت كذكاء صناعي، شنو الأفضل؟". I answered: hybrid Library Registry (45 vetted libs, 15 categories) > pure-search or fixed-injection. User said "implement everything in 3 hours, then tell me when done".
+
+**Delivered in 1 session:**
+
+1. **`/app/backend/data/library_registry.json`** — 15 categories × 3 variants (primary/alternative/experimental) = 45 vetted CDN libraries with: lib, version, cdn_js[], cdn_css[], bundle_kb, use_when (Arabic), dom_anchor_hint, init_snippet (boilerplate), free_tier_note. Covers charts, maps, realtime, animation, 3d, canvas_editor, code_editor, tables, calendar, forms, checkout, wallet_web3, video_audio, search, llm_proxy.
+
+2. **`/app/backend/modules/freebuild/library_registry.py`** (~420 lines):
+   - `LIBRARY_REGISTRY` — loaded JSON, mtime-cached.
+   - `library_summary_for_prompt(max_chars=2400)` — compact Arabic atlas embedded in **every** system prompt via `get_system_prompt`. Cost: ~1.6KB of tokens, zero extra LLM calls.
+   - `inject_library(ctx, args)` — surgical tool: inserts `<link>` in `<head>`, `<script defer>` at `</body>`, optional init snippet at anchor or before `</body>`. Idempotent (checks for `data-zenrex-lib="..."` markers). Replaces literal `TPL` placeholder with caller-provided `template_id`. Tracks injects in `library_usage_stats` MongoDB collection.
+   - `record_library_usage(db, project_id, lib_name, ...)` — for Tavily-discovered libs: after 3 successful uses → queued in `library_promotion_queue` for owner approval → auto-promotes to `experimental` tier.
+   - `LIBRARY_TOOL_SCHEMA` — Anthropic-tool spec with category/variant/page/anchor_selector/template_id/skip_init_snippet inputs.
+
+3. **Wiring in `freebuild_agent.py`**:
+   - Import block adds `LIBRARY_TOOL_SCHEMA, inject_library, library_summary_for_prompt`.
+   - `TOOLS_SCHEMA.append(LIBRARY_TOOL_SCHEMA)`.
+   - `LIBRARY_REGISTRY_TOOL_NAMES = {"inject_library"}` exported for tool-name routing.
+   - Dispatch branch in `_exec_tool_async`: `if name in LIBRARY_REGISTRY_TOOL_NAMES: return await _inject_library(ctx, args)`.
+   - Async sentinel: name added to the giant tool-routing tuple at line ~3853.
+   - UI label: `TOOL_LABELS_AR["inject_library"] = { "running": "📚 يحقن مكتبة معتمدة...", "done": "✅ المكتبة جاهزة" }`.
+   - **Atlas injection**: at the bottom of `get_system_prompt`, the registry summary is appended between `══════` rules so the AI sees the atlas in **every** turn.
+
+4. **Admin endpoints in `lessons_admin.py`**:
+   - `GET /api/admin/lessons/library-registry` → full registry JSON (for future admin UI).
+   - `GET /api/admin/lessons/library-usage` → usage stats + pending promotion queue.
+
+5. **`/app/backend/tests/test_library_registry.py`** — 11 unit tests, all pass:
+   - Discovery mode (category='?')
+   - Primary variant injection (chart.js)
+   - Alternative variant (echarts)
+   - Anchor selector targeting (`#dash`)
+   - Idempotent re-injection (0 bytes added on 2nd call)
+   - Unknown category rejected
+   - Missing page rejected
+   - 3D variant with importmap
+   - Atlas summary contains all 15 categories
+   - Schema validation
+
+**Live evidence:**
+- Project `supermarket-test-42532` (id `3db3...`) → published as `supermarket-test-v3`.
+- `admin.html` now contains `chart.js@4.4.1` + `data-zenrex-lib="chart.js"` marker + init snippet for `#sales-chart`.
+- `index.html` now contains `leaflet@1.9.4` (CSS+JS) ready for use.
+- Both served correctly on the live preview URL (`/api/freebuild-chat/published-sites/supermarket-test-v3` and `/admin.html`).
+- `library_usage_stats` MongoDB collection has 2 entries (chart.js + leaflet, both `source:"registry"`).
+
+**Honesty Wrapper still catches lies:**
+- Round 1: User asked AI to inject Chart.js. AI WROTE long success message claiming `inject_library` was called. Actual DB state: 0 chart.js content. `honesty_check {verified:false, verification_tools_used:[]}` fired → escalation logged.
+- This proves the safety net works even when the AI knows about the new tool but skips calling it.
+
+**Issues found (non-blocking):**
+- **ISSUE-73-A**: Honesty Wrapper logs escalation but doesn't auto-refund when claim is tool-less (saw `auto_refunded:false, credits_charged:330` on a tool-less lie). Easy fix.
+- **ISSUE-73-B**: AI sometimes writes "I already did this in the previous turn" hallucination when context is short. Silent Supervisor nudge would help.
+- **ISSUE-73-C**: A full 12-page build_plan eats 60s of the SSE window. Plan-skip flag when user says "execute now" would help.
+
+**Test report:** `/app/test_reports/iteration_73.json` (full evidence + verdict).
+
+
+
+
 ### 🧪 Feb 27, 2026 — Iteration 72: Comprehensive E2E Autonomy Test on Supermarket Project
 
 **Owner directive (Saudi Arabic):** continue from iter71 — do exhaustive, real testing. Discover when the AI escalates to E1 (the human operator). Send hard escalations through the employee section. Document with screenshots.
