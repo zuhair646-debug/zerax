@@ -65,6 +65,26 @@ def claims_completion(text: str) -> bool:
     return False
 
 
+def is_zero_tool_lie(text: str, tool_log: List[Dict[str, Any]]) -> bool:
+    """True when the AI claimed completion AND called ZERO tools this turn.
+    This is the worst lie: pure fabrication. Should trigger an auto-refund.
+    """
+    if not claims_completion(text):
+        return False
+    # Count meaningful tool calls (excluding pure reads/no-ops)
+    if not tool_log:
+        return True
+    # Even if there are reads (read_current_html, search_html, list_pages),
+    # they don't constitute "doing the work" — they're discovery, not changes.
+    READ_ONLY = {
+        "read_current_html", "read_file", "search_html", "list_pages",
+        "list_files", "list_sections", "list_all_pages_summary",
+        "audit_html",  # audit alone w/o changes isn't doing the work
+    }
+    changes = [t for t in tool_log if (t or {}).get("name") not in READ_ONLY]
+    return len(changes) == 0
+
+
 def verification_evidence(tool_log: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Return a structured proof-of-verification report from the turn's tool log.
 
@@ -94,9 +114,23 @@ def verification_evidence(tool_log: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def build_honesty_violation_nudge(claim_excerpt: str, evidence: Dict[str, Any]) -> str:
+def build_honesty_violation_nudge(claim_excerpt: str, evidence: Dict[str, Any], zero_tool: bool = False) -> str:
     """Compose the corrective Arabic message that will be injected next turn."""
     excerpt = (claim_excerpt or "").strip()[:120]
+    if zero_tool:
+        return (
+            "🚨 **خرق صدق جسيم — Zero-Tool Lie** — قلتَ شيئاً يدل على إكمال العمل "
+            f"(«{excerpt}»…) لكنك لم تستدع **ولا أداة واحدة** في هذا الدور.\n\n"
+            "**هذا أسوأ نوع كذب** — اختلاق محض. الإجراءات المتخذة:\n"
+            "  • 🔁 **استرداد كامل للرصيد** (auto_refunded=true) — العميل لن يدفع.\n"
+            "  • 📋 سُجّل ضدك في `ai_escalations` كـ honesty_violation.\n"
+            "  • 🧠 الدرس مُسجّل في الذاكرة الدائمة عبر RAG.\n\n"
+            "**القاعدة المطلقة:** قبل ما تقول «خلصت / جاهز / تم»، **يجب** تستدعي على الأقل:\n"
+            "  1. أداة تغيير حقيقية (`insert_html_at`, `inject_library`, `apply_section`, `write_full_html`, "
+            "`batch_replace_in_pages`, ...)\n"
+            "  2. ثم أداة تحقق (`audit_html`, `validate_html`, `test_page`, `verify_my_work`, `search_html`).\n\n"
+            "في الدور القادم: **ابدأ بالأداة. لا تكتب نص ادعاء حتى تستدعي على الأقل tool واحدة.**"
+        )
     return (
         "🛡️ **فحص الصدق (Honesty Check)** — قلتَ شيئاً يدل على إكمال العمل "
         f"(«{excerpt}»…) لكنك لم تستدعِ **أي أداة تحقق فعلية في هذا الدور**.\n\n"

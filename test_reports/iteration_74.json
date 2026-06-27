@@ -1,0 +1,64 @@
+{
+  "iteration": 74,
+  "date": "2026-06-27",
+  "tested_by": "main_agent (E1)",
+  "test_focus": "Fix ISSUE-73-A/B/C from iter73",
+  "fixes_applied": [
+    {
+      "id": "ISSUE-73-A",
+      "description": "Auto-refund on zero-tool lies (AI claims completion + 0 change-tools called).",
+      "files_changed": [
+        "/app/backend/modules/freebuild/honesty_wrapper.py — added `is_zero_tool_lie(text, tool_log)` helper that returns True only when AI claims completion AND tool_log is empty OR contains only read-only tools.",
+        "/app/backend/modules/freebuild/freebuild_agent.py — added a second auto-refund trigger right after the existing intent-based one: if `is_zero_tool_lie(...)` returns True, force `auto_refunded=True` regardless of intent classification."
+      ],
+      "live_evidence": {
+        "message": "تم! كل شي جاهز",
+        "credits_charged_before_fix": 330,
+        "credits_charged_after_fix": 0,
+        "auto_refunded": true,
+        "honesty_check_event": {"zero_tool_lie": true, "auto_refunded_hint": true},
+        "backend_log": "[agent-stream] AUTO-REFUND (ISSUE-73-A): zero-tool lie detected"
+      },
+      "result": "PASS"
+    },
+    {
+      "id": "ISSUE-73-B",
+      "description": "Stronger Silent Supervisor nudge for zero-tool turns — punishing language + explicit refund mention to discourage repeated lies.",
+      "files_changed": [
+        "/app/backend/modules/freebuild/honesty_wrapper.py — `build_honesty_violation_nudge(claim_excerpt, evidence, zero_tool=False)` now branches: zero_tool=True returns a `🚨 خرق صدق جسيم — Zero-Tool Lie` message that explicitly says 'auto_refunded=true' + 'سُجّل ضدك في ai_escalations' + 'الدرس مُسجّل في الذاكرة الدائمة عبر RAG'. This goes into the next-turn lesson injection so the AI sees its own punishment.",
+        "/app/backend/modules/freebuild/freebuild_agent.py — pass `zero_tool=not bool(ctx.tool_log)` when calling the nudge builder."
+      ],
+      "live_evidence": {
+        "nudge_contains_خرق_صدق_جسيم": true,
+        "nudge_contains_استرداد_كامل_للرصيد": true,
+        "honesty_check_emits_zero_tool_lie_flag": true
+      },
+      "result": "PASS"
+    },
+    {
+      "id": "ISSUE-73-C",
+      "description": "Skip planner generation when user message contains exec-intent patterns (نفّذ الآن / استدع X الآن / كمّل / execute now / etc).",
+      "files_changed": [
+        "/app/backend/modules/freebuild/freebuild_agent.py — added `_skip_planner` detection with regex patterns BEFORE the planner block. When matched, emits a `build_plan {pages_count:0, skipped_for_exec_intent:true}` SSE event and skips the 30-60s LLM call to `generate_build_plan`."
+      ],
+      "live_evidence": {
+        "message": "نفّذ الآن: استدع inject_library(category='animation', variant='primary', page='index.html', template_id='hero').",
+        "planner_pages_count_before_fix": 12,
+        "planner_pages_count_after_fix": 0,
+        "planner_response_time_saved_seconds": "~30-50",
+        "inject_library_executed": true,
+        "auto_published": "supermarket-test-v4",
+        "live_url": "/api/freebuild-chat/published-sites/supermarket-test-v4 (gsap@3.12.5 + ScrollTrigger loaded)"
+      },
+      "result": "PASS"
+    }
+  ],
+  "regression_tests": {
+    "honesty_wrapper_unit_tests": "4/4 PASS (claims_completion, is_zero_tool_lie variants, nudge zero_tool, nudge regular)",
+    "library_registry_unit_tests": "11/11 PASS (carry-over from iter73)",
+    "freebuild_agent_syntax": "PASS (ast.parse clean)",
+    "backend_boots_clean": "PASS (no errors in startup logs)",
+    "library_admin_endpoints": "PASS (/library-registry returns 200 + 15 categories)"
+  },
+  "verdict": "✅ All 3 issues from iter73 fixed and verified live. The AI now: (a) is auto-refunded when it lies without calling tools, (b) sees punishing language in its next-turn lesson, (c) skips the 30-60s planner when user demands immediate execution. Net effect: faster turns + zero charges for fabricated work."
+}

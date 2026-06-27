@@ -9919,34 +9919,67 @@ async def _stream_one_provider(
     # ═══════════════════════════════════════════════════════════════════
     # 🧠 AI #2.1 — Planner pass (only on new builds / major requests)
     # ═══════════════════════════════════════════════════════════════════
+    # 🆕 ISSUE-73-C FIX: skip planner when user clearly wants execution NOW
+    # (e.g. "نفّذ الآن", "استدع X الآن", "ابدأ التنفيذ", "execute now").
+    # The planner can eat 30-60s of the SSE window on complex projects.
+    _skip_planner = False
     try:
-        from .planner import generate_build_plan, render_plan_summary
-        _plan = await generate_build_plan(
-            user_message=user_message,
-            project_name=project.get("name") or "",
-            project_id=project.get("id") or "",
-            current_html=ctx.current_html or "",
-            pages_existing=list((ctx.pages or {}).keys()),
-        )
-        if _plan:
-            try:
-                ctx.build_plan = _plan
-            except Exception:
-                pass
-            logger.info(f"[planner] {render_plan_summary(_plan)}")
+        import re as _re_plan
+        _exec_intent_patterns = [
+            r"نفّذ\s*الآن", r"نفذ\s*الآن", r"ابدأ\s*التنفيذ", r"ابدا\s*التنفيذ",
+            r"استدع\s+(?:\w+\s+)?الآن", r"استدعِ\s+(?:\w+\s+)?الآن",
+            r"كمّل(?:\s+الخطة)?", r"كمل\s+الخطة",
+            r"execute\s+now", r"do\s+it\s+now", r"call\s+the\s+tool",
+            r"تجاهل\s+أي\s+ادعاء", r"بدون\s+خطة", r"skip\s+(?:the\s+)?plan",
+            r"^أمر\s+مباشر", r"الآن\s*[:：]",
+            # tool-name patterns indicate the user already knows what to do
+            r"insert_html_at|inject_library|apply_section|write_full_html|batch_replace_in_pages",
+        ]
+        for pat in _exec_intent_patterns:
+            if _re_plan.search(pat, user_message or "", _re_plan.IGNORECASE):
+                _skip_planner = True
+                logger.info(f"[planner] SKIPPED — exec-intent pattern matched: {pat}")
+                break
+    except Exception:
+        pass
+    if _skip_planner:
+        try:
             yield _sse("build_plan", {
-                "summary": _plan.get("summary"),
-                "pages_count": len(_plan.get("pages") or []),
-                "phases": _plan.get("phases") or [],
-                "suggestions": _plan.get("suggestions") or [],
-                "risks": _plan.get("risks") or [],
-                "integrations": _plan.get("integrations") or [],
-                "design_hints": _plan.get("design_hints") or {},
-                "from_cache": _plan.get("from_cache", False),
-                "fallback": _plan.get("fallback", False),
+                "summary": "⚡ تخطّيت مرحلة التخطيط — المستخدم طلب تنفيذاً مباشراً.",
+                "pages_count": 0, "phases": [], "from_cache": False,
+                "fallback": False, "skipped_for_exec_intent": True,
             })
-    except Exception as _pe:
-        logger.warning(f"[planner] skipped: {_pe}")
+        except Exception:
+            pass
+    if not _skip_planner:
+        try:
+            from .planner import generate_build_plan, render_plan_summary
+            _plan = await generate_build_plan(
+                user_message=user_message,
+                project_name=project.get("name") or "",
+                project_id=project.get("id") or "",
+                current_html=ctx.current_html or "",
+                pages_existing=list((ctx.pages or {}).keys()),
+            )
+            if _plan:
+                try:
+                    ctx.build_plan = _plan
+                except Exception:
+                    pass
+                logger.info(f"[planner] {render_plan_summary(_plan)}")
+                yield _sse("build_plan", {
+                    "summary": _plan.get("summary"),
+                    "pages_count": len(_plan.get("pages") or []),
+                    "phases": _plan.get("phases") or [],
+                    "suggestions": _plan.get("suggestions") or [],
+                    "risks": _plan.get("risks") or [],
+                    "integrations": _plan.get("integrations") or [],
+                    "design_hints": _plan.get("design_hints") or {},
+                    "from_cache": _plan.get("from_cache", False),
+                    "fallback": _plan.get("fallback", False),
+                })
+        except Exception as _pe:
+            logger.warning(f"[planner] skipped: {_pe}")
 
     template_note = ""
     cat_id = project.get("category_id")
@@ -11023,6 +11056,23 @@ async def _stream_one_provider(
             )
     except Exception as _re:
         logger.warning(f"[agent-stream] auto-refund check failed: {_re}")
+
+    # 🆕 ISSUE-73-A FIX: Auto-refund on ZERO-TOOL LIE.
+    # If the AI claimed completion but called ZERO change-tools this turn,
+    # that's pure fabrication — refund unconditionally, regardless of intent.
+    if not auto_refunded:
+        try:
+            from .honesty_wrapper import is_zero_tool_lie
+            _ft_lie = "\n".join(all_text_chunks or [])
+            if is_zero_tool_lie(_ft_lie, ctx.tool_log or []):
+                auto_refunded = True
+                logger.warning(
+                    f"[agent-stream] AUTO-REFUND (ISSUE-73-A): zero-tool lie "
+                    f"detected — claimed completion with no change-tools called. "
+                    f"project={ctx.project_id}"
+                )
+        except Exception as _ze:
+            logger.debug(f"[agent-stream] zero-tool-lie check failed: {_ze}")
     try:
         if db is not None and not auto_refunded:
             effective_in = turn_tokens_in or 0
@@ -11132,7 +11182,7 @@ async def _stream_one_provider(
                     if idx >= 0:
                         _excerpt = _final_text[max(0, idx - 30):idx + 80]
                         break
-                _nudge = build_honesty_violation_nudge(_excerpt, _ev)
+                _nudge = build_honesty_violation_nudge(_excerpt, _ev, zero_tool=not bool(ctx.tool_log))
                 # Persist as a learned lesson so next session carries it.
                 try:
                     from .silent_supervisor import persist_lesson
@@ -11152,6 +11202,8 @@ async def _stream_one_provider(
                     "verified": False,
                     "claim_excerpt": _excerpt,
                     "verification_tools_used": [],
+                    "zero_tool_lie": True if not (ctx.tool_log or []) else False,
+                    "auto_refunded_hint": True if not (ctx.tool_log or []) else False,
                 })
             else:
                 yield _sse("honesty_check", {
