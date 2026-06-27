@@ -241,6 +241,83 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             "required": ["integration_id"],
         },
     },
+    {
+        "name": "generate_nextjs_project",
+        "description": "Generate a complete Next.js 15 (App Router) project with TypeScript + Tailwind from a brief. Use for SaaS apps, dashboards, multi-page React apps. Returns file tree {path: content}.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "brief": {"type": "string", "description": "Project description"},
+                "brand_dna": {"type": "object", "description": "Optional brand palette/tone from extract_brand_dna"},
+                "architecture": {"type": "object", "description": "Optional architecture blueprint from run_architect"},
+            },
+            "required": ["brief"],
+        },
+    },
+    {
+        "name": "build_capacitor_app",
+        "description": "Wrap an existing web app as a native Android/iOS app via Capacitor. Returns capacitor.config.ts + package.json + Arabic build instructions for user to run locally (we cannot build .apk/.ipa server-side without Android Studio/Xcode).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "app_id": {"type": "string", "description": "Reverse-DNS bundle id, e.g. com.zenrex.myapp"},
+                "app_name": {"type": "string"},
+                "web_dir": {"type": "string", "default": "dist"},
+            },
+            "required": ["app_id", "app_name"],
+        },
+    },
+    {
+        "name": "recommend_state_management",
+        "description": "Pick the right React state management strategy (useState / useReducer / Zustand / TanStack Query / Jotai) for a use-case. Optionally returns ready-paste Zustand store snippet.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "use_case": {"type": "string", "description": "Describe what state needs to be managed"},
+                "store_name": {"type": "string", "description": "Optional store name to generate Zustand snippet"},
+                "state_keys": {"type": "array", "items": {"type": "string"}, "description": "Optional keys for the Zustand store"},
+            },
+            "required": ["use_case"],
+        },
+    },
+    {
+        "name": "search_past_projects",
+        "description": "Search the user's past project lessons via semantic RAG. Useful before starting a new project to reuse previous learnings (palette decisions, library choices, fixes). Returns top-K relevant lessons.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "top_k": {"type": "integer", "default": 5},
+                "tags_filter": {"type": "array", "items": {"type": "string"}, "description": "Optional tag filter e.g. ['restaurant', 'arabic']"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "run_in_e2b_sandbox",
+        "description": "Execute arbitrary commands in an E2B cloud sandbox (full Linux VM). Use when WebContainer/Pyodide aren't enough (needs apt-get, compiled binaries, network access). Requires E2B_API_KEY in user's vault.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "files": {"type": "object", "description": "Files to write {path: content}"},
+                "commands": {"type": "array", "items": {"type": "string"}, "description": "Shell commands to execute sequentially"},
+                "template": {"type": "string", "default": "base"},
+                "timeout_min": {"type": "integer", "default": 10},
+            },
+            "required": ["commands"],
+        },
+    },
+    {
+        "name": "deploy_via_ssh",
+        "description": "Deploy/execute commands on the user's own VPS via SSH. Requires SSH_HOST, SSH_PORT, SSH_USERNAME + (SSH_PASSWORD or SSH_PRIVATE_KEY) in vault. Use for final deploys to user's Hetzner/DigitalOcean/AWS.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "commands": {"type": "array", "items": {"type": "string"}, "description": "Sequential commands to run on remote"},
+            },
+            "required": ["commands"],
+        },
+    },
 ]
 
 
@@ -458,6 +535,114 @@ async def handle_inject_integration(args: Dict[str, Any], ctx: Any = None) -> Di
     return {"ok": True, "integration": fn()}
 
 
+async def handle_generate_nextjs_project(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    from .orchestrator.nextjs_cortex import (
+        generate_nextjs_project, default_package_json, default_tailwind_config,
+    )
+    result = await generate_nextjs_project(
+        args["brief"],
+        brand_dna=args.get("brand_dna"),
+        architecture=args.get("architecture"),
+    )
+    if result and result.get("files"):
+        return {"ok": True, **result}
+    # LLM failed → return minimal defaults so caller can still scaffold
+    return {
+        "ok": False,
+        "error": "LLM generation failed — falling back to defaults",
+        "fallback_files": {
+            "package.json": default_package_json("zenrex-app"),
+            "tailwind.config.ts": default_tailwind_config(
+                ((args.get("brand_dna") or {}).get("palette") or None)
+            ),
+        },
+    }
+
+
+async def handle_build_capacitor_app(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    from .orchestrator.capacitor_cortex import (
+        build_capacitor_config, capacitor_package_json,
+        build_instructions_ar, push_native_snippet_js,
+    )
+    return {
+        "ok": True,
+        "files": {
+            "capacitor.config.ts": build_capacitor_config(
+                args["app_id"], args["app_name"], args.get("web_dir", "dist"),
+            ),
+            "package.json": capacitor_package_json(args["app_name"]),
+            "push-notifications.js": push_native_snippet_js(),
+        },
+        "instructions_ar": build_instructions_ar(args["app_name"]),
+    }
+
+
+async def handle_recommend_state_management(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    from .orchestrator.state_cortex import (
+        recommend_state_strategy, zustand_store_snippet, react_query_snippet,
+    )
+    rec = recommend_state_strategy(args["use_case"])
+    out: Dict[str, Any] = {"ok": True, "recommendation": rec}
+    if args.get("store_name") and args.get("state_keys"):
+        out["zustand_snippet"] = zustand_store_snippet(args["store_name"], args["state_keys"])
+    if rec.get("choice") == "tanstack-query":
+        out["react_query_example"] = react_query_snippet("/api/data", "data")
+    return out
+
+
+async def handle_search_past_projects(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    from .orchestrator.cross_project_rag import retrieve_lessons, render_lessons_hint_ar
+    if not (ctx and getattr(ctx, "db", None)):
+        return {"ok": False, "error": "no db context"}
+    lessons = await retrieve_lessons(
+        ctx.db, args["query"],
+        top_k=int(args.get("top_k", 5)),
+        tags_filter=args.get("tags_filter"),
+        exclude_project_id=getattr(ctx, "project_id", None),
+    )
+    return {"ok": True, "lessons": lessons, "hint_ar": render_lessons_hint_ar(lessons), "count": len(lessons)}
+
+
+async def handle_run_in_e2b_sandbox(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    from .executors.e2b_executor import run_full_workflow
+    from .concierge.credential_vault import get_credential
+    if not (ctx and getattr(ctx, "db", None) and getattr(ctx, "user_id", None)):
+        return {"ok": False, "error": "no auth context"}
+    api_key = await get_credential(ctx.db, ctx.user_id, "E2B_API_KEY")
+    if not api_key:
+        return {"ok": False, "error": "E2B_API_KEY not in vault — run Concierge setup first"}
+    return await run_full_workflow(
+        api_key,
+        files=args.get("files") or {},
+        commands=args["commands"],
+        template=args.get("template", "base"),
+        timeout_min=int(args.get("timeout_min", 10)),
+    )
+
+
+async def handle_deploy_via_ssh(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    from .executors.ssh_executor import run_workflow
+    from .concierge.credential_vault import get_credential
+    if not (ctx and getattr(ctx, "db", None) and getattr(ctx, "user_id", None)):
+        return {"ok": False, "error": "no auth context"}
+    host = await get_credential(ctx.db, ctx.user_id, "SSH_HOST")
+    if not host:
+        return {"ok": False, "error": "SSH_HOST not in vault — run Concierge setup first"}
+    port = await get_credential(ctx.db, ctx.user_id, "SSH_PORT") or "22"
+    username = await get_credential(ctx.db, ctx.user_id, "SSH_USERNAME")
+    if not username:
+        return {"ok": False, "error": "SSH_USERNAME not in vault"}
+    password = await get_credential(ctx.db, ctx.user_id, "SSH_PASSWORD")
+    private_key = await get_credential(ctx.db, ctx.user_id, "SSH_PRIVATE_KEY")
+    if not (password or private_key):
+        return {"ok": False, "error": "Need SSH_PASSWORD or SSH_PRIVATE_KEY in vault"}
+    return await run_workflow(
+        host=host, port=int(port), username=username,
+        commands=args["commands"],
+        password=password, private_key=private_key,
+    )
+
+
 TOOL_HANDLERS = {
     "inject_recipe": handle_inject_recipe,
     "apply_shader": handle_apply_shader,
@@ -480,6 +665,12 @@ TOOL_HANDLERS = {
     "generate_tests": handle_generate_tests,
     "generate_openapi_spec": handle_generate_openapi_spec,
     "inject_integration": handle_inject_integration,
+    "generate_nextjs_project": handle_generate_nextjs_project,
+    "build_capacitor_app": handle_build_capacitor_app,
+    "recommend_state_management": handle_recommend_state_management,
+    "search_past_projects": handle_search_past_projects,
+    "run_in_e2b_sandbox": handle_run_in_e2b_sandbox,
+    "deploy_via_ssh": handle_deploy_via_ssh,
 }
 
 

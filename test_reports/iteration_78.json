@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 78 V2 wiring verification. 8/10 verifiable checks PASS. CRITICAL BUG found in architect fast-path: signature mismatch with stream_architect_cortex causes silent fallback to legacy stream_agent_turn. Brand DNA HOOK #1 confirmed firing + persisting. Review fast-path works perfectly. Concierge regression intact (fires BEFORE classifier as required). Auto-Reviewer end-to-end not verified due to environment-level LLM budget exhaustion blocking HTML generation, but underlying review_code() function works correctly.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/freebuild-chat/project/{pid}/agent-chat-stream",
+        "issue": "Architect fast-path is BROKEN. freebuild_chat.py:8291-8297 calls stream_architect_cortex(project=, user_message=, history=, ctx_holder=, user_language=, auth_token=, db=, is_owner=, max_iterations=, inject_workflow_addendum=) but the actual signature in architect_cortex.py:177 is `stream_architect_cortex(user_message, project=None, brand_dna=None)`. TypeError 'unexpected keyword argument history' is silently caught by `except Exception as _ce2`, _routed_via_cortex stays False, and the request falls through to legacy stream_agent_turn. Result: classifier event fires correctly but architect cortex NEVER runs even when primary=architect & confidence=0.9. Backend log: '[agent-chat-stream] classifier routing skipped: stream_architect_cortex() got an unexpected keyword argument history'.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "environment",
+        "issue": "Emergent LLM budget exhausted (Current cost: 83.45 / Max: 83.43). Blocks any new LLM call (architect cortex's design_architecture, brand_dna extraction in some cases, normal stream_agent_turn). Reported by litellm.BadRequestError. Not a code bug but blocks E2E verification of architect/code/auto-reviewer flows."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_v2_wiring.py",
+    "/app/backend/tests/test_concierge_wiring.py"
+  ],
+  "action_items": [
+    "FIX architect fast-path signature mismatch: either (a) change call site in freebuild_chat.py:8291-8297 to call `stream_architect_cortex(user_message=message, project=proj, brand_dna=proj.get('brand_dna'))` and stop passing history/ctx_holder/auth_token/db/etc., OR (b) widen stream_architect_cortex signature in architect_cortex.py to accept **kwargs and ignore extras. Option (a) is cleaner since architect is a single-pass designer that doesn't need history.",
+    "Top up Emergent LLM budget (litellm reports cost 83.45 vs max 83.43) so end-to-end LLM-dependent tests can run.",
+    "After architect fix, re-run TestClassifierRouting::test_architect_fast_path and TestAutoReviewerHook to confirm full hook chain."
+  ],
+  "critical_code_review_comments": [
+    "freebuild_chat.py has grown to >8800 lines — should be split into smaller modules (classifier router, concierge handler, brand_dna hook, auto_review hook).",
+    "Defensive `try/except Exception as _ce2` around classifier routing swallows the architect signature error silently. Should at minimum log the exception with logger.exception() (currently uses logger.warning with just the message — stack trace lost). This is how the bug stayed invisible.",
+    "stream_architect_cortex signature (user_message, project, brand_dna) is incompatible with how stream_agent_turn-style cortices are typically invoked. Consider standardizing all cortex stream functions to a common kwarg surface, OR document the intentional minimal surface.",
+    "Auto-reviewer hook only triggers when len(_html) > 200 — small/partial HTML edits could silently skip review."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v2_wiring.py (created)"
+  ],
+  "success_rate": {
+    "backend": "80%",
+    "frontend": "n/a (skipped per request)"
+  },
+  "test_credentials": "owner@zerax.com / owner123 (from review_request; login works, JWT returned via /api/auth/login)",
+  "seed_data_creation": "Created TEST_v2_* freebuild projects (concierge, review, branddna, arch). Brand_dna persistence verified via Mongo query: 2 projects have brand_dna persisted with full key set (palette, tone, voice, archetypes, fonts, glossary, etc.).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "PASSED CHECKS: (1) TOOLS_SCHEMA=172 ✓ (2) TOOL_HANDLERS=27 ✓ (3) All 6 new dispatchers callable ✓ (4) Concierge pause + cards + done.paused_for_setup=true ✓ (5) Concierge runs BEFORE classifier ✓ (6) Classifier emits correct primary/confidence/rationale ✓ (7) Review fast-path: primary=review, score=75, model_used=static_analyzer, credits=3, review_report.issues contains eval critical issue ✓ (8) Brand DNA HOOK #1 fires brand_dna_extracted SSE event AND persists palette/tone/voice/archetypes/glossary/fonts with brand_dna_extracted_at ISO timestamp ✓. FAILED: Architect fast-path silently broken due to signature mismatch (see backend_issues.critical). NOT VERIFIED: (a) Auto-Reviewer end-to-end SSE event (review_code() unit works, hook code looks correct on inspection, but couldn't trigger html_updated=true due to LLM budget exhaustion) (b) brand_dna_extracted second-message idempotency (test would have run if architect cleared) (c) Code-normal path full execution (only verified classifier event). After architect fix + LLM budget, re-run: pytest tests/test_v2_wiring.py -v -s --timeout=300",
+  "rca of the issue": "Architect fast-path bug RCA: (1) Reproduction: POST /api/freebuild-chat/project/{pid}/agent-chat-stream with message='أريد design system معماري لـ SaaS multi-tenant مع ERD diagram', user_language='ar'. Expected: stream events classifier → cortex_started → cortex_step → architecture_blueprint → done(model_used=architect_cortex/...). Actual: classifier event fires (primary=architect, conf=0.9), then stream falls through to legacy stream_agent_turn (events: start, provider, build_plan, text_delta, tool_building, tool, ...). (2) Root cause: freebuild_chat.py:8291-8297 invokes stream_architect_cortex with 10 kwargs (project, user_message, history, ctx_holder, user_language, auth_token, db, is_owner, max_iterations, inject_workflow_addendum) but architect_cortex.py:177 only declares (user_message, project=None, brand_dna=None). Python raises TypeError 'unexpected keyword argument history'. (3) Why silent: the surrounding `try ... except Exception as _ce2: logger.warning(...)` block at 8327-8328 swallows the error with only the message string — no stack trace — and execution continues past the `if _routed_via_cortex:` guard since `_routed_via_cortex` remained False. (4) Mitigation: change call site to `async for chunk in stream_architect_cortex(user_message=message, project=proj, brand_dna=proj.get('brand_dna')): ...` — matches the actual signature. Optionally change `except Exception as _ce2: logger.warning(...)` to `logger.exception(...)` to prevent future silent failures."
+}
