@@ -4504,7 +4504,7 @@ function ContinuationPaymentBanner({ projectId, onUnlocked }) {
     }
   };
 
-  if (!status || !status.show_payment_prompt) return null;
+  if (!status || !status.show_subscription_prompt) return null;
   return (
     <div
       data-testid="continuation-payment-banner"
@@ -4514,21 +4514,22 @@ function ContinuationPaymentBanner({ projectId, onUnlocked }) {
         <div className="text-2xl">✨</div>
         <div className="flex-1">
           <h3 className="text-sm sm:text-base font-black text-fuchsia-100 mb-1">
-            عجبك أول تحديث؟ فعّل التنفيذ الكامل
+            عجبك أول تحديث؟ اشترك بـ $150/شهر للصيانة المستمرة
           </h3>
           <p className="text-xs text-fuchsia-200/80 leading-relaxed">
-            شفت الجودة بنفسك — الآن خلّيني أكمّل معك التطوير، الصيانة، والإضافات على مدى المشروع كامل.
-            دفعة واحدة <strong className="text-amber-300">$100</strong>، ما في اشتراك شهري ولا رسوم خفيّة.
+            شفت الجودة بنفسك على النسخة المعزولة. الاشتراك يفتح: دعم فني + صيانة + مساحة sandbox + backup يومي + مراقبة فريق.
+            <strong className="text-amber-300"> إلغاء في أي وقت.</strong>
+            <span className="block text-[10px] text-fuchsia-200/60 mt-1">الإضافات/التطوير = نقاط منفصلة، تدفع لما تطلب فقط.</span>
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-[10px] text-fuchsia-100/80">
         {[
-          { e: '🛠️', t: 'إصلاحات غير محدودة' },
-          { e: '⚡', t: 'تحسين الأداء' },
-          { e: '🎨', t: 'إضافة ميزات جديدة' },
-          { e: '📱', t: 'تحويل لتطبيق مجاناً' },
+          { e: '🛠️', t: 'دعم فني مستمر' },
+          { e: '💾', t: 'Backup يومي' },
+          { e: '👁️', t: 'مراقبة فريق' },
+          { e: '🔒', t: 'مساحة Sandbox' },
         ].map((b, i) => (
           <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-black/30 border border-white/5">
             <span>{b.e}</span><span>{b.t}</span>
@@ -4542,11 +4543,11 @@ function ContinuationPaymentBanner({ projectId, onUnlocked }) {
         data-testid="continuation-unlock-btn"
         className="w-full py-3 rounded-xl bg-gradient-to-r from-fuchsia-500 to-amber-500 hover:from-fuchsia-400 hover:to-amber-400 transition font-black text-sm text-white shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
       >
-        {busy ? 'جاري التحويل لبوابة الدفع...' : `💳 ادفع $100 وفعّل التنفيذ الكامل`}
+        {busy ? 'جاري التحويل لبوابة الاشتراك...' : `💳 اشترك بـ $150/شهر`}
       </button>
 
       <p className="text-[10px] text-fuchsia-200/60 mt-2 text-center">
-        💎 ضمان استرجاع كامل خلال ٧ أيام لو ما عجبتك الجودة
+        💎 إلغاء بضغطة زر · أول ٧ أيام ضمان استرجاع كامل
       </p>
     </div>
   );

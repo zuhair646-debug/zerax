@@ -1479,9 +1479,12 @@ def make_freebuild_chat_router(db, get_current_user):
                 "url": url_clean or None,
                 "access_note": access_clean or None,
             },
-            "continuation_unlocked": False,    # Becomes True after $100 payment
-            "continuation_price_usd": 100.0,
-            "first_update_delivered": False,   # Once True, payment prompt appears
+            "continuation_unlocked": False,    # Becomes True after subscription
+            "continuation_subscription_monthly_usd": 150.0,
+            "continuation_storage_mb": 0.0,    # Tracked monthly for billing
+            "first_update_delivered": False,   # Once True, subscription prompt appears
+            "sandbox_url": None,               # Set when AI provisions the sandbox
+            "origin_repo_type": None,          # 'git' | 'ssh' | 'ftp' | 'zip'
             "status": "active",
             "current_phase": "explore",
             "phase_history": [],
@@ -3555,7 +3558,8 @@ def make_freebuild_chat_router(db, get_current_user):
         proj = await db.freebuild_projects.find_one(
             {"id": pid, "user_id": user["user_id"]},
             {"continuation_unlocked": 1, "first_update_delivered": 1,
-             "continuation_price_usd": 1, "continuation_source": 1, "mode": 1, "_id": 0},
+             "continuation_subscription_monthly_usd": 1, "continuation_storage_mb": 1,
+             "continuation_source": 1, "sandbox_url": 1, "mode": 1, "_id": 0},
         )
         if not proj:
             raise HTTPException(status_code=404, detail="project not found")
@@ -3564,9 +3568,11 @@ def make_freebuild_chat_router(db, get_current_user):
         return {
             "unlocked": bool(proj.get("continuation_unlocked")),
             "first_update_delivered": bool(proj.get("first_update_delivered")),
-            "price_usd": float(proj.get("continuation_price_usd") or 100.0),
+            "monthly_price_usd": float(proj.get("continuation_subscription_monthly_usd") or 150.0),
+            "storage_mb": float(proj.get("continuation_storage_mb") or 0.0),
+            "sandbox_url": proj.get("sandbox_url"),
             "source": proj.get("continuation_source") or {},
-            "show_payment_prompt": (
+            "show_subscription_prompt": (
                 bool(proj.get("first_update_delivered"))
                 and not bool(proj.get("continuation_unlocked"))
             ),
@@ -3576,7 +3582,8 @@ def make_freebuild_chat_router(db, get_current_user):
     async def unlock_continuation(
         pid: str, payload: ContinuationUnlockPayload, user=Depends(get_current_user),
     ):
-        """Initiate $100 payment to unlock full execution. Owner accounts unlock instantly."""
+        """Subscribe at $150/month to unlock continuation execution + maintenance.
+        Owner/admin accounts unlock instantly without charge."""
         proj = await db.freebuild_projects.find_one(
             {"id": pid, "user_id": user["user_id"]},
             {"mode": 1, "continuation_unlocked": 1, "_id": 0},
@@ -3593,7 +3600,7 @@ def make_freebuild_chat_router(db, get_current_user):
                 {"id": pid}, {"$set": {"continuation_unlocked": True, "unlocked_at": _now()}},
             )
             return {"ok": True, "method": "admin_bypass"}
-        # Real path: create Stripe checkout (uses existing STRIPE_PACKAGES infra)
+        # Real path: Stripe RECURRING subscription at $150/month
         try:
             import stripe as _stripe
             _stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
@@ -3609,16 +3616,17 @@ def make_freebuild_chat_router(db, get_current_user):
                 line_items=[{
                     "price_data": {
                         "currency": "usd",
-                        "unit_amount": 10000,  # $100.00
+                        "unit_amount": 15000,  # $150.00/month
+                        "recurring": {"interval": "month"},
                         "product_data": {
-                            "name": "Zenrex Project Continuation Unlock",
-                            "description": "تفعيل التنفيذ الكامل + الصيانة المستمرة",
+                            "name": "Zenrex Project Continuation — Monthly Subscription",
+                            "description": "دعم فني + صيانة + مساحة Sandbox + Backup يومي + مراقبة فريق",
                         },
                     },
                     "quantity": 1,
                 }],
-                mode="payment",
-                metadata={"project_id": pid, "user_id": user["user_id"], "purpose": "continuation_unlock"},
+                mode="subscription",
+                metadata={"project_id": pid, "user_id": user["user_id"], "purpose": "continuation_subscription"},
                 success_url=f"{os.environ.get('FRONTEND_BASE_URL', 'https://zenrex.ai')}/freebuild/chat/{pid}?unlocked=1",
                 cancel_url=f"{os.environ.get('FRONTEND_BASE_URL', 'https://zenrex.ai')}/freebuild/chat/{pid}?unlocked=0",
             )
