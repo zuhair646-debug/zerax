@@ -289,7 +289,28 @@ def register_paypal_subscriptions(app, db, get_current_user, STORAGE_PLANS, GRAC
         elif pp_status == "SUSPENDED":
             updates.update({"status": "past_due", "grace_started_at": now_iso, "auto_renew": True})
         elif pp_status in ("CANCELLED", "EXPIRED"):
-            updates.update({"status": "cancelled", "auto_renew": False, "cancelled_at": now_iso})
+            # PayPal says cancelled — but we MUST keep paid access until the
+            # current_period_end passes. Just mark cancellation metadata;
+            # _evaluate_subscription_state will flip to active/archived
+            # based on whether the paid period still has time left.
+            local_period_end = sub.get("current_period_end")
+            period_end_future = False
+            if local_period_end:
+                try:
+                    period_end_future = datetime.fromisoformat(local_period_end) > datetime.now(timezone.utc)
+                except Exception:
+                    period_end_future = False
+            updates.update({
+                "auto_renew": False,
+                "cancelled_at": sub.get("cancelled_at") or now_iso,
+            })
+            if period_end_future:
+                # Keep paid access — do NOT change status from active
+                updates["status"] = "active"
+            else:
+                # Paid period truly ended — archive (lock files for 6mo).
+                updates["status"] = "archived"
+                updates["archived_at"] = now_iso
 
         await db.storage_subscriptions.update_one(
             {"user_id": user["user_id"]},

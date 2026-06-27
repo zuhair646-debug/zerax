@@ -1,6 +1,26 @@
 # Zitex Changelog
 
 
+### 🛡️ Feb 27, 2026 — Cancellation Quota Retention Fix (P0)
+
+**Bug:** When a user cancelled an active PayPal storage subscription, their quota was immediately dropping to the trial 2 MB limit (locking them out of the chat), instead of retaining the paid quota until `current_period_end`.
+
+**Root cause:** Multiple code paths could flip `status` to `cancelled` prematurely (PayPal webhook, `verify-subscription` returning CANCELLED), and `_quota_for_subscription` treated `cancelled` as locked regardless of period end.
+
+**Fix**
+- `/app/backend/modules/storage_billing/__init__.py`
+  - `_evaluate_subscription_state()`: added a leading branch that flips a stale `cancelled` status back to `active` when `current_period_end` is still in the future, and archives directly when the paid period has truly ended.
+  - `_evaluate_subscription_state()`: when `status=active` + `auto_renew=false` + period expired → archive directly (skip past_due grace, since the user cancelled themselves).
+  - `_quota_for_subscription()`: defensive fallback so a stale `cancelled` doc with a future `current_period_end` still returns the paid quota and `locked=false`.
+- `/app/backend/modules/storage_billing/paypal_subscriptions.py`
+  - `verify-subscription`: when PayPal reports `CANCELLED`/`EXPIRED` we no longer set local `status=cancelled` blindly. We keep `status=active` while the paid period has time left; only flip to `archived` once it has actually expired.
+- `/app/frontend/public/service-worker.js` → bumped to `v40-2026-02-cancel-quota-retention`.
+
+**Tests**
+- New regression suite `/app/backend/tests/test_cancellation_quota_retention.py` — 4 cases (active-with-future-period-end, cancelled-with-past-period-end, active+auto_renew=false past period, direct safety net) — all passing.
+
+
+
 ### 💳 Feb 2026 — Linear Storage Pricing + Lemon Squeezy Removal (PayPal-only)
 
 **Owner directive (Saudi Arabic):** Remove Lemon Squeezy entirely (account rejected) and adopt a strictly linear storage pricing model: **10 MB free, then $5 per +50 MB**.

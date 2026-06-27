@@ -219,16 +219,44 @@ async def _evaluate_subscription_state(db, user_id: str) -> dict:
 
     updates = {}
 
-    # 1) active → past_due if period ended
+    # 0) cancelled but still inside paid period → restore to active.
+    #    The user paid for the month; we must honor it. Status only becomes
+    #    truly cancelled (locked) AFTER current_period_end passes.
+    if status == "cancelled":
+        period_end_iso = sub.get("current_period_end")
+        if period_end_iso:
+            try:
+                period_end = datetime.fromisoformat(period_end_iso)
+                if period_end > now:
+                    # Paid period still active — flip back to active.
+                    # auto_renew=False stays so PayPal won't re-charge.
+                    updates["status"] = "active"
+                    status = "active"
+                else:
+                    # Paid period has truly ended → archive directly.
+                    updates["status"] = "archived"
+                    updates["archived_at"] = now.isoformat()
+                    status = "archived"
+            except Exception:
+                pass
+
+    # 1) active → past_due if period ended (only if auto_renew=true; if
+    #    auto_renew is false, the user cancelled — go straight to archived).
     if status == "active":
         period_end_iso = sub.get("current_period_end")
         if period_end_iso:
             try:
                 period_end = datetime.fromisoformat(period_end_iso)
                 if period_end < now:
-                    updates["status"] = "past_due"
-                    updates["grace_started_at"] = now.isoformat()
-                    status = "past_due"
+                    if sub.get("auto_renew") is False:
+                        # Cancelled subscription — paid period over → archive
+                        updates["status"] = "archived"
+                        updates["archived_at"] = now.isoformat()
+                        status = "archived"
+                    else:
+                        updates["status"] = "past_due"
+                        updates["grace_started_at"] = now.isoformat()
+                        status = "past_due"
             except Exception:
                 pass
 
@@ -284,6 +312,19 @@ def _quota_for_subscription(sub: dict) -> dict:
     """
     status = sub.get("status", "trial")
     plan_id = sub.get("plan_id", "trial")
+
+    # Safety: a stale 'cancelled' status with a still-future current_period_end
+    # must NOT lock the user out. They paid for the month — they get the month.
+    # (Primary normalization happens in _evaluate_subscription_state; this is a
+    # defensive fallback for any caller that reads the doc directly.)
+    if status == "cancelled":
+        period_end_iso = sub.get("current_period_end")
+        if period_end_iso:
+            try:
+                if datetime.fromisoformat(period_end_iso) > datetime.now(timezone.utc):
+                    status = "active"
+            except Exception:
+                pass
 
     # Trial / not-yet-paid → 2 MB only. Subscriptions in `pending_approval`
     # state mean the user started the PayPal flow but hasn't confirmed

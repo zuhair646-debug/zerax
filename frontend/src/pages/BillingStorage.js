@@ -136,6 +136,31 @@ export default function BillingStorage() {
     }
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-sync pending_approval subscriptions with PayPal on every page
+  // load. PayPal webhooks can be delayed/missed, so we proactively poll
+  // when we detect a stuck pending_approval state. Catches the case where
+  // the user paid + cancelled via PayPal's UI directly.
+  useEffect(() => {
+    if (!sub) return;
+    if (sub.status === 'pending_approval' && sub.cancelled_at == null) {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      (async () => {
+        try {
+          const r = await fetch(`${API}/api/storage/verify-subscription`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          });
+          const d = await r.json();
+          if (r.ok && d.local_status && d.local_status !== sub.status) {
+            await reload();
+          }
+        } catch (_) { /* silent — manual refresh button still available */ }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sub?.status]);
+
   // Manual "Refresh from PayPal" button — for users stuck in pending_approval
   const verifyWithPayPal = async () => {
     const token = localStorage.getItem('token');
