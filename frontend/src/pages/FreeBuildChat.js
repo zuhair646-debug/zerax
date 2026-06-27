@@ -7,6 +7,7 @@ import ZenrexBrand from '../components/ZenrexBrand';
 import ConnectionHelpModal from '../components/ConnectionHelpModal';
 import StorageIndicator from '../components/StorageIndicator';
 import { EngineerAuditModal } from '../components/EngineerAuditModal';
+import { ConciergeWizardPanel } from '../components/ConciergeWizard';
 // UsageIndicator removed — duplicate of the credits pill, was confusing users.
 import CookiesManager from '../components/CookiesManager';
 import CreditsBlockedBanner from '../components/CreditsBlockedBanner';
@@ -5098,6 +5099,19 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
             try { payload = JSON.parse(dataStr); } catch { continue; }
             if (eventName === 'start' || eventName === 'provider' || eventName === 'fallback') {
               liveSteps.push({ kind: eventName, ...payload });
+            } else if (eventName === 'concierge_setup_required') {
+              liveSteps.push({ kind: 'concierge_setup_required', ...payload, _conciergeCards: [] });
+            } else if (eventName === 'concierge_wizard_card') {
+              // Append to the latest concierge_setup_required step's cards
+              const last = liveSteps.filter(s => s.kind === 'concierge_setup_required').pop();
+              if (last) {
+                last._conciergeCards = [...(last._conciergeCards || []), payload];
+              } else {
+                liveSteps.push({ kind: 'concierge_setup_required', _conciergeCards: [payload] });
+              }
+              scheduleUpdate();
+            } else if (eventName === 'concierge_setup_done') {
+              liveSteps.push({ kind: 'concierge_setup_done', ...payload });
             } else if (eventName === 'thinking') {
               liveSteps.push({ kind: 'thinking', text: payload.text });
             } else if (eventName === 'text_delta') {
@@ -6496,6 +6510,35 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                             return (
                               <div key={sIdx} className="text-[10px] text-cyan-400 px-3">
                                 {s.message}
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'concierge_setup_required') {
+                            const cards = s._conciergeCards || [];
+                            return (
+                              <div key={sIdx} className="px-3" data-testid={`concierge-setup-${sIdx}`}>
+                                <ConciergeWizardPanel
+                                  cards={cards}
+                                  language="ar"
+                                  projectId={projectId}
+                                  onAllDone={async () => {
+                                    try {
+                                      await fetch(`${API}/api/concierge/project/${projectId}/resume-after-setup`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                      });
+                                      toast.success('تم الإعداد — يمكنك متابعة البناء');
+                                    } catch (e) { /* non-fatal */ }
+                                  }}
+                                  onSkipAll={() => toast.info('تم تخطّي الإعداد')}
+                                />
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'concierge_setup_done') {
+                            return (
+                              <div key={sIdx} className="text-[11px] text-emerald-400 px-3 py-1">
+                                ✅ تم إكمال الإعداد — متابعة البناء
                               </div>
                             );
                           }

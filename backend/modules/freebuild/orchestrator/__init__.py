@@ -155,6 +155,16 @@ def _get_cortex(domain: str):
     from .cortices.audio_cortex import stream_audio_cortex
     from .cortices.video_cortex import stream_video_cortex
     from .cortices.narrative_cortex import stream_narrative_cortex
+    from .cortices.architect_cortex import stream_architect_cortex
+
+    async def stream_review_cortex(project, user_message, history, ctx_holder, **kw):
+        """Inline reviewer that processes the user_message as code-to-review."""
+        from .review_cortex import review_code, render_review_report_ar
+        import json as _j
+        yield f"event: cortex_started\ndata: {_j.dumps({'cortex': 'review'}, ensure_ascii=False)}\n\n"
+        rep = review_code(user_message, "mixed")
+        yield f"event: cortex_step\ndata: {_j.dumps({'cortex': 'review', 'score': rep.get('score')}, ensure_ascii=False)}\n\n"
+        yield f"event: done\ndata: {_j.dumps({'summary': render_review_report_ar(rep), 'auto_refunded': False, 'credits_charged': 3, 'model_used': 'static_analyzer', 'iterations': 1, 'options': [], 'inline_images': [], 'review_report': rep}, ensure_ascii=False)}\n\n"
 
     return {
         "code": stream_code_cortex,
@@ -162,6 +172,8 @@ def _get_cortex(domain: str):
         "audio": stream_audio_cortex,
         "video": stream_video_cortex,
         "narrative": stream_narrative_cortex,
+        "architect": stream_architect_cortex,
+        "review": stream_review_cortex,
     }.get(domain, stream_code_cortex)
 
 

@@ -1869,6 +1869,27 @@ except Exception as _e:
     async def load_all_project_docs(db, project_id):  # type: ignore
         return ""
 
+# 🆕 Cortex Tools — 21 specialized tools wrapping the new cortices/executors
+# (architect, reviewer, brand_dna, typescript, refactor, a11y, seo, perf, pwa,
+# i18n, db_designer, liveblocks, eas_build, webcontainer, pyodide, test_gen,
+# openapi, integrations, recipe, shader, backend_pattern).
+try:
+    from .cortex_tools import (
+        TOOL_DEFINITIONS as CORTEX_TOOL_DEFINITIONS,
+        TOOL_HANDLERS as CORTEX_TOOL_HANDLERS,
+        dispatch as cortex_dispatch,
+    )
+    TOOLS_SCHEMA.extend(CORTEX_TOOL_DEFINITIONS)
+    CORTEX_TOOL_NAMES = set(CORTEX_TOOL_HANDLERS.keys())
+    logger.info(f"[cortex_tools] registered {len(CORTEX_TOOL_DEFINITIONS)} cortex tools")
+except Exception as _e:
+    logger.warning(f"cortex_tools module unavailable: {_e}")
+    CORTEX_TOOL_DEFINITIONS = []
+    CORTEX_TOOL_HANDLERS = {}
+    CORTEX_TOOL_NAMES = set()
+    async def cortex_dispatch(name, args, ctx=None):  # type: ignore
+        return {"ok": False, "error": f"cortex_tools unavailable: {_e}"}
+
 
 # Tools restricted to the OWNER role only (high-risk / privileged capabilities).
 # Filtered out of the schema sent to non-owner customers.
@@ -3908,6 +3929,9 @@ async def _dispatch_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, A
                 (args or {}).get("content", ""),
                 (args or {}).get("mode", "append"),
             )
+    # ── 🆕 Cortex tools (architect, reviewer, brand_dna, typescript, etc.)
+    if name in CORTEX_TOOL_NAMES:
+        return await cortex_dispatch(name, args or {}, ctx)
     result = _exec_tool(ctx, name, args)
     if isinstance(result, dict) and result.get("__async__"):
         return await _exec_tool_async(ctx, name, args)
@@ -8948,6 +8972,13 @@ def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
                 + "\n" + MODE_ADDENDUM_OWNER_ASSISTANT)
     else:
         base = AGENT_SYSTEM_PROMPT
+
+    # 🆕 Inject Capabilities Catalog so the AI knows about all 24 cortices + tools
+    try:
+        from .capabilities_addendum import get_capabilities_addendum
+        base += "\n\n" + get_capabilities_addendum()
+    except Exception:
+        pass
 
     # ── Strict Phase Protocol — applied to non-owner, non-developer builder
     # projects (websites, apps, games) until the project is finalized. The

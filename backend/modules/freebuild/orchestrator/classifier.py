@@ -105,6 +105,20 @@ def classify_intent_domain(message: str) -> DomainIntent:
         "video":     _count_matches(msg, _VIDEO_KW),
         "narrative": _count_matches(msg, _NARRATIVE_KW),
     }
+    # Detect special routes (override before standard scoring)
+    _ARCH_KW = [r"معماري", r"architecture", r"\barchitect\b", r"erd", r"diagram", r"\bblueprint\b", r"design.*system"]
+    _REVIEW_KW = [r"راجع", r"review.*code", r"\baudit\b", r"\bcritique\b", r"فحص.*كود"]
+    _MOBILE_KW = [r"تطبيق\s*موبايل", r"mobile\s*app", r"apk", r"ipa", r"android\s*app", r"ios\s*app", r"capacitor", r"expo"]
+    _REALTIME_KW = [r"تعاون\s*مباشر", r"live\s*cursors", r"realtime\s*collab", r"multiplayer\s*editing", r"liveblocks"]
+    if _count_matches(msg, _ARCH_KW) >= 1:
+        return DomainIntent(primary="architect", confidence=0.9, rationale="architecture/diagram keywords")
+    if _count_matches(msg, _REVIEW_KW) >= 1:
+        return DomainIntent(primary="review", confidence=0.9, rationale="review/audit keywords")
+    if _count_matches(msg, _MOBILE_KW) >= 1:
+        # Mobile = code + concierge (EAS setup needed)
+        scores["code"] += 2
+    if _count_matches(msg, _REALTIME_KW) >= 1:
+        scores["code"] += 1  # realtime = code + concierge (liveblocks)
     total = sum(scores.values())
 
     # No keyword hit anywhere → default to code (safe)

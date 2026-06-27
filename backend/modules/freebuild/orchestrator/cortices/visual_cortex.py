@@ -238,6 +238,20 @@ async def stream_visual_cortex(
     t0 = time.time()
     yield _sse("cortex_started", {"cortex": "visual", "message_excerpt": user_message[:120]})
 
+    # 🆕 Auto-detect matching shaders + recipe for this visual request
+    try:
+        from ...shaders_library import find_shaders_for_intent, get_shader
+        from ...creative_recipes import find_recipe_for_intent
+        matched_shaders = find_shaders_for_intent(user_message, max_results=3)
+        matched_recipe = find_recipe_for_intent(user_message)
+        if matched_shaders:
+            yield _sse("visual_cortex_hint", {
+                "matched_shaders": matched_shaders,
+                "matched_recipe_id": (matched_recipe or {}).get("id"),
+            })
+    except Exception:
+        pass
+
     # ── 0. Load project memory (Brand DNA + past outputs) ────────────
     from ..shared_memory import load_memory, save_memory, memory_to_system_hint
     mem = await load_memory(db, (project or {}).get("id"))
