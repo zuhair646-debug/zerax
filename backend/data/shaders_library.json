@@ -1,0 +1,269 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-02",
+  "description": "GLSL shaders + Three.js postprocessing recipes. Each shader is a self-contained snippet ready to inject.",
+  "shaders": {
+    "nebula": {
+      "name": "Nebula / Space Clouds",
+      "category": "background_3d",
+      "ar_label": "سديم كوني",
+      "use_when": "خلفية فضائية ملونة متحركة. مناسب لـ hero ثلاثي الأبعاد.",
+      "required_libs": ["three.js"],
+      "performance": "medium",
+      "fragment_shader": "precision highp float; uniform float u_time; uniform vec2 u_resolution; float hash(vec3 p){p=fract(p*0.3183099+0.1);p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));} float noise(vec3 x){vec3 i=floor(x);vec3 f=fract(x);f=f*f*(3.0-2.0*f);return mix(mix(mix(hash(i+vec3(0,0,0)),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);} void main(){vec2 uv=(gl_FragCoord.xy-0.5*u_resolution.xy)/u_resolution.y;float t=u_time*0.05;float n=0.0;float amp=0.5;vec3 p=vec3(uv*2.0,t);for(int i=0;i<5;i++){n+=amp*noise(p);p*=2.0;amp*=0.5;}vec3 col1=vec3(0.05,0.0,0.2);vec3 col2=vec3(0.8,0.2,0.6);vec3 col3=vec3(0.0,0.7,1.0);vec3 col=mix(col1,col2,smoothstep(0.3,0.6,n));col=mix(col,col3,smoothstep(0.6,0.85,n));col+=vec3(1.0)*smoothstep(0.85,0.95,n);gl_FragColor=vec4(col,1.0);}",
+      "init_snippet_three": "// Inject as a fullscreen plane behind the scene\nconst nebulaMat = new THREE.ShaderMaterial({\n  uniforms: { u_time: { value: 0 }, u_resolution: { value: new THREE.Vector2(innerWidth, innerHeight) } },\n  vertexShader: 'void main(){gl_Position=vec4(position,1.0);}',\n  fragmentShader: NEBULA_FRAG // paste fragment_shader here\n});\nconst nebulaQuad = new THREE.Mesh(new THREE.PlaneGeometry(2,2), nebulaMat);\nnebulaQuad.frustumCulled = false;\nscene.add(nebulaQuad);"
+    },
+    "starfield": {
+      "name": "Animated Starfield",
+      "category": "background_3d",
+      "ar_label": "حقل نجوم متحرك",
+      "use_when": "نجوم تطير تجاه الكاميرا. سريع وخفيف.",
+      "required_libs": ["three.js"],
+      "performance": "high",
+      "init_snippet_three": "const starsGeo = new THREE.BufferGeometry();\nconst N = 3000;\nconst pos = new Float32Array(N*3);\nfor(let i=0;i<N;i++){pos[i*3]=(Math.random()-0.5)*2000;pos[i*3+1]=(Math.random()-0.5)*2000;pos[i*3+2]=(Math.random()-0.5)*2000;}\nstarsGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));\nconst starsMat = new THREE.PointsMaterial({ color:0xffffff, size:1.5, transparent:true, opacity:0.85 });\nconst stars = new THREE.Points(starsGeo, starsMat);\nscene.add(stars);\n// in animate(): stars.rotation.y += 0.0005; stars.rotation.x += 0.0002;"
+    },
+    "bloom_postfx": {
+      "name": "Bloom Post-Processing",
+      "category": "postfx",
+      "ar_label": "إشعاع نوراني",
+      "use_when": "أضواء نيون متوهجة. يكثّف تأثير neon/laser.",
+      "required_libs": ["three.js", "postprocessing"],
+      "performance": "medium",
+      "init_snippet_three": "// requires three/examples/jsm/postprocessing modules\nimport { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';\nimport { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';\nimport { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';\nconst composer = new EffectComposer(renderer);\ncomposer.addPass(new RenderPass(scene, camera));\nconst bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.5, 0.4, 0.85);\ncomposer.addPass(bloom);\n// replace renderer.render(scene,camera) with composer.render();"
+    },
+    "glitch": {
+      "name": "Glitch / Datamosh",
+      "category": "postfx",
+      "ar_label": "تشويش رقمي",
+      "use_when": "Brutalism / cyber / hacker aesthetic.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".glitch { position: relative; }\n.glitch::before, .glitch::after { content: attr(data-text); position: absolute; top:0; left:0; width:100%; height:100%; }\n.glitch::before { animation: glitchTop 1s linear infinite; clip-path: polygon(0 0, 100% 0, 100% 33%, 0 33%); transform: translate(-2px, -2px); color: #ff00ff; }\n.glitch::after { animation: glitchBot 1.5s linear infinite; clip-path: polygon(0 67%, 100% 67%, 100% 100%, 0 100%); transform: translate(2px, 2px); color: #00ffff; }\n@keyframes glitchTop { 2%, 64% { transform: translate(2px, -2px); } 4%, 60% { transform: translate(-2px, 2px); } 62% { transform: translate(13px, -1px) skew(-13deg); } }\n@keyframes glitchBot { 10%, 50% { transform: translate(-2px, 0); } 14%, 56% { transform: translate(2px, 0); } 50% { transform: translate(-22px, 5px) skew(21deg); } }"
+    },
+    "scanlines": {
+      "name": "CRT Scanlines",
+      "category": "postfx",
+      "ar_label": "خطوط CRT",
+      "use_when": "Retro/arcade/terminal aesthetic.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".scanlines { position: relative; }\n.scanlines::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 3px); pointer-events: none; z-index: 9999; }"
+    },
+    "matrix_rain": {
+      "name": "Matrix Digital Rain",
+      "category": "background",
+      "ar_label": "مطر ماتركس",
+      "use_when": "Hacker/cyber/Web3 themes.",
+      "required_libs": [],
+      "performance": "medium",
+      "js_snippet": "function matrixRain(canvasId){const c=document.getElementById(canvasId);const ctx=c.getContext('2d');c.width=innerWidth;c.height=innerHeight;const cols=Math.floor(c.width/14);const ys=Array(cols).fill(0);const chars='0123456789ABCDEFアイウエオカキクケコ'.split('');function draw(){ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle='#00ff41';ctx.font='14px monospace';ys.forEach((y,i)=>{const t=chars[Math.floor(Math.random()*chars.length)];ctx.fillText(t,i*14,y);ys[i]=y>c.height||Math.random()>0.975?0:y+14;});}setInterval(draw,33);}"
+    },
+    "wireframe": {
+      "name": "3D Wireframe Mesh",
+      "category": "3d",
+      "ar_label": "هيكل سلكي ثلاثي الأبعاد",
+      "use_when": "Tech/blockchain/futurist look.",
+      "required_libs": ["three.js"],
+      "performance": "high",
+      "init_snippet_three": "const wireGeo = new THREE.IcosahedronGeometry(2, 4);\nconst wireMat = new THREE.MeshBasicMaterial({ color:0x00ff41, wireframe:true });\nconst wireMesh = new THREE.Mesh(wireGeo, wireMat);\nscene.add(wireMesh);\n// in animate(): wireMesh.rotation.x += 0.003; wireMesh.rotation.y += 0.005;"
+    },
+    "chromatic_aberration": {
+      "name": "Chromatic Aberration (RGB split)",
+      "category": "postfx",
+      "ar_label": "انفصال ألوان RGB",
+      "use_when": "Synthwave/glitch/cinematic accent.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".chromatic { position: relative; }\n.chromatic::before, .chromatic::after { content: ''; position: absolute; inset: 0; mix-blend-mode: screen; pointer-events: none; }\n.chromatic::before { background: inherit; transform: translate(-2px, 0); filter: blur(0.5px) drop-shadow(0 0 1px #ff0000); opacity: 0.5; }\n.chromatic::after { background: inherit; transform: translate(2px, 0); filter: blur(0.5px) drop-shadow(0 0 1px #00ffff); opacity: 0.5; }"
+    },
+    "neon_glow": {
+      "name": "Neon Glow Text/Border",
+      "category": "css_fx",
+      "ar_label": "وهج نيون",
+      "use_when": "Gaming/synthwave/nightclub vibes.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".neon-pink { color:#fff; text-shadow:0 0 5px #fff, 0 0 10px #ff006e, 0 0 20px #ff006e, 0 0 40px #ff006e, 0 0 80px #ff006e; }\n.neon-cyan { color:#fff; text-shadow:0 0 5px #fff, 0 0 10px #00f5ff, 0 0 20px #00f5ff, 0 0 40px #00f5ff, 0 0 80px #00f5ff; }\n.neon-border { border:2px solid #00f5ff; box-shadow:0 0 10px #00f5ff, inset 0 0 10px #00f5ff; }\n.neon-pulse { animation: neonPulse 1.5s ease-in-out infinite alternate; }\n@keyframes neonPulse { from { text-shadow:0 0 5px #fff, 0 0 10px #ff006e; } to { text-shadow:0 0 8px #fff, 0 0 20px #ff006e, 0 0 30px #ff006e, 0 0 50px #ff006e; } }"
+    },
+    "audio_visualizer": {
+      "name": "Audio Reactive Waveform",
+      "category": "audio",
+      "ar_label": "مرئيات صوت تفاعلية",
+      "use_when": "Music/podcast pages reacting to audio playback.",
+      "required_libs": [],
+      "performance": "high",
+      "js_snippet": "async function setupAudioViz(audioEl, canvasEl){const ctx=new(AudioContext||webkitAudioContext)();const src=ctx.createMediaElementSource(audioEl);const analyser=ctx.createAnalyser();analyser.fftSize=256;src.connect(analyser);analyser.connect(ctx.destination);const data=new Uint8Array(analyser.frequencyBinCount);const c=canvasEl.getContext('2d');function draw(){requestAnimationFrame(draw);analyser.getByteFrequencyData(data);c.fillStyle='rgba(0,0,0,0.1)';c.fillRect(0,0,canvasEl.width,canvasEl.height);const bw=canvasEl.width/data.length;data.forEach((v,i)=>{const h=v*canvasEl.height/255;const grad=c.createLinearGradient(0,canvasEl.height,0,canvasEl.height-h);grad.addColorStop(0,'#ff006e');grad.addColorStop(1,'#00f5ff');c.fillStyle=grad;c.fillRect(i*bw,canvasEl.height-h,bw-1,h);});}draw();}"
+    },
+    "particle_burst": {
+      "name": "Particle Burst on Click",
+      "category": "interactive",
+      "ar_label": "انفجار جسيمات",
+      "use_when": "Reward feedback on CTAs, gaming UI.",
+      "required_libs": [],
+      "performance": "high",
+      "js_snippet": "function particleBurst(x,y,color='#ff006e'){const n=30;for(let i=0;i<n;i++){const p=document.createElement('div');p.style.cssText=`position:fixed;left:${x}px;top:${y}px;width:6px;height:6px;background:${color};border-radius:50%;pointer-events:none;z-index:9999;`;document.body.appendChild(p);const ang=Math.random()*Math.PI*2;const vel=2+Math.random()*4;const dx=Math.cos(ang)*vel;const dy=Math.sin(ang)*vel;p.animate([{transform:'translate(0,0) scale(1)',opacity:1},{transform:`translate(${dx*40}px,${dy*40}px) scale(0)`,opacity:0}],{duration:600+Math.random()*400,easing:'cubic-bezier(0.4,0,0.2,1)',fill:'forwards'}).onfinish=()=>p.remove();}}"
+    },
+    "liquid_distortion": {
+      "name": "Liquid Distortion Hover",
+      "category": "interactive",
+      "ar_label": "تشويه سائل",
+      "use_when": "Premium product cards, luxury items.",
+      "required_libs": [],
+      "performance": "medium",
+      "css_snippet": ".liquid { transition: clip-path 0.6s cubic-bezier(0.4,0,0.2,1), transform 0.6s; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }\n.liquid:hover { clip-path: polygon(0 5%, 100% 0, 95% 100%, 5% 95%); transform: scale(1.02); }"
+    },
+    "film_grain": {
+      "name": "Film Grain Overlay",
+      "category": "postfx",
+      "ar_label": "حبيبات فيلم",
+      "use_when": "Editorial/cinema/luxury photography.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".grain { position:relative; }\n.grain::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:0.15; mix-blend-mode:overlay; background-image:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>\"); }"
+    },
+    "grain_overlay": {
+      "name": "Soft Paper Grain",
+      "category": "postfx",
+      "ar_label": "حبيبات ورقية ناعمة",
+      "use_when": "Warm/cozy/restaurant designs.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".paper-grain::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:0.08; background-image:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2'/></filter><rect width='150' height='150' filter='url(%23n)'/></svg>\"); }"
+    },
+    "halftone": {
+      "name": "Halftone Dots",
+      "category": "css_fx",
+      "ar_label": "نقاط هاف-تون",
+      "use_when": "Editorial/pop art/print aesthetic.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".halftone { background-image: radial-gradient(circle, currentColor 1.2px, transparent 1.5px); background-size: 6px 6px; }"
+    },
+    "dither": {
+      "name": "Dither Pattern",
+      "category": "css_fx",
+      "ar_label": "نقش ديذر",
+      "use_when": "Retro/brutalist gradients.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".dither { background-image: linear-gradient(45deg, currentColor 25%, transparent 25%), linear-gradient(-45deg, currentColor 25%, transparent 25%); background-size: 4px 4px; opacity: 0.5; }"
+    },
+    "chrome_reflection": {
+      "name": "Chrome Reflection",
+      "category": "css_fx",
+      "ar_label": "انعكاس كروم",
+      "use_when": "Automotive/luxury/premium products.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".chrome { background: linear-gradient(180deg, #f5f5f5 0%, #999 25%, #ffffff 50%, #555 75%, #cccccc 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 1px 0 rgba(255,255,255,0.5); }"
+    },
+    "carbon_fiber": {
+      "name": "Carbon Fiber Texture",
+      "category": "background",
+      "ar_label": "نسيج كربون فايبر",
+      "use_when": "Automotive/tech/premium hardware.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".carbon-fiber { background: repeating-linear-gradient(45deg, #1a1a1a 0, #1a1a1a 2px, #2a2a2a 2px, #2a2a2a 4px), repeating-linear-gradient(-45deg, transparent 0, transparent 2px, rgba(0,0,0,0.5) 2px, rgba(0,0,0,0.5) 4px); }"
+    },
+    "lens_flare": {
+      "name": "Lens Flare",
+      "category": "postfx",
+      "ar_label": "وهج عدسة",
+      "use_when": "Cinematic hero shots, automotive/luxury.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".lens-flare { position:relative; }\n.lens-flare::before { content:''; position:absolute; width:300px; height:300px; border-radius:50%; background: radial-gradient(circle, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 40%, transparent 70%); top:-50px; right:-50px; filter:blur(20px); pointer-events:none; }"
+    },
+    "rgb_split": {
+      "name": "RGB Split Text Effect",
+      "category": "css_fx",
+      "ar_label": "انفصال ألوان RGB للنص",
+      "use_when": "Glitchy headlines, brutalist art.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".rgb-split { color: #fff; text-shadow: -2px 0 #ff006e, 2px 0 #00f5ff; }"
+    },
+    "vhs": {
+      "name": "VHS Tape Look",
+      "category": "postfx",
+      "ar_label": "فيديو VHS قديم",
+      "use_when": "Nostalgia/synthwave/retrowave.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".vhs { position:relative; }\n.vhs::before { content:''; position:absolute; inset:0; pointer-events:none; background: repeating-linear-gradient(0deg, transparent 0, transparent 2px, rgba(255,255,255,0.04) 2px, rgba(255,255,255,0.04) 4px); }\n.vhs::after { content:''; position:absolute; inset:0; pointer-events:none; box-shadow:inset 0 0 100px rgba(0,0,0,0.6); }"
+    },
+    "crt": {
+      "name": "CRT Monitor Curvature",
+      "category": "postfx",
+      "ar_label": "انحناء شاشة CRT",
+      "use_when": "Pure terminal/arcade nostalgia.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".crt { position:relative; overflow:hidden; border-radius:20px; box-shadow: inset 0 0 60px rgba(0,0,0,0.8); }\n.crt::before { content:''; position:absolute; inset:0; pointer-events:none; background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.4) 100%); }"
+    },
+    "motion_blur": {
+      "name": "Motion Blur (CSS)",
+      "category": "interactive",
+      "ar_label": "تشويش حركي",
+      "use_when": "Action/sports/fast-paced UI feedback.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".motion-blur:hover { filter: blur(0px); transition: filter 0.3s; }\n.motion-blur { filter: blur(0.3px); transition: filter 0.3s; }"
+    },
+    "soft_blur": {
+      "name": "Soft Blur Overlay",
+      "category": "postfx",
+      "ar_label": "ضبابية ناعمة",
+      "use_when": "Wedding/luxury/romantic vibes.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".soft-blur { filter: blur(0px); }\n.soft-blur-bg::before { content:''; position:absolute; inset:0; backdrop-filter: blur(8px) saturate(1.2); -webkit-backdrop-filter: blur(8px) saturate(1.2); pointer-events:none; }"
+    },
+    "depth_blur": {
+      "name": "Depth-of-Field Blur",
+      "category": "postfx",
+      "ar_label": "ضبابية عمق المجال",
+      "use_when": "Travel/photography emphasis on subject.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".depth-back { filter: blur(4px); transition: filter 0.6s; }\n.depth-front:hover ~ .depth-back { filter: blur(8px); }"
+    },
+    "audio_visualizer_simple": {
+      "name": "Simple Audio Bars",
+      "category": "audio",
+      "ar_label": "أعمدة موسيقى بسيطة",
+      "use_when": "Podcast/music card play indicator.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".bars { display:flex; gap:3px; align-items:flex-end; height:30px; }\n.bars span { width:4px; background:#ff006e; animation: barJump 1s ease-in-out infinite; }\n.bars span:nth-child(1){animation-delay:-0.3s} .bars span:nth-child(2){animation-delay:-0.6s} .bars span:nth-child(3){animation-delay:-0.9s} .bars span:nth-child(4){animation-delay:-0.4s} .bars span:nth-child(5){animation-delay:-0.8s}\n@keyframes barJump { 0%,100% { height:10%; } 50% { height:100%; } }"
+    },
+    "paper_texture": {
+      "name": "Paper Texture",
+      "category": "background",
+      "ar_label": "نسيج ورقي",
+      "use_when": "Storybook/handmade/warm themes.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".paper { background-color:#fef3c7; background-image: url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='2'/></filter><rect width='100' height='100' filter='url(%23p)' opacity='0.3'/></svg>\"); }"
+    },
+    "gradient_mesh": {
+      "name": "Gradient Mesh",
+      "category": "background",
+      "ar_label": "تدرّج شبكي",
+      "use_when": "Modern SaaS/tech conferences.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".gradient-mesh { background: radial-gradient(at 0% 0%, #6366f1 0%, transparent 50%), radial-gradient(at 100% 0%, #ec4899 0%, transparent 50%), radial-gradient(at 100% 100%, #fbbf24 0%, transparent 50%), radial-gradient(at 0% 100%, #0f172a 0%, transparent 50%), #0f172a; }"
+    },
+    "noise": {
+      "name": "Subtle Noise",
+      "category": "postfx",
+      "ar_label": "ضوضاء ناعمة",
+      "use_when": "Premium texture without distraction.",
+      "required_libs": [],
+      "performance": "high",
+      "css_snippet": ".noise::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:0.04; background-image:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85'/></filter><rect width='100' height='100' filter='url(%23n)'/></svg>\"); }"
+    }
+  }
+}

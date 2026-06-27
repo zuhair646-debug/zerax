@@ -1,0 +1,160 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-02",
+  "description": "Ready-to-inject backend patterns. Each pattern is a self-contained module the AI can copy into a FastAPI / Express project.",
+  "patterns": {
+    "jwt_auth_fastapi": {
+      "name": "JWT Auth (FastAPI)",
+      "ar_label": "JWT مصادقة FastAPI",
+      "category": "auth",
+      "framework": "fastapi",
+      "files": {
+        "auth/jwt_handler.py": "import os, jwt, time\nfrom datetime import datetime, timedelta, timezone\nfrom typing import Optional\n\nJWT_SECRET = os.environ.get('JWT_SECRET', 'change-me')\nJWT_ALGO = 'HS256'\nJWT_EXPIRE_HOURS = 24*7\n\ndef create_access_token(user_id: str, extras: Optional[dict] = None) -> str:\n    payload = {'sub': user_id, 'iat': datetime.now(timezone.utc), 'exp': datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)}\n    if extras: payload.update(extras)\n    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)\n\ndef decode_token(token: str) -> dict:\n    return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])\n",
+        "auth/deps.py": "from fastapi import Depends, HTTPException, status\nfrom fastapi.security import HTTPBearer, HTTPAuthorizationCredentials\nfrom .jwt_handler import decode_token\n\nbearer = HTTPBearer()\n\nasync def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer)) -> dict:\n    try:\n        payload = decode_token(creds.credentials)\n        return {'user_id': payload['sub']}\n    except Exception as e:\n        raise HTTPException(status_code=401, detail=f'invalid token: {e}')\n"
+      },
+      "install": ["pyjwt"]
+    },
+    "password_hashing_bcrypt": {
+      "name": "Password Hashing (bcrypt)",
+      "ar_label": "تشفير كلمات سر bcrypt",
+      "category": "auth",
+      "framework": "fastapi",
+      "files": {
+        "auth/password.py": "import bcrypt\n\ndef hash_password(pw: str) -> str:\n    return bcrypt.hashpw(pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')\n\ndef verify_password(pw: str, hashed: str) -> bool:\n    try:\n        return bcrypt.checkpw(pw.encode('utf-8'), hashed.encode('utf-8'))\n    except Exception:\n        return False\n"
+      },
+      "install": ["bcrypt"]
+    },
+    "websocket_fastapi": {
+      "name": "WebSocket Real-time (FastAPI)",
+      "ar_label": "WebSocket فوري",
+      "category": "realtime",
+      "framework": "fastapi",
+      "files": {
+        "ws/manager.py": "from typing import Dict, List\nfrom fastapi import WebSocket\n\nclass ConnectionManager:\n    def __init__(self):\n        self.active: Dict[str, List[WebSocket]] = {}\n    async def connect(self, room: str, ws: WebSocket):\n        await ws.accept()\n        self.active.setdefault(room, []).append(ws)\n    def disconnect(self, room: str, ws: WebSocket):\n        if room in self.active and ws in self.active[room]:\n            self.active[room].remove(ws)\n    async def broadcast(self, room: str, message: dict):\n        for conn in list(self.active.get(room, [])):\n            try:\n                await conn.send_json(message)\n            except Exception:\n                self.disconnect(room, conn)\n\nmanager = ConnectionManager()\n",
+        "ws/routes.py": "from fastapi import APIRouter, WebSocket, WebSocketDisconnect\nfrom .manager import manager\n\nrouter = APIRouter()\n\n@router.websocket('/ws/{room}')\nasync def ws_endpoint(ws: WebSocket, room: str):\n    await manager.connect(room, ws)\n    try:\n        while True:\n            data = await ws.receive_json()\n            await manager.broadcast(room, {'from': ws.client.host if ws.client else '?', 'payload': data})\n    except WebSocketDisconnect:\n        manager.disconnect(room, ws)\n"
+      }
+    },
+    "rate_limiter_redis": {
+      "name": "Redis Rate Limiter",
+      "ar_label": "حد طلبات Redis",
+      "category": "performance",
+      "framework": "fastapi",
+      "files": {
+        "middleware/rate_limit.py": "import os, time\ntry:\n    import redis.asyncio as redis\nexcept ImportError:\n    redis = None\nfrom fastapi import HTTPException, Request\n\n_redis = None\n\nasync def get_redis():\n    global _redis\n    if _redis is None and redis is not None:\n        _redis = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379'))\n    return _redis\n\nasync def rate_limit(req: Request, key: str, limit: int = 60, window_sec: int = 60):\n    r = await get_redis()\n    if r is None: return\n    bucket = f'rl:{key}:{int(time.time() // window_sec)}'\n    cur = await r.incr(bucket)\n    if cur == 1: await r.expire(bucket, window_sec)\n    if cur > limit:\n        raise HTTPException(status_code=429, detail=f'rate limit {limit}/{window_sec}s exceeded')\n"
+      },
+      "install": ["redis"]
+    },
+    "background_jobs_arq": {
+      "name": "Background Jobs (ARQ)",
+      "ar_label": "مهام خلفية ARQ",
+      "category": "jobs",
+      "framework": "fastapi",
+      "files": {
+        "jobs/worker.py": "from arq import create_pool\nfrom arq.connections import RedisSettings\nimport os\n\nREDIS = RedisSettings.from_dsn(os.environ.get('REDIS_URL', 'redis://localhost:6379'))\n\nasync def send_email_job(ctx, to: str, subject: str, body: str):\n    print(f'sending email to {to}: {subject}')\n    return {'sent': True}\n\nclass WorkerSettings:\n    redis_settings = REDIS\n    functions = [send_email_job]\n",
+        "jobs/enqueue.py": "from arq import create_pool\nfrom arq.connections import RedisSettings\nimport os\n\n_pool = None\n\nasync def enqueue(func_name: str, *args, **kwargs):\n    global _pool\n    if _pool is None:\n        _pool = await create_pool(RedisSettings.from_dsn(os.environ.get('REDIS_URL', 'redis://localhost:6379')))\n    return await _pool.enqueue_job(func_name, *args, **kwargs)\n"
+      },
+      "install": ["arq"]
+    },
+    "stripe_subscription_checkout": {
+      "name": "Stripe Subscription Checkout",
+      "ar_label": "اشتراك Stripe",
+      "category": "payments",
+      "framework": "fastapi",
+      "files": {
+        "payments/stripe_routes.py": "import os, stripe\nfrom fastapi import APIRouter, HTTPException, Depends\nfrom pydantic import BaseModel\n\nstripe.api_key = os.environ['STRIPE_SECRET_KEY']\nrouter = APIRouter(prefix='/api/payments')\n\nclass CheckoutBody(BaseModel):\n    price_id: str\n    success_url: str\n    cancel_url: str\n\n@router.post('/create-checkout')\nasync def create_checkout(body: CheckoutBody):\n    sess = stripe.checkout.Session.create(\n        mode='subscription',\n        line_items=[{'price': body.price_id, 'quantity': 1}],\n        success_url=body.success_url + '?sid={CHECKOUT_SESSION_ID}',\n        cancel_url=body.cancel_url,\n    )\n    return {'url': sess.url, 'session_id': sess.id}\n\n@router.post('/webhook')\nasync def webhook(req):\n    sig = req.headers.get('stripe-signature')\n    payload = await req.body()\n    try:\n        event = stripe.Webhook.construct_event(payload, sig, os.environ['STRIPE_WEBHOOK_SECRET'])\n    except Exception as e:\n        raise HTTPException(400, str(e))\n    # handle event.type ...\n    return {'received': True}\n"
+      },
+      "install": ["stripe"]
+    },
+    "file_upload_local": {
+      "name": "File Upload (Local Disk)",
+      "ar_label": "رفع ملفات محلي",
+      "category": "storage",
+      "framework": "fastapi",
+      "files": {
+        "uploads/routes.py": "import os, uuid\nfrom pathlib import Path\nfrom fastapi import APIRouter, UploadFile, HTTPException\n\nUPLOAD_DIR = Path(os.environ.get('UPLOAD_DIR', '/app/uploads'))\nUPLOAD_DIR.mkdir(parents=True, exist_ok=True)\nMAX_BYTES = 10 * 1024 * 1024  # 10MB\n\nrouter = APIRouter(prefix='/api/uploads')\n\n@router.post('/')\nasync def upload(file: UploadFile):\n    ext = (file.filename or '').rsplit('.', 1)[-1][:6]\n    fname = f'{uuid.uuid4().hex}.{ext}' if ext else uuid.uuid4().hex\n    fpath = UPLOAD_DIR / fname\n    size = 0\n    with open(fpath, 'wb') as f:\n        while chunk := await file.read(64*1024):\n            size += len(chunk)\n            if size > MAX_BYTES:\n                fpath.unlink(missing_ok=True)\n                raise HTTPException(413, 'file too large')\n            f.write(chunk)\n    return {'url': f'/uploads/{fname}', 'size': size}\n"
+      }
+    },
+    "email_resend": {
+      "name": "Email Sending (Resend)",
+      "ar_label": "إرسال بريد Resend",
+      "category": "integrations",
+      "framework": "fastapi",
+      "files": {
+        "integrations/resend_mailer.py": "import os\nimport httpx\n\nRESEND_API_KEY = os.environ.get('RESEND_API_KEY')\n\nasync def send_email(to: str, subject: str, html: str, from_addr: str = 'no-reply@zenrex.ai'):\n    if not RESEND_API_KEY: raise RuntimeError('RESEND_API_KEY not set')\n    async with httpx.AsyncClient(timeout=20) as cl:\n        r = await cl.post('https://api.resend.com/emails',\n                          headers={'Authorization': f'Bearer {RESEND_API_KEY}', 'Content-Type': 'application/json'},\n                          json={'from': from_addr, 'to': [to], 'subject': subject, 'html': html})\n        r.raise_for_status()\n        return r.json()\n"
+      }
+    },
+    "sms_twilio": {
+      "name": "SMS Sending (Twilio)",
+      "ar_label": "إرسال SMS Twilio",
+      "category": "integrations",
+      "framework": "fastapi",
+      "files": {
+        "integrations/twilio_sms.py": "import os\nimport httpx\nfrom base64 import b64encode\n\nSID = os.environ.get('TWILIO_ACCOUNT_SID')\nTOKEN = os.environ.get('TWILIO_AUTH_TOKEN')\nFROM = os.environ.get('TWILIO_FROM_NUMBER')\n\nasync def send_sms(to: str, body: str):\n    if not (SID and TOKEN and FROM): raise RuntimeError('Twilio creds missing')\n    auth = b64encode(f'{SID}:{TOKEN}'.encode()).decode()\n    async with httpx.AsyncClient(timeout=20) as cl:\n        r = await cl.post(f'https://api.twilio.com/2010-04-01/Accounts/{SID}/Messages.json',\n                          headers={'Authorization': f'Basic {auth}'},\n                          data={'To': to, 'From': FROM, 'Body': body})\n        r.raise_for_status()\n        return r.json()\n"
+      }
+    },
+    "openapi_swagger_ui": {
+      "name": "OpenAPI + Swagger UI (FastAPI built-in)",
+      "ar_label": "توثيق OpenAPI",
+      "category": "docs",
+      "framework": "fastapi",
+      "notes": "FastAPI auto-generates /docs and /redoc. Just add tags + descriptions to routes."
+    },
+    "cors_middleware": {
+      "name": "CORS Middleware",
+      "ar_label": "CORS middleware",
+      "category": "security",
+      "framework": "fastapi",
+      "files": {
+        "middleware/cors.py": "from fastapi.middleware.cors import CORSMiddleware\n\ndef install_cors(app, origins: list[str] | None = None):\n    app.add_middleware(\n        CORSMiddleware,\n        allow_origins=origins or ['*'],\n        allow_credentials=True,\n        allow_methods=['*'],\n        allow_headers=['*'],\n    )\n"
+      }
+    },
+    "logging_structured": {
+      "name": "Structured Logging",
+      "ar_label": "تسجيل منظّم JSON",
+      "category": "observability",
+      "framework": "fastapi",
+      "files": {
+        "logging_config.py": "import logging, json, sys\n\nclass JsonFormatter(logging.Formatter):\n    def format(self, record):\n        return json.dumps({\n            'ts': self.formatTime(record),\n            'level': record.levelname,\n            'logger': record.name,\n            'msg': record.getMessage(),\n        }, ensure_ascii=False)\n\ndef setup_logging(level=logging.INFO):\n    h = logging.StreamHandler(sys.stdout)\n    h.setFormatter(JsonFormatter())\n    logging.basicConfig(level=level, handlers=[h], force=True)\n"
+      }
+    },
+    "mongo_connection": {
+      "name": "MongoDB Connection (Motor)",
+      "ar_label": "اتصال MongoDB",
+      "category": "database",
+      "framework": "fastapi",
+      "files": {
+        "db/mongo.py": "import os\nfrom motor.motor_asyncio import AsyncIOMotorClient\n\n_client = None\n_db = None\n\ndef get_db():\n    global _client, _db\n    if _db is None:\n        _client = AsyncIOMotorClient(os.environ['MONGO_URL'])\n        _db = _client[os.environ.get('DB_NAME', 'app')]\n    return _db\n"
+      },
+      "install": ["motor"]
+    },
+    "postgres_sqlmodel": {
+      "name": "Postgres + SQLModel",
+      "ar_label": "Postgres + SQLModel",
+      "category": "database",
+      "framework": "fastapi",
+      "files": {
+        "db/postgres.py": "import os\nfrom sqlmodel import create_engine, Session\n\n_engine = None\n\ndef get_engine():\n    global _engine\n    if _engine is None:\n        _engine = create_engine(os.environ['DATABASE_URL'], pool_pre_ping=True)\n    return _engine\n\ndef get_session():\n    return Session(get_engine())\n"
+      },
+      "install": ["sqlmodel", "psycopg2-binary"]
+    },
+    "scheduled_tasks_apscheduler": {
+      "name": "Scheduled Tasks (APScheduler)",
+      "ar_label": "مهام مجدولة",
+      "category": "jobs",
+      "framework": "fastapi",
+      "files": {
+        "scheduler/setup.py": "from apscheduler.schedulers.asyncio import AsyncIOScheduler\n\nscheduler = AsyncIOScheduler()\n\nasync def daily_report():\n    print('daily report fired')\n\ndef setup_jobs():\n    scheduler.add_job(daily_report, 'cron', hour=2, minute=0)\n    scheduler.start()\n"
+      },
+      "install": ["apscheduler"]
+    },
+    "search_meilisearch": {
+      "name": "Search (Meilisearch)",
+      "ar_label": "بحث Meilisearch",
+      "category": "search",
+      "framework": "fastapi",
+      "files": {
+        "search/meili.py": "import os, httpx\n\nMEILI = os.environ.get('MEILI_URL', 'http://localhost:7700')\nKEY = os.environ.get('MEILI_KEY', '')\n\nasync def search(index: str, query: str, limit: int = 20):\n    async with httpx.AsyncClient(timeout=15) as cl:\n        r = await cl.post(f'{MEILI}/indexes/{index}/search',\n                          headers={'Authorization': f'Bearer {KEY}'} if KEY else {},\n                          json={'q': query, 'limit': limit})\n        return r.json()\n"
+      }
+    }
+  }
+}
