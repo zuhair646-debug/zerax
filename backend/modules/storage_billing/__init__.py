@@ -415,6 +415,8 @@ def register_storage_billing(app, db, get_current_user):
             "trial_started_at": sub.get("trial_started_at"),
             "trial_days_left": trial_days_left,
             "archived_at": sub.get("archived_at"),
+            "cancelled_at": sub.get("cancelled_at"),
+            "auto_renew": bool(sub.get("auto_renew", True)) if sub.get("paypal_subscription_id") else False,
             "recovery_price_usd": recovery["price_usd"],
             "can_purchase": True,
         }

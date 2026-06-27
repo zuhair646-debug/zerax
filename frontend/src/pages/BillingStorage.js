@@ -17,6 +17,18 @@ const fmtGB = (mb) => {
   return `${(mb / 1024).toFixed(0)} GB`;
 };
 
+const fmtDate = (iso) => {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('ar-SA', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    });
+  } catch {
+    return iso.slice(0, 10);
+  }
+};
+
 export default function BillingStorage() {
   const nav = useNavigate();
   const [params] = useSearchParams();
@@ -308,9 +320,49 @@ export default function BillingStorage() {
               </div>
             )}
 
-            {/* Cancel subscription — visible whenever the user has any
-                ongoing PayPal subscription (pending/active/past_due). */}
-            {!isArchived && ['pending_approval', 'active', 'past_due'].includes(sub.status) && (
+            {/* Cancelled subscription — sub.auto_renew=false + has cancellation date */}
+            {!isArchived && sub.cancelled_at && sub.auto_renew === false && sub.status === 'active' && (
+              <div className="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-4 flex items-start gap-3" data-testid="cancelled-block">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <Check className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-black text-emerald-200 mb-1">
+                    ✅ تم إلغاء الاشتراك بنجاح
+                  </p>
+                  <div className="text-xs text-emerald-100/90 leading-relaxed space-y-1.5">
+                    <p>
+                      <span className="text-zinc-400">📅 تاريخ الإلغاء:</span>{' '}
+                      <b>{fmtDate(sub.cancelled_at)}</b>
+                    </p>
+                    <p>
+                      <span className="text-zinc-400">⏳ صلاحياتك تظل سارية حتى:</span>{' '}
+                      <b className="text-amber-300">{fmtDate(sub.current_period_end)}</b>
+                    </p>
+                    <p className="text-zinc-300 mt-2">
+                      ✓ لن يتم سحب أي مبلغ منك بعد هذا التاريخ.
+                    </p>
+                    <p className="text-zinc-300">
+                      ✓ يمكنك مواصلة استخدام كامل مساحة <b>{sub.plan_label_ar}</b> حتى نهاية الفترة المدفوعة.
+                    </p>
+                    <p className="text-rose-200/80 mt-2">
+                      ⚠️ بعد {fmtDate(sub.current_period_end)} سيُقفل الوصول لملفاتك. لاستعادتها لاحقاً يلزم دفع رسم استرداد ${sub.recovery_price_usd}.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => startCheckout(sub.plan_id)}
+                    className="mt-3 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-black text-xs font-black inline-flex items-center gap-2"
+                    data-testid="reactivate-subscription-btn"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    إعادة تفعيل الاشتراك
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Active subscription management (cancel button) — hidden once cancelled */}
+            {!isArchived && !sub.cancelled_at && ['pending_approval', 'active', 'past_due'].includes(sub.status) && (
               <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 flex items-start gap-3" data-testid="cancel-subscription-block">
                 <Info className="w-5 h-5 text-zinc-400 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
@@ -334,7 +386,7 @@ export default function BillingStorage() {
                       </>
                     ) : (
                       <>
-                        اشتراكك يُجدّد تلقائياً عبر PayPal كل شهر. عند الإلغاء:
+                        اشتراكك يُجدّد تلقائياً عبر PayPal كل شهر ({fmtDate(sub.current_period_end)}). عند الإلغاء:
                         <span className="block mt-1.5">• تحتفظ بصلاحياتك حتى نهاية الشهر المدفوع.</span>
                         <span className="block">• لا نسحب أي مبلغ بعدها.</span>
                         <span className="block">• ملفاتك تبقى محفوظة، وتحتاج لدفع <b className="text-rose-300">ضعف سعر باقتك</b> لاستردادها مستقبلاً.</span>
