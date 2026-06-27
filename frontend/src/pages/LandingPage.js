@@ -235,6 +235,16 @@ const LandingPage = ({ user }) => {
           badge: 'جديد',
           action: () => goOrRegister('/ready-sites'),
         },
+        {
+          type: 'project-continuation',
+          title: 'تكملة مشروع',
+          desc: 'ارفع موقعك الحالي · تحليل ذكي · صيانة + تطوير',
+          gradient: 'from-fuchsia-500/20 to-rose-500/10',
+          accent: '#d946ef',
+          bgImage: 'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=800&q=70',
+          badge: 'جديد',
+          action: () => goOrRegister('/freebuild/continue'),
+        },
       ],
     },
     {

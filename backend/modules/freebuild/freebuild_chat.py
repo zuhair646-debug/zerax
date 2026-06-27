@@ -1088,6 +1088,17 @@ class ChatIn(BaseModel):
     message: str
 
 
+class ContinuationCreatePayload(BaseModel):
+    source_type: str  # 'url' | 'description'
+    url: Optional[str] = None
+    description: Optional[str] = None
+    access_note: Optional[str] = None
+
+
+class ContinuationUnlockPayload(BaseModel):
+    coupon: Optional[str] = None
+
+
 def make_freebuild_chat_router(db, get_current_user):
     router = APIRouter(prefix="/freebuild-chat", tags=["freebuild-chat"])
 
@@ -1418,6 +1429,75 @@ def make_freebuild_chat_router(db, get_current_user):
             "updated_at": _now(),
         })
         return {"id": pid, "name": payload.name, "mode": proj_mode, "video_submode": video_submode, "platform": platform}
+
+    # ===== Continuation Mode — analyze existing website + AI maintenance =====
+    @router.post("/projects/continuation/create")
+    async def create_continuation_project(
+        payload: ContinuationCreatePayload, user=Depends(get_current_user),
+    ):
+        """Create a new project in 'continuation' mode for an existing website.
+        Free until first delivered update; $100 to unlock full execution."""
+        if payload.source_type not in {"url", "description"}:
+            raise HTTPException(status_code=400, detail="invalid source_type")
+        if payload.source_type == "url" and not (payload.url and payload.url.strip()):
+            raise HTTPException(status_code=400, detail="url is required")
+        if payload.source_type == "description" and len(payload.description or "") < 30:
+            raise HTTPException(status_code=400, detail="description must be at least 30 chars")
+
+        pid = str(uuid.uuid4())
+        # Seed message that primes the AI for analysis
+        url_clean = (payload.url or "").strip()
+        desc_clean = (payload.description or "").strip()
+        access_clean = (payload.access_note or "").strip()
+        seed_parts = ["📌 **مشروع تكملة** — موقع موجود يحتاج صيانة/تطوير.\n"]
+        if url_clean:
+            seed_parts.append(f"🔗 **الرابط**: {url_clean}")
+        if desc_clean:
+            seed_parts.append(f"📝 **وصف العميل**: {desc_clean}")
+        if access_clean:
+            seed_parts.append(f"🔐 **ملاحظات الوصول**: {access_clean}")
+        seed_parts.append(
+            "\n🎯 **مهمتك (المرحلة 1):** اقرأ الموقع (لو في رابط، استخدم web_search أو download_media)، "
+            "حلّل البنية + التصميم + الأداء، ثم اطلع تقرير تشخيص شامل بالعربية."
+        )
+        seed_message = "\n\n".join(seed_parts)
+
+        project_name = (
+            f"تكملة: {url_clean.replace('https://','').replace('http://','').split('/')[0][:50]}"
+            if url_clean else f"تكملة: {desc_clean[:50]}"
+        )
+
+        await db.freebuild_projects.insert_one({
+            "id": pid,
+            "user_id": user["user_id"],
+            "mode": "continuation",
+            "website_type": "continuation",
+            "name": project_name,
+            "description": desc_clean[:1500],
+            "continuation_source": {
+                "source_type": payload.source_type,
+                "url": url_clean or None,
+                "access_note": access_clean or None,
+            },
+            "continuation_unlocked": False,    # Becomes True after $100 payment
+            "continuation_price_usd": 100.0,
+            "first_update_delivered": False,   # Once True, payment prompt appears
+            "status": "active",
+            "current_phase": "explore",
+            "phase_history": [],
+            "messages": [{
+                "role": "user",
+                "content": seed_message,
+                "created_at": _now(),
+            }],
+            "approved_assets": [],
+            "current_html": None,
+            "preview_url": None,
+            "created_at": _now(),
+            "updated_at": _now(),
+        })
+        logger.info(f"[continuation] project {pid} created for user {user['user_id']} (source={payload.source_type})")
+        return {"project_id": pid, "mode": "continuation", "phase": "explore"}
 
     # ===== List projects =====
     @router.get("/projects")
@@ -3468,6 +3548,100 @@ def make_freebuild_chat_router(db, get_current_user):
             {"$set": {"converted_to_app_id": app_id, "updated_at": _now()}},
         )
         return {"ok": True, "app_id": app_id}
+
+    # ===== Continuation Mode — payment + status =====
+    @router.get("/project/{pid}/continuation/status")
+    async def get_continuation_status(pid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"continuation_unlocked": 1, "first_update_delivered": 1,
+             "continuation_price_usd": 1, "continuation_source": 1, "mode": 1, "_id": 0},
+        )
+        if not proj:
+            raise HTTPException(status_code=404, detail="project not found")
+        if proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        return {
+            "unlocked": bool(proj.get("continuation_unlocked")),
+            "first_update_delivered": bool(proj.get("first_update_delivered")),
+            "price_usd": float(proj.get("continuation_price_usd") or 100.0),
+            "source": proj.get("continuation_source") or {},
+            "show_payment_prompt": (
+                bool(proj.get("first_update_delivered"))
+                and not bool(proj.get("continuation_unlocked"))
+            ),
+        }
+
+    @router.post("/project/{pid}/continuation/unlock")
+    async def unlock_continuation(
+        pid: str, payload: ContinuationUnlockPayload, user=Depends(get_current_user),
+    ):
+        """Initiate $100 payment to unlock full execution. Owner accounts unlock instantly."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"mode": 1, "continuation_unlocked": 1, "_id": 0},
+        )
+        if not proj:
+            raise HTTPException(status_code=404, detail="project not found")
+        if proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        if proj.get("continuation_unlocked"):
+            return {"ok": True, "already_unlocked": True}
+        # Owner / staff instant unlock
+        if user.get("is_admin") or user.get("user_id") in {"owner", "admin"}:
+            await db.freebuild_projects.update_one(
+                {"id": pid}, {"$set": {"continuation_unlocked": True, "unlocked_at": _now()}},
+            )
+            return {"ok": True, "method": "admin_bypass"}
+        # Real path: create Stripe checkout (uses existing STRIPE_PACKAGES infra)
+        try:
+            import stripe as _stripe
+            _stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+            if not _stripe.api_key:
+                # Fallback when Stripe is not configured: instant unlock (test mode)
+                logger.warning(f"[continuation] STRIPE_SECRET_KEY missing — granting test unlock for {pid}")
+                await db.freebuild_projects.update_one(
+                    {"id": pid}, {"$set": {"continuation_unlocked": True, "unlocked_at": _now(), "unlock_method": "test_mode"}},
+                )
+                return {"ok": True, "method": "test_mode", "note": "Stripe not configured — granted free unlock for testing"}
+            session = _stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[{
+                    "price_data": {
+                        "currency": "usd",
+                        "unit_amount": 10000,  # $100.00
+                        "product_data": {
+                            "name": "Zenrex Project Continuation Unlock",
+                            "description": "تفعيل التنفيذ الكامل + الصيانة المستمرة",
+                        },
+                    },
+                    "quantity": 1,
+                }],
+                mode="payment",
+                metadata={"project_id": pid, "user_id": user["user_id"], "purpose": "continuation_unlock"},
+                success_url=f"{os.environ.get('FRONTEND_BASE_URL', 'https://zenrex.ai')}/freebuild/chat/{pid}?unlocked=1",
+                cancel_url=f"{os.environ.get('FRONTEND_BASE_URL', 'https://zenrex.ai')}/freebuild/chat/{pid}?unlocked=0",
+            )
+            return {"ok": True, "method": "stripe", "checkout_url": session.url}
+        except Exception as e:
+            logger.exception(f"[continuation] stripe checkout failed: {e}")
+            raise HTTPException(status_code=500, detail=f"checkout creation failed: {type(e).__name__}")
+
+    @router.post("/project/{pid}/continuation/mark-first-update")
+    async def mark_first_update(pid: str, user=Depends(get_current_user)):
+        """Called by AI after delivering the first concrete update (e.g. a fix
+        the user can see). Flips first_update_delivered=True which triggers
+        the payment prompt in the UI."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"mode": 1, "_id": 0},
+        )
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=404, detail="not a continuation project")
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$set": {"first_update_delivered": True, "first_update_at": _now()}},
+        )
+        return {"ok": True}
 
     # ===== INDEPENDENCE TOOLKIT =====
     # Unlock the code/independence tier (mocked payment — wire Lemon Squeezy later)

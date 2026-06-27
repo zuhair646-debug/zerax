@@ -82,8 +82,11 @@ function WizardCore() {
     fetch(`${API}/api/freebuild-chat/projects`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.ok ? r.json() : { projects: [] })
       .then((d) => {
-        // Only show non-app projects with current_html (sites that can be converted)
-        const candidates = (d.projects || []).filter((p) => (!p.mode || p.mode === 'website') && p.current_html);
+        // Include website + continuation projects (any with HTML or external URL)
+        const candidates = (d.projects || []).filter((p) =>
+          (!p.mode || p.mode === 'website' || p.mode === 'continuation')
+          && (p.current_html || p.continuation_source?.url)
+        );
         setMyProjects(candidates);
       })
       .catch(() => {});

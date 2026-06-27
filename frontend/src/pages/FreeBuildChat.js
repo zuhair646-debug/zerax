@@ -92,6 +92,15 @@ const PHASES_BY_MODE = {
     { id: 'preview',    title: 'المعاينة',           icon: '👁️', desc: 'الموقع نهائياً' },
     { id: 'publish',    title: 'النشر',             icon: '🚀', desc: 'دومين + استضافة' },
   ],
+  continuation: [
+    { id: 'explore',    title: 'استكشاف الموقع',     icon: '🔍', desc: 'قراءة الكود + الفهم' },
+    { id: 'diagnose',   title: 'التشخيص الكامل',     icon: '📋', desc: 'تقرير صحة + ثغرات' },
+    { id: 'plan',       title: 'خطة الصيانة',        icon: '🎯', desc: 'إصلاح + تطوير + إضافة' },
+    { id: 'first_fix',  title: 'أول تحديث (مجاني)',  icon: '✨', desc: 'تجربة جودة قبل الدفع' },
+    { id: 'unlock',     title: 'تفعيل التنفيذ',      icon: '💳', desc: '$100 — مرة وحدة' },
+    { id: 'execute',    title: 'التنفيذ الكامل',     icon: '🛠️', desc: 'بناء + إصلاح + تطوير' },
+    { id: 'handover',   title: 'التسليم + الصيانة',  icon: '🚀', desc: 'نشر + متابعة مستمرة' },
+  ],
 };
 
 const getPhases = (mode) => PHASES_BY_MODE[mode] || PHASES_DEFAULT;
@@ -4444,6 +4453,105 @@ function ChatCreditsPill() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// ContinuationPaymentBanner — appears in chat after the AI
+// delivers the first concrete update. Triggers Stripe checkout
+// (or instant unlock for admins / test mode).
+// ─────────────────────────────────────────────────────────────
+function ContinuationPaymentBanner({ projectId, onUnlocked }) {
+  const [status, setStatus] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+
+  const loadStatus = React.useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const r = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/freebuild-chat/project/${projectId}/continuation/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) setStatus(await r.json());
+    } catch { /* silent */ }
+  }, [projectId]);
+
+  React.useEffect(() => {
+    loadStatus();
+    const id = setInterval(loadStatus, 15000);
+    return () => clearInterval(id);
+  }, [loadStatus]);
+
+  const unlock = async () => {
+    setBusy(true);
+    try {
+      const token = localStorage.getItem('token');
+      const r = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/freebuild-chat/project/${projectId}/continuation/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      const d = await r.json();
+      if (d.checkout_url) {
+        window.location.href = d.checkout_url;
+        return;
+      }
+      if (d.ok) {
+        toast.success(d.method === 'test_mode' ? 'تم التفعيل (وضع اختبار)' : 'تم تفعيل التنفيذ الكامل');
+        await loadStatus();
+        onUnlocked && onUnlocked();
+      }
+    } catch (e) {
+      toast.error('فشل بدء الدفع — حاول بعد قليل');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!status || !status.show_payment_prompt) return null;
+  return (
+    <div
+      data-testid="continuation-payment-banner"
+      className="mx-3 my-3 rounded-2xl border border-fuchsia-400/40 bg-gradient-to-br from-fuchsia-600/15 via-rose-600/10 to-amber-600/10 backdrop-blur-sm p-4 sm:p-5 shadow-xl shadow-fuchsia-500/10"
+    >
+      <div className="flex items-start gap-3 mb-3">
+        <div className="text-2xl">✨</div>
+        <div className="flex-1">
+          <h3 className="text-sm sm:text-base font-black text-fuchsia-100 mb-1">
+            عجبك أول تحديث؟ فعّل التنفيذ الكامل
+          </h3>
+          <p className="text-xs text-fuchsia-200/80 leading-relaxed">
+            شفت الجودة بنفسك — الآن خلّيني أكمّل معك التطوير، الصيانة، والإضافات على مدى المشروع كامل.
+            دفعة واحدة <strong className="text-amber-300">$100</strong>، ما في اشتراك شهري ولا رسوم خفيّة.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-[10px] text-fuchsia-100/80">
+        {[
+          { e: '🛠️', t: 'إصلاحات غير محدودة' },
+          { e: '⚡', t: 'تحسين الأداء' },
+          { e: '🎨', t: 'إضافة ميزات جديدة' },
+          { e: '📱', t: 'تحويل لتطبيق مجاناً' },
+        ].map((b, i) => (
+          <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-black/30 border border-white/5">
+            <span>{b.e}</span><span>{b.t}</span>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={unlock}
+        disabled={busy}
+        data-testid="continuation-unlock-btn"
+        className="w-full py-3 rounded-xl bg-gradient-to-r from-fuchsia-500 to-amber-500 hover:from-fuchsia-400 hover:to-amber-400 transition font-black text-sm text-white shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+      >
+        {busy ? 'جاري التحويل لبوابة الدفع...' : `💳 ادفع $100 وفعّل التنفيذ الكامل`}
+      </button>
+
+      <p className="text-[10px] text-fuchsia-200/60 mt-2 text-center">
+        💎 ضمان استرجاع كامل خلال ٧ أيام لو ما عجبتك الجودة
+      </p>
+    </div>
+  );
+}
+
 /**
  * PhaseHeaderPill — top strip above the tab bar that ALWAYS shows the
  * project name + current build phase + storage indicator. The pill is now
@@ -4609,6 +4717,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   const isVideoMode = ['video_studio', 'anime_studio', 'longform_video'].includes(project?.mode);
   const isStudioMode = isVideoMode || project?.mode === 'image_studio';
   const isAppMode = project?.mode === 'app';
+  const isContinuationMode = project?.mode === 'continuation';
   // Website-from-scratch mode — هذا اللي المستخدم طلب فيه:
   // إلغاء تبويبات "المعاينة الحية" و "المعتمدات" بالكامل، وخلي بس المحادثة + المراحل.
   // الـ studios والـ app modes تحافظ على تبويباتها (تحتاج المعاينة المرئية).
@@ -6045,6 +6154,13 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
           {/* Tab Content */}
           {activeTab === 'chat' && (
             <div ref={chatScrollRef} onScroll={onChatScroll} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" data-testid="chat-messages">
+              {/* 💳 Continuation payment banner — appears AFTER first update delivered */}
+              {isContinuationMode && (
+                <ContinuationPaymentBanner
+                  projectId={projectId}
+                  onUnlocked={() => setProject((p) => p ? { ...p, continuation_unlocked: true } : p)}
+                />
+              )}
               {/* Independence banner removed by UX request — actions surface
                   inline via AI chat messages instead of a permanent banner. */}
               {/* 🧠 Discovery Brain — only in website-from-scratch mode.
