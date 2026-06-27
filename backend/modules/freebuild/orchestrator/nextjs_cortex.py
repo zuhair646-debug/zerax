@@ -127,11 +127,27 @@ def default_package_json(project_name: str = "zenrex-app") -> str:
     }, indent=2)
 
 
-def default_tailwind_config(palette: Optional[List[str]] = None) -> str:
+def default_tailwind_config(palette: Any = None) -> str:
+    """Accept palette as either a list of hex strings (legacy) OR a dict like
+    {primary, secondary, accent, background, text} (canonical brand_dna shape).
+    Auto-normalizes to a list before generating Tailwind config.
+    """
     colors = {}
     if palette:
-        for i, c in enumerate(palette[:5]):
-            colors[f"brand-{i+1}"] = c
+        if isinstance(palette, dict):
+            # Canonical brand_dna palette shape — extract hex string values
+            palette_list = [v for v in palette.values() if isinstance(v, str) and v.startswith("#")]
+            # Preserve semantic names if present (primary/secondary/accent)
+            for name, val in palette.items():
+                if isinstance(val, str) and val.startswith("#") and name in ("primary", "secondary", "accent", "background", "text"):
+                    colors[name] = val
+            # Fallback to brand-N for any remaining hex values
+            for i, c in enumerate(palette_list[:5]):
+                colors.setdefault(f"brand-{i+1}", c)
+        elif isinstance(palette, (list, tuple)):
+            for i, c in enumerate(palette[:5]):
+                if isinstance(c, str):
+                    colors[f"brand-{i+1}"] = c
     cfg = (
         "import type { Config } from 'tailwindcss';\n\n"
         "const config: Config = {\n"

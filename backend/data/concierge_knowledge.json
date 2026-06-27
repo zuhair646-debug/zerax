@@ -336,8 +336,8 @@
         "free_tier": "حسب مزوّد VPS (Hetzner: من $4/شهر، DigitalOcean: من $4/شهر)",
         "paid": "متغيّر"
       },
-      "prerequisites_ar": ["سيرفر VPS جاهز", "صلاحية SSH على المنفذ المطلوب"],
-      "prerequisites_en": ["A ready VPS server", "SSH access on the desired port"],
+      "prerequisites_ar": ["سيرفر VPS جاهز (مثل Hetzner أو DigitalOcean أو Linode — تبدأ من $4/شهر)", "صلاحية SSH على المنفذ المطلوب"],
+      "prerequisites_en": ["A ready VPS server (e.g. Hetzner, DigitalOcean, or Linode — from $4/month)", "SSH access on the desired port"],
       "common_mistakes_ar": [
         "نسخ المفتاح الخاص بدون السطر -----BEGIN/END----- — لازم تنسخه كاملاً",
         "Firewall يمنع SSH — تأكد أن port 22 مفتوح"
