@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { HardDrive, Check, Loader2, ArrowLeft, Archive, Clock, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { HardDrive, Check, Loader2, ArrowLeft, Archive, Clock, ShieldCheck, AlertTriangle, XCircle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -99,23 +99,42 @@ export default function BillingStorage() {
     if (!token) { nav('/login'); return; }
     setBusyPlanId(planId);
     try {
-      const r = await fetch(`${API}/api/storage/checkout`, {
+      // NEW: PayPal Subscriptions API — true recurring billing (auto-charge monthly).
+      const r = await fetch(`${API}/api/storage/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ plan_id: planId }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || 'فشل');
-      if (d.downgraded_to === 'free') {
-        toast.success('تم التحويل للخطة المجانية');
-        await reload();
-        return;
-      }
-      if (d.checkout_url) window.location.href = d.checkout_url;
+      if (d.approval_url) window.location.href = d.approval_url;
     } catch (e) {
-      toast.error(e?.message || 'تعذر إنشاء الدفع');
+      toast.error(e?.message || 'تعذر إنشاء الاشتراك');
     } finally {
       setBusyPlanId(null);
+    }
+  };
+
+  const cancelSubscription = async () => {
+    const ok = window.confirm(
+      'هل تريد فعلاً إلغاء الاشتراك؟\n\n' +
+      '• ستحتفظ بكامل الصلاحيات حتى نهاية الشهر المدفوع.\n' +
+      '• لن نسحب أي مبلغ منك بعدها.\n' +
+      '• إذا أردت العودة لاحقاً، يجب الاشتراك من جديد + دفع رسم الاسترداد (ضعف سعر باقتك) لفك قفل ملفاتك القديمة.'
+    );
+    if (!ok) return;
+    const token = localStorage.getItem('token');
+    try {
+      const r = await fetch(`${API}/api/storage/cancel-subscription`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل الإلغاء');
+      toast.success('تم إلغاء الاشتراك. أنت مغطى حتى نهاية الشهر المدفوع.');
+      await reload();
+    } catch (e) {
+      toast.error(e?.message || 'تعذر الإلغاء');
     }
   };
 
@@ -232,6 +251,30 @@ export default function BillingStorage() {
                 </div>
               </div>
             )}
+
+            {/* Cancel subscription — visible only when user has an active paid sub */}
+            {!isArchived && sub.plan_id && sub.plan_id !== 'trial' && sub.plan_id !== 'free' && sub.plan_price_usd > 0 && (
+              <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 flex items-start gap-3" data-testid="cancel-subscription-block">
+                <Info className="w-5 h-5 text-zinc-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-zinc-200 mb-1">إدارة الاشتراك</p>
+                  <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
+                    اشتراكك يُجدّد تلقائياً عبر PayPal كل شهر. عند الإلغاء:
+                    <span className="block mt-1.5">• تحتفظ بصلاحياتك حتى نهاية الشهر المدفوع.</span>
+                    <span className="block">• لا نسحب أي مبلغ بعدها.</span>
+                    <span className="block">• ملفاتك تبقى محفوظة، وتحتاج لدفع <b className="text-rose-300">ضعف سعر باقتك</b> لاستردادها مستقبلاً.</span>
+                  </p>
+                  <button
+                    onClick={cancelSubscription}
+                    data-testid="cancel-subscription-btn"
+                    className="px-4 py-2 rounded-lg border border-rose-500/40 hover:bg-rose-500/10 text-rose-300 text-xs font-black inline-flex items-center gap-2"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    إلغاء الاشتراك
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -240,10 +283,12 @@ export default function BillingStorage() {
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 mb-6 text-[12px] leading-relaxed">
           <p className="text-amber-200 font-bold mb-2">💡 كيف تعمل الباقات</p>
           <ul className="space-y-1 text-zinc-300">
+            <li>• <b className="text-amber-300">تجربة مجانية:</b> 2 ميجا فقط (حتى تتأكد من النظام) — بعدها يجب الاشتراك.</li>
             <li>• <b className="text-amber-300">تسعير خطي:</b> 10 ميجا بـ $3، ثم +$5 لكل +50 ميجا.</li>
-            <li>• <b className="text-amber-300">تجديد شهري تلقائي</b> عبر PayPal — تقدر تلغي في أي وقت.</li>
-            <li>• <b className="text-rose-300">عند التأخر في السداد:</b> ملفاتك تبقى محفوظة لكن الوصول إليها يُقفل.</li>
-            <li>• <b className="text-rose-300">رسوم الاسترداد = ضعف سعر الباقة</b> (مثال: باقة $5 → استرداد بـ $10).</li>
+            <li>• <b className="text-amber-300">تجديد شهري تلقائي</b> عبر PayPal — يسحب من غير تدخل منك.</li>
+            <li>• <b className="text-emerald-300">إلغاء فوري:</b> اضغط زر «إلغاء الاشتراك» → نوقف السحب فوراً وتحتفظ بالصلاحيات للشهر المدفوع.</li>
+            <li>• <b className="text-rose-300">عند التأخر في السداد:</b> 10 أيام سماح، ثم يُقفل الوصول لكن الملفات تبقى 6 أشهر.</li>
+            <li>• <b className="text-rose-300">رسم الاسترداد:</b> ضعف سعر الباقة (مثال: باقة $5 → استرداد بـ $10).</li>
           </ul>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">

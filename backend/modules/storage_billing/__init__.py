@@ -285,9 +285,10 @@ def _quota_for_subscription(sub: dict) -> dict:
     status = sub.get("status", "trial")
     plan_id = sub.get("plan_id", "trial")
 
-    # Trial: 10 MB free for evaluation
+    # Trial: 2 MB free for evaluation — small on purpose so users hit the
+    # paywall fast and must subscribe to keep going.
     if plan_id == "trial" or plan_id == "free":
-        quota_mb = 10
+        quota_mb = 2
         label_ar = "تجريبية"
         price_usd = 0
     else:
@@ -301,7 +302,7 @@ def _quota_for_subscription(sub: dict) -> dict:
     if status == "archived":
         locked_reason = "انتهت فترة السماح — ادفع رسم الاسترداد لفك القفل"
     elif status == "cancelled":
-        locked_reason = "اشتراكك ملغى — جدّد لفك القفل"
+        locked_reason = "اشتراكك ملغى — اشترك من جديد للوصول لملفاتك"
 
     return {
         "plan_id": plan_id,

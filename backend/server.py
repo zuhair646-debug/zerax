@@ -3753,8 +3753,11 @@ except Exception as _ppe:
 
 # ── Zenrex Storage Billing (unified storage subscription + grace period) ──
 try:
-    from modules.storage_billing import register_storage_billing as _sb_register
+    from modules.storage_billing import register_storage_billing as _sb_register, STORAGE_PLANS as _SB_PLANS, GRACE_DAYS as _SB_GRACE
     _sb_register(app, db, get_current_user)
+    # ── True recurring billing via PayPal Subscriptions API ──
+    from modules.storage_billing.paypal_subscriptions import register_paypal_subscriptions as _pps_register
+    _pps_register(app, db, get_current_user, _SB_PLANS, _SB_GRACE)
 except Exception as _sbe:
     logging.getLogger(__name__).error(f"Failed to register storage_billing: {_sbe}", exc_info=True)
 
