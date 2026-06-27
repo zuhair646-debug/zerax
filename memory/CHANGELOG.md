@@ -1,6 +1,73 @@
 # Zitex Changelog
 
 
+### 🧠 Feb 27, 2026 — Autonomy v4: Learning Robustness Push (~95% Target)
+
+**Owner directive (Saudi Arabic):** push autonomy to ~95% by closing the 5 learning-system gaps. The AI must actually internalize lessons across sessions, not just "see" the last 5 chronologically.
+
+**A. Relevance-based lesson retrieval (replaces "last 5 chronological")**
+- New `/app/backend/modules/freebuild/lesson_retrieval.py`
+  - `_normalize_arabic()` + `_tokenize()` — Arabic-aware tokenizer (alef/ya/ta-marbuta normalization, stopwords, keeps code identifiers like `deploy_to_vercel`).
+  - `_score_lesson()` — hybrid scorer: **token-overlap × priority_boost × recency_boost × effectiveness_boost**. Critical priority always-included; recency half-life ~14 days; ineffective lessons (high `injection_count` + high `pattern_recurred_after`) get dampened.
+  - `get_relevant_lessons()` — picks the top-N most-relevant lessons per turn (default 8). Auto-bumps `injection_count` + `last_injected_at` on the chosen lessons.
+- `silent_supervisor.recent_lessons_for_prompt()` rewritten to call the new retrieval (with safe chronological fallback).
+- `freebuild_agent.py` system-prompt builder now extracts the last user message and passes it to retrieval — so the lessons surfaced ACTUALLY relate to the current task.
+- **Result:** with 200 stored lessons, the model sees the 8 most relevant — not the 5 newest. Critical owner-authored rules always lead the list.
+
+**B. Effectiveness tracking**
+- `ai_learned_lessons` schema extended with: `priority`, `source`, `injection_count`, `pattern_recurred_after`, `last_injected_at`, `details`.
+- New helper `mark_pattern_recurrence(lesson_id)` — called when a pattern re-fires after a lesson was injected; degrades the lesson's effectiveness score.
+- `get_lesson_stats()` returns `effectiveness = 1 - recurrence/(injections+1)` per lesson. Weak lessons (eff < 0.5) surface at the top of the admin dashboard for rewriting.
+
+**C. Manual lesson authoring (operator override)**
+- New `/app/backend/modules/freebuild/lessons_admin.py` — REST router mounted at `/api/admin/lessons`:
+  - `GET /api/admin/lessons` — list lessons sorted by priority + effectiveness.
+  - `POST /api/admin/lessons` — owner adds a `critical`-priority lesson (always-on across sessions). Logs an owner notification too.
+  - `PATCH /api/admin/lessons/{id}` — edit guidance or priority.
+  - `DELETE /api/admin/lessons/{id}` — remove a bad lesson.
+  - `GET /api/admin/lessons/e1-reviews` — Auto-E1 audit log.
+- Server registers the router with an owner-only guard (`role in {owner, admin, super_admin}`).
+- **Verified live:** `POST` saved a critical lesson; `GET` returned 2 items; the lesson then surfaced in all 3 unrelated test queries (forced critical inclusion working).
+
+**D. Auto-E1 Reviewer (30s safety net)**
+- New `/app/backend/modules/freebuild/auto_e1.py`
+  - `should_invoke_auto_e1()` — triggers after **3 Silent-Supervisor interventions** in one turn.
+  - `run_auto_e1_review()` — calls Claude Sonnet 4.5 with a tight "senior engineer review" prompt → returns `{diagnosis_ar, lesson_ar, next_action_ar}` as JSON.
+  - The reviewer **does NOT touch code** — it only produces ONE focused high-priority lesson that flows through the standard retrieval pipeline.
+- `freebuild_agent.py` wires the trigger right after escalation; emits `auto_e1_review` SSE event + creates an `auto_e1_review` owner notification with the diagnosis + lesson + next action.
+- **30-second operator grace window:** if the operator added a `manual_operator` lesson in the last 30s, Auto-E1 skips (the operator already took control).
+
+**E. New supervisor patterns**
+- `lazy_reply` — assistant replied with <50 chars to a >120-char user request.
+- `credential_repeat_loop` — same `request_credential` called 3× consecutively.
+- Both fire instantly on detection (no 3-event minimum). Each has a tailored Arabic nudge.
+- `record_assistant_text()` now also accepts `prior_user_text_len` so lazy detection works.
+
+**Backend wiring**
+- `escalation_bridge._title_ar_for_reason()` extended with `auto_e1_review` and `manual_lesson`.
+- `escalation_bridge._body_ar_for_reason()` extended with operator-friendly HTML bodies for both new reasons.
+- `server.py` registers `lessons_admin` after `storage_billing`.
+
+**Tests (all passing)**
+- New `/app/backend/tests/test_learning_v4.py` — 12 cases: tokenization, scoring (overlap/priority/recency/effectiveness), new supervisor patterns, Auto-E1 threshold.
+- Combined suite: 38/38 pass (4 + 11 + 11 + 12).
+
+**Service worker:** bumped to `v45-2026-02-learning-v4`.
+
+**Expected accuracy improvement (per change)**
+| Change | Estimated lift |
+|---|---|
+| A (relevance retrieval) | +25% — lessons are now actually relevant |
+| B (effectiveness tracking) | +10% — weak lessons get downgraded automatically |
+| C (manual lessons) | +15% — owner can override anything in seconds |
+| D (Auto-E1) | +20% — closes the gap between mechanical Supervisor and human review |
+| E (new patterns) | +10% — covers lazy/cred-loop blind spots |
+| **Total expected** | **~80% of the way from 60% → 95%** |
+
+Real measurement requires 7-14 days of usage data (per the metrics now collected in `injection_count` + `pattern_recurred_after`).
+
+
+
 ### 🔁 Feb 27, 2026 — End-to-End Verification Pass + Persistence Fixes
 
 **What the testing agent verified live** (iteration_71.json):

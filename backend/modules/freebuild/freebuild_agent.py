@@ -10006,18 +10006,40 @@ async def _stream_one_provider(
         except Exception:
             _docs_block = ""
         sys_prompt = get_system_prompt(project, is_owner=is_owner) + _lang_directive + (_docs_block or "") + (_wf_addendum or "")
-        # 🧠 Inject lessons learned from prior Silent Supervisor interventions
-        # so the AI doesn't repeat the same mistake across sessions.
+        # 🧠 Inject lessons learned from prior Silent Supervisor / E1 reviews.
+        # Now uses RELEVANCE-based retrieval (token overlap + priority + recency
+        # + effectiveness) instead of pure chronological, so the AI sees the
+        # right lesson at the right time even with hundreds of lessons in store.
         try:
             from .silent_supervisor import recent_lessons_for_prompt
-            _lessons = await recent_lessons_for_prompt(db, project.get("id"), limit=5) if db else []
+            _user_msg_for_retrieval = ""
+            try:
+                # Last user message in the turn — used to score lesson relevance
+                for _m in reversed(messages):
+                    if (_m.get("role") == "user") and isinstance(_m.get("content"), (str, list)):
+                        c = _m.get("content")
+                        if isinstance(c, str):
+                            _user_msg_for_retrieval = c
+                        elif isinstance(c, list):
+                            for _ci in c:
+                                if isinstance(_ci, dict) and _ci.get("type") == "text":
+                                    _user_msg_for_retrieval = _ci.get("text", "")
+                                    break
+                        if _user_msg_for_retrieval:
+                            break
+            except Exception:
+                _user_msg_for_retrieval = ""
+            _lessons = await recent_lessons_for_prompt(
+                db, project.get("id"), limit=8, user_message=_user_msg_for_retrieval,
+            ) if db else []
             if _lessons:
                 _lesson_block = (
-                    "\n\n# 🧠 دروس مستفادة من جلسات سابقة (لا تكرر هذه الأخطاء):\n"
+                    "\n\n# 🧠 دروس مستفادة ذات صلة (مرتّبة حسب الأولوية + الصلة):\n"
+                    "# هذه الدروس مأخوذة من تجارب سابقة — التزم بها لتجنّب تكرار الأخطاء.\n"
                     + "\n\n".join(f"### درس {i + 1}\n{ls}" for i, ls in enumerate(_lessons))
                 )
                 sys_prompt = sys_prompt + _lesson_block
-                logger.info(f"[agent] injected {len(_lessons)} learned lessons into system prompt")
+                logger.info(f"[agent] injected {len(_lessons)} relevance-ranked lessons into system prompt")
         except Exception as _le:
             logger.debug(f"[agent] lesson injection skipped: {_le}")
         # ── 🔪 SURGICAL MODE — replace 55KB monolith with 4KB focused prompt
@@ -11139,6 +11161,76 @@ async def _stream_one_provider(
             })
     except Exception as _ee:
         logger.debug(f"[escalation] dispatch failed: {_ee}")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 🤝 AUTO-E1 REVIEW — if the supervisor intervened 3+ times AND the
+    # operator hasn't manually unblocked the project in the last 30s, run
+    # an automated "senior engineer review" pass that produces a focused
+    # high-priority lesson. The lesson goes through the same retrieval
+    # pipeline as everything else, so the AI sees it on the next turn.
+    # This is the autonomy "safety net" — bridges the gap between Silent
+    # Supervisor (mechanical) and human E1 (manual).
+    # ─────────────────────────────────────────────────────────────────────────
+    try:
+        from .auto_e1 import should_invoke_auto_e1, run_auto_e1_review
+        if await should_invoke_auto_e1(getattr(ctx, "_supervisor", None)):
+            # Check the 30-second operator-grace window: was a manual lesson
+            # added for this project in the last 30 seconds? If yes, skip.
+            _skip_auto_e1 = False
+            try:
+                from datetime import timedelta as _td
+                _grace_cutoff = (datetime.now(timezone.utc) - _td(seconds=30)).isoformat()
+                _recent_manual = await db.ai_learned_lessons.find_one({
+                    "project_id": ctx.project_id,
+                    "source": "manual_operator",
+                    "ts": {"$gte": _grace_cutoff},
+                })
+                if _recent_manual:
+                    _skip_auto_e1 = True
+                    logger.info("[auto_e1] skipped — operator added a manual lesson in last 30s")
+            except Exception:
+                pass
+            if not _skip_auto_e1:
+                logger.info("[auto_e1] threshold reached — running auto review")
+                _sup_state = getattr(ctx, "_supervisor", None)
+                _events = list(getattr(_sup_state, "events", []) or [])
+                _review = await run_auto_e1_review(
+                    db=db,
+                    project_id=ctx.project_id,
+                    user_id=(ctx.user.get("user_id") if getattr(ctx, "user", None) else None),
+                    supervisor_events=_events,
+                    last_assistant_text="\n".join(all_text_chunks or [])[-1200:],
+                    project_state={"pages": dict(ctx.pages or {})},
+                )
+                if _review.get("ok"):
+                    yield _sse("auto_e1_review", {
+                        "diagnosis_ar": _review.get("diagnosis_ar"),
+                        "lesson_ar": _review.get("lesson_ar"),
+                        "next_action_ar": _review.get("next_action_ar"),
+                        "lesson_id": _review.get("lesson_id"),
+                    })
+                    # Also drop an owner notification so the operator knows
+                    # E1 stepped in (separate from the standard escalation).
+                    try:
+                        from .escalation_bridge import create_escalation
+                        await create_escalation(
+                            db=db,
+                            project_id=ctx.project_id,
+                            user_id=(ctx.user.get("user_id") if getattr(ctx, "user", None) else None),
+                            reason="auto_e1_review",
+                            severity="medium",
+                            context={
+                                "diagnosis": _review.get("diagnosis_ar"),
+                                "lesson": _review.get("lesson_ar"),
+                                "next_action": _review.get("next_action_ar"),
+                            },
+                        )
+                    except Exception:
+                        pass
+                else:
+                    logger.warning(f"[auto_e1] review failed: {_review.get('error')}")
+    except Exception as _ae:
+        logger.debug(f"[auto_e1] hook failed: {_ae}")
 
     # ─────────────────────────────────────────────────────────────────────────
     # 📋 PROJECT-STATUS FOOTER — emitted before `done` so the frontend can

@@ -3761,6 +3761,24 @@ try:
 except Exception as _sbe:
     logging.getLogger(__name__).error(f"Failed to register storage_billing: {_sbe}", exc_info=True)
 
+# ── AI Lessons Admin (operator-only CRUD for the learning system) ──
+try:
+    from modules.freebuild.lessons_admin import register_lessons_admin
+
+    def _is_owner_check(user):
+        # `get_current_user` returns {user_id, role} from the JWT — no email/is_owner.
+        # The role claim is set at login time from the user doc.
+        if not user:
+            return False
+        try:
+            return user.get("role") in ("owner", "admin", "super_admin")
+        except Exception:
+            return False
+
+    register_lessons_admin(app, db, get_current_user, _is_owner_check)
+except Exception as _le:
+    logging.getLogger(__name__).error(f"Failed to register lessons_admin: {_le}", exc_info=True)
+
 # ============== CARE PORTAL (post-delivery client dashboard + Mobile App upgrade) ==============
 try:
     from modules.care_portal import create_care_router

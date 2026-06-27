@@ -92,8 +92,9 @@ def record_tool_event(state: SupervisorState, name: str, args: Dict[str, Any], r
         log.debug(f"[supervisor] record_event error: {e}")
 
 
-def record_assistant_text(state: SupervisorState, text: str) -> None:
-    """Detect explicit give-up phrases in the model's text."""
+def record_assistant_text(state: SupervisorState, text: str, prior_user_text_len: int = 0) -> None:
+    """Detect explicit give-up phrases AND lazy/empty replies on a long
+    user turn (signs of the AI not engaging with the actual request)."""
     if state is None or not text:
         return
     txt = (text or "").lower()
@@ -107,11 +108,23 @@ def record_assistant_text(state: SupervisorState, text: str) -> None:
                 "ts": datetime.now(timezone.utc).isoformat(),
             })
             return
+    # Lazy reply detector: user wrote a substantial request (>120 chars)
+    # but the AI replied with <50 chars of meaningful content. Indicates
+    # the model didn't engage with the prompt.
+    stripped_len = len((text or "").strip())
+    if prior_user_text_len > 120 and stripped_len < 50:
+        state.events.append({
+            "name": "_assistant_text",
+            "payload_hash": "lazy",
+            "ok": False,
+            "error": f"lazy:user_len={prior_user_text_len} reply_len={stripped_len}",
+            "ts": datetime.now(timezone.utc).isoformat(),
+        })
 
 
 def detect_stuck_pattern(state: SupervisorState) -> Optional[Dict[str, Any]]:
     """Return a {pattern, details} dict if the AI looks stuck, else None."""
-    if state is None or len(state.events) < 2:
+    if state is None or len(state.events) < 1:
         return None
 
     # 3) Explicit give-up text — check FIRST so it fires on the first occurrence
@@ -122,6 +135,22 @@ def detect_stuck_pattern(state: SupervisorState) -> Optional[Dict[str, Any]]:
                 "pattern": "assistant_gave_up",
                 "trigger": e.get("error"),
             }
+
+    # 4) Lazy reply on a complex/long user turn — same instant-fire treatment.
+    for e in reversed(list(state.events)[-4:]):
+        if e.get("name") == "_assistant_text" and e.get("payload_hash") == "lazy":
+            return {"pattern": "lazy_reply", "details": (e.get("error") or "")[:140]}
+
+    # 5) Credential request loop — same `request_credential` for the same
+    # service in 3 consecutive calls (the AI forgot the customer already
+    # provided it, or it never actually waited for the answer).
+    recent_cred = [e for e in list(state.events)[-5:] if e["name"] == "request_credential"]
+    if len(recent_cred) >= 3:
+        return {
+            "pattern": "credential_repeat_loop",
+            "service_payload": recent_cred[-1].get("payload_hash"),
+            "count": len(recent_cred),
+        }
 
     if len(state.events) < _FAIL_THRESHOLD:
         return None
@@ -197,6 +226,24 @@ def build_supervisor_injection(pattern: Dict[str, Any], project_state: Dict[str,
             "• استخدم `troubleshoot_agent` للحصول على مساعدة متخصصة.\n\n"
             "إذا فعلاً لا توجد أداة (وهذا نادر جداً) — اطلب من العميل بوضوح ما تحتاجه."
         )
+    if pat == "lazy_reply":
+        return (
+            "📉 **مُراقب تلقائي** — العميل أرسل طلباً مفصّلاً ورديت برد قصير جداً.\n"
+            "هذا تجاهل للسياق. أعِد قراءة طلب العميل بعناية، حدّد ما يحتاجه فعلاً، "
+            "ثم نفّذ خطوات ملموسة (استدع أدوات، اقرأ الـ HTML الحالي، أو اطرح أسئلة "
+            "موجّهة). **لا ترد بجمل عامة على طلب محدد**."
+        )
+    if pat == "credential_repeat_loop":
+        return (
+            "🔑 **مُراقب تلقائي** — طلبت نفس الـ credential من العميل **3 مرات متتالية**.\n"
+            "إما (أ) العميل أرسله ولم تتعرف عليه، أو (ب) أنت تطلب وتنسى الانتظار.\n"
+            "**توقف عن إعادة الطلب** واستخدم بدلاً عن ذلك:\n"
+            "• `get_credential` أو افحص `freebuild_credentials` لمشروعك للتأكد إن "
+            "التوكن محفوظ فعلاً.\n"
+            "• إذا التوكن موجود لكن استدعاء الأداة فشل → المشكلة في التوكن نفسه "
+            "(صلاحيات/انتهاء)، أبلغ العميل بصراحة.\n"
+            "• إذا غير موجود → اطلبه **مرة واحدة فقط** ثم انتظر `tool_result` يؤكد الحفظ."
+        )
     return ""
 
 
@@ -221,11 +268,23 @@ async def persist_lesson(db, project_id: Optional[str], lesson: str, pattern: Di
         log.debug(f"[supervisor] persist_lesson failed: {e}")
 
 
-async def recent_lessons_for_prompt(db, project_id: Optional[str], limit: int = 5) -> List[str]:
-    """Fetch the most recent lessons for this project + global ones.
-    Used by freebuild_agent to enrich the system prompt."""
+async def recent_lessons_for_prompt(db, project_id: Optional[str], limit: int = 5, user_message: str = "") -> List[str]:
+    """Fetch the lessons most RELEVANT to the current user message, not just
+    the most recent ones. Falls back to recency if retrieval fails.
+
+    The new `lesson_retrieval.get_relevant_lessons` runs a hybrid scorer
+    (token overlap + priority + recency + effectiveness) so the lessons
+    surfaced to the AI actually relate to the current task — fixing the
+    "5 latest lessons" weakness."""
     if db is None:
         return []
+    try:
+        from .lesson_retrieval import get_relevant_lessons
+        lessons = await get_relevant_lessons(db, project_id, user_message or "", limit=limit)
+        return [L.get("guidance_ar") for L in lessons if L.get("guidance_ar")]
+    except Exception as e:
+        log.debug(f"[supervisor] relevant_lessons failed, falling back: {e}")
+    # Fallback path: simple chronological
     try:
         cursor = db.ai_learned_lessons.find(
             {"$or": [{"project_id": project_id}, {"project_id": None}]},

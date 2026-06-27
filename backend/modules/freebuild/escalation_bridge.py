@@ -173,6 +173,8 @@ def _title_ar_for_reason(reason: str) -> str:
         "honesty_violation": "🛡️ فحص الصدق: ادّعى الذكاء إنجازاً بدون تحقق",
         "assistant_gave_up": "🚧 الذكاء استسلم — يحتاج تدخل بشري",
         "tool_chain_failure": "❌ سلسلة فشل في الأدوات",
+        "auto_e1_review": "🤝 E1 تدخّل تلقائياً وأنتج درساً تصحيحياً",
+        "manual_lesson": "📝 درس يدوي من الموظف",
     }.get(reason, f"⚠️ تنبيه AI: {reason}")
 
 
@@ -205,6 +207,21 @@ def _body_ar_for_reason(reason: str, context: Dict[str, Any]) -> str:
             f"خدمة خارجية. السياق: <pre style='direction:ltr;text-align:left'>"
             f"{str(context)[:600]}</pre>"
         )
+    if reason == "auto_e1_review":
+        diag = context.get("diagnosis", "—")
+        lesson = context.get("lesson", "—")
+        nxt = context.get("next_action", "—")
+        return (
+            f"الذكاء تعثّر 3 مرات، فتدخّل <b>E1 تلقائياً</b> وأنتج التشخيص التالي:<br/><br/>"
+            f"<b>التشخيص:</b> {diag}<br/>"
+            f"<b>الدرس المحقون:</b> {lesson}<br/>"
+            f"<b>الخطوة القادمة:</b> {nxt}<br/><br/>"
+            f"<i>الدرس انحفظ بـ priority=high وراح يطلع في system prompt الدور القادم تلقائياً. "
+            f"لا تحتاج عمل شيء — هذا فقط للعلم.</i>"
+        )
+    if reason == "manual_lesson":
+        ls = context.get("lesson", "—")
+        return f"تمت إضافة درس يدوي بواسطة الموظف:<br/><br/><b>«{ls}»</b><br/><br/><i>تم تطبيقه بـ priority=critical.</i>"
     return f"<pre style='direction:ltr;text-align:left'>{str(context)[:800]}</pre>"
 
 
