@@ -285,12 +285,20 @@ def _quota_for_subscription(sub: dict) -> dict:
     status = sub.get("status", "trial")
     plan_id = sub.get("plan_id", "trial")
 
-    # Trial: 2 MB free for evaluation — small on purpose so users hit the
-    # paywall fast and must subscribe to keep going.
-    if plan_id == "trial" or plan_id == "free":
+    # Trial / not-yet-paid → 2 MB only. Subscriptions in `pending_approval`
+    # state mean the user started the PayPal flow but hasn't confirmed
+    # payment yet — we must NOT grant them the paid quota until PayPal
+    # webhook flips them to 'active'. Otherwise users could click
+    # Subscribe and never pay.
+    if plan_id in ("trial", "free") or status == "pending_approval":
         quota_mb = 2
         label_ar = "تجريبية"
         price_usd = 0
+        # pending_approval keeps the chosen plan label for UI breadcrumbs
+        if status == "pending_approval":
+            paid_plan = STORAGE_PLANS.get(plan_id)
+            if paid_plan:
+                label_ar = f"بانتظار تأكيد PayPal ({paid_plan['label_ar']})"
     else:
         plan = STORAGE_PLANS.get(plan_id) or STORAGE_PLANS["starter10"]
         quota_mb = plan["quota_mb"]

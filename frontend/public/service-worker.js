@@ -1,6 +1,6 @@
 /* Zenrex Service Worker — PWA (v13 — credits packs + custom amount + AI deduction fix) */
 /* eslint-disable no-restricted-globals */
-const CACHE_VERSION = 'zenrex-pwa-v34-2026-02-paypal-subscriptions';
+const CACHE_VERSION = 'zenrex-pwa-v35-2026-02-cancel-fix';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

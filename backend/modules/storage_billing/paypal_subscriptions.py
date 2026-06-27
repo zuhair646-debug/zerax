@@ -224,38 +224,67 @@ def register_paypal_subscriptions(app, db, get_current_user, STORAGE_PLANS, GRAC
         sub = await db.storage_subscriptions.find_one(
             {"user_id": user["user_id"]}, {"_id": 0},
         )
-        if not sub or not sub.get("paypal_subscription_id"):
-            raise HTTPException(400, "لا يوجد اشتراك نشط للإلغاء")
+        if not sub:
+            raise HTTPException(400, "لا يوجد اشتراك للإلغاء")
         if sub.get("status") in ("cancelled", "archived"):
             return {"ok": True, "already": True}
 
-        pp_sub_id = sub["paypal_subscription_id"]
-        token = await _pp_token()
-        async with httpx.AsyncClient(timeout=15.0) as c:
-            r = await c.post(
-                f"{_pp_base_url()}/v1/billing/subscriptions/{pp_sub_id}/cancel",
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                json={"reason": "Cancelled by user via Zenrex"},
-            )
-        # PayPal returns 204 No Content on success
-        if r.status_code not in (200, 204):
-            log.error(f"[paypal-subs] cancel error {r.status_code}: {r.text[:300]}")
-            raise HTTPException(500, f"فشل إلغاء الاشتراك في PayPal ({r.status_code})")
+        pp_sub_id = sub.get("paypal_subscription_id")
+        now_iso = datetime.now(timezone.utc).isoformat()
 
-        # Mark as cancelled in DB but KEEP access until current_period_end
+        # ── Pending approval → user never finished the PayPal flow,
+        #    no recurring payment was set up yet. Revert to trial state.
+        if sub.get("status") == "pending_approval":
+            await db.storage_subscriptions.update_one(
+                {"user_id": user["user_id"]},
+                {"$set": {
+                    "plan_id": "trial",
+                    "status": "trial",
+                    "auto_renew": False,
+                    "paypal_subscription_id": None,
+                    "current_period_end": None,
+                    "cancelled_at": now_iso,
+                    "updated_at": now_iso,
+                }},
+            )
+            return {"ok": True, "cancelled": True, "was_pending": True}
+
+        # ── Active / past_due → ask PayPal to stop charging.
+        if pp_sub_id:
+            try:
+                token = await _pp_token()
+                async with httpx.AsyncClient(timeout=15.0) as c:
+                    r = await c.post(
+                        f"{_pp_base_url()}/v1/billing/subscriptions/{pp_sub_id}/cancel",
+                        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                        json={"reason": "Cancelled by user via Zenrex"},
+                    )
+                # PayPal returns 204 No Content on success. 422 = already cancelled.
+                if r.status_code not in (200, 204, 422):
+                    log.error(f"[paypal-subs] cancel error {r.status_code}: {r.text[:300]}")
+                    # Don't block local cancellation — user demanded auto-stop
+                    # of withdrawals. Mark locally anyway so /subscription
+                    # reflects truth.
+            except Exception as e:
+                log.warning(f"[paypal-subs] cancel exception: {e}")
+
+        # Mark `auto_renew=false` so the auto-evaluator eventually archives
+        # the account after `current_period_end` passes (giving the user the
+        # paid period they already paid for). We do NOT set status='cancelled'
+        # immediately — the user demanded "keep access for the paid month".
         await db.storage_subscriptions.update_one(
             {"user_id": user["user_id"]},
             {"$set": {
                 "auto_renew": False,
-                "cancelled_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                # status stays 'active' until period_end → then auto-evaluator
-                # transitions it via past_due → archived (no recovery needed,
-                # since cancellation is voluntary — we set locked_reason
-                # accordingly via /subscription)
+                "cancelled_at": now_iso,
+                "updated_at": now_iso,
             }},
         )
-        return {"ok": True, "cancelled": True, "access_until": sub.get("current_period_end")}
+        return {
+            "ok": True,
+            "cancelled": True,
+            "access_until": sub.get("current_period_end"),
+        }
 
     # ─── POST /api/storage/paypal-webhook ──────────────────────────────
     # PayPal calls this URL on subscription events. Configure in dashboard:
