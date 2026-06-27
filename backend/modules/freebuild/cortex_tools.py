@@ -318,6 +318,52 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             "required": ["commands"],
         },
     },
+    {
+        "name": "run_js_sandbox",
+        "description": "Execute JavaScript snippet in a fast Node.js sandbox (timeout ~5s). Use for sanity-testing utility functions, regex, parsing logic before injecting into the final code. Returns {ok, stdout, stderr}.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string"},
+                "timeout_sec": {"type": "integer", "default": 5},
+            },
+            "required": ["code"],
+        },
+    },
+    {
+        "name": "run_python_sandbox",
+        "description": "Execute a Python snippet in an isolated subprocess (timeout ~5s). Use for quick data computations, regex tests, JSON parsing checks. Returns {ok, stdout, stderr}.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string"},
+                "timeout_sec": {"type": "integer", "default": 5},
+            },
+            "required": ["code"],
+        },
+    },
+    {
+        "name": "validate_html_sandbox",
+        "description": "Quick HTML validator — checks balanced tags, missing DOCTYPE/html/body. Returns {ok, issues:[]}. MUCH faster than running a full browser. Use after every HTML edit to self-verify. (ok=False if any structural issue found.)",
+        "input_schema": {
+            "type": "object",
+            "properties": {"html": {"type": "string"}},
+            "required": ["html"],
+        },
+    },
+    {
+        "name": "autofix_code_loop",
+        "description": "Self-healing loop: run code → if fails, LLM-fix → rerun, up to N attempts. Use when a generated snippet has runtime errors you want the AI to fix automatically. Returns {ok, final_code, attempts:[], total_attempts}.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string"},
+                "language": {"type": "string", "enum": ["js", "python"], "default": "js"},
+                "max_attempts": {"type": "integer", "default": 3},
+            },
+            "required": ["code"],
+        },
+    },
 ]
 
 
@@ -643,6 +689,32 @@ async def handle_deploy_via_ssh(args: Dict[str, Any], ctx: Any = None) -> Dict[s
     )
 
 
+async def handle_run_js_sandbox(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    from .orchestrator.code_sandbox import run_js
+    return await run_js(args["code"], timeout_sec=int(args.get("timeout_sec", 5)))
+
+
+async def handle_run_python_sandbox(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    from .orchestrator.code_sandbox import run_python
+    return await run_python(args["code"], timeout_sec=int(args.get("timeout_sec", 5)))
+
+
+async def handle_validate_html_sandbox(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    from .orchestrator.code_sandbox import validate_html
+    return validate_html(args["html"])
+
+
+async def handle_autofix_code_loop(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    from .orchestrator.autofix_loop import autofix_loop
+    from .orchestrator.code_sandbox import run_js, run_python
+    lang = args.get("language", "js")
+    runner = run_js if lang == "js" else run_python
+    return await autofix_loop(
+        args["code"], runner, language=lang,
+        max_attempts=int(args.get("max_attempts", 3)),
+    )
+
+
 TOOL_HANDLERS = {
     "inject_recipe": handle_inject_recipe,
     "apply_shader": handle_apply_shader,
@@ -671,6 +743,10 @@ TOOL_HANDLERS = {
     "search_past_projects": handle_search_past_projects,
     "run_in_e2b_sandbox": handle_run_in_e2b_sandbox,
     "deploy_via_ssh": handle_deploy_via_ssh,
+    "run_js_sandbox": handle_run_js_sandbox,
+    "run_python_sandbox": handle_run_python_sandbox,
+    "validate_html_sandbox": handle_validate_html_sandbox,
+    "autofix_code_loop": handle_autofix_code_loop,
 }
 
 

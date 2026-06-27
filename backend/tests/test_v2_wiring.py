@@ -62,16 +62,16 @@ class TestNewCortexToolsRegistered:
     def test_tools_schema_count_and_new_tools(self):
         from modules.freebuild.freebuild_agent import TOOLS_SCHEMA
         names = {t["name"] for t in TOOLS_SCHEMA}
-        assert len(TOOLS_SCHEMA) == 172, f"expected 172 tools, got {len(TOOLS_SCHEMA)}"
+        assert len(TOOLS_SCHEMA) == 176, f"expected 176 tools, got {len(TOOLS_SCHEMA)}"
         expected = {"generate_nextjs_project", "build_capacitor_app",
                     "recommend_state_management", "search_past_projects",
                     "run_in_e2b_sandbox", "deploy_via_ssh"}
         missing = expected - names
         assert not missing, f"missing new tools in TOOLS_SCHEMA: {missing}"
 
-    def test_tool_handlers_count_27(self):
+    def test_tool_handlers_count_31(self):
         from modules.freebuild.cortex_tools import TOOL_HANDLERS
-        assert len(TOOL_HANDLERS) == 27, f"expected 27 handlers, got {len(TOOL_HANDLERS)}"
+        assert len(TOOL_HANDLERS) == 31, f"expected 31 handlers, got {len(TOOL_HANDLERS)}"
         expected = {"generate_nextjs_project", "build_capacitor_app",
                     "recommend_state_management", "search_past_projects",
                     "run_in_e2b_sandbox", "deploy_via_ssh"}

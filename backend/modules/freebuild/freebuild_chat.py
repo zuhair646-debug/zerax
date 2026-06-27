@@ -8279,52 +8279,12 @@ For questions: legal@zenrex.ai
             # produces a single-pass output. Other domains (code/visual/audio/
             # video/narrative/multi) still go through stream_agent_turn which
             # has full tool access — the classifier just emits a hint event.
-            _routed_via_cortex = False
-            try:
-                from .orchestrator.classifier import classify_intent_domain
-                _intent = classify_intent_domain(message)
-                await event_queue.put(
-                    f"event: classifier\ndata: {json.dumps({'primary': _intent.primary, 'secondary': _intent.secondary, 'confidence': _intent.confidence, 'rationale': _intent.rationale}, ensure_ascii=False)}\n\n"
-                )
-                # Fast-path: architect cortex (produces Mermaid + ADR blueprint)
-                if _intent.primary == "architect" and _intent.confidence >= 0.85:
-                    from .orchestrator.cortices.architect_cortex import stream_architect_cortex
-                    async for chunk in stream_architect_cortex(
-                        user_message=message,
-                        project=proj,
-                        brand_dna=proj.get("brand_dna"),
-                    ):
-                        await event_queue.put(chunk)
-                        if chunk.startswith("event: done\n"):
-                            try:
-                                _dl = [ln for ln in chunk.split("\n") if ln.startswith("data:")][0][5:].strip()
-                                done = json.loads(_dl)
-                                captured["summary"] = done.get("summary", "")
-                                captured["model_used"] = done.get("model_used", "architect")
-                                captured["iterations"] = done.get("iterations", 1)
-                                captured["credits_charged"] = int(done.get("credits_charged") or 0)
-                            except Exception:
-                                pass
-                    _routed_via_cortex = True
-                # Fast-path: review cortex (static + LLM review of pasted code)
-                elif _intent.primary == "review" and _intent.confidence >= 0.85:
-                    from .orchestrator.review_cortex import review_code, render_review_report_ar
-                    rep = review_code(message, "mixed")
-                    summary_ar = render_review_report_ar(rep)
-                    await event_queue.put(
-                        f"event: cortex_step\ndata: {json.dumps({'cortex': 'review', 'score': rep.get('score')}, ensure_ascii=False)}\n\n"
-                    )
-                    captured["summary"] = summary_ar
-                    captured["model_used"] = "static_analyzer"
-                    captured["iterations"] = 1
-                    captured["credits_charged"] = 3
-                    captured["review_report"] = rep
-                    await event_queue.put(
-                        f"event: done\ndata: {json.dumps({'summary': summary_ar, 'auto_refunded': False, 'credits_charged': 3, 'model_used': 'static_analyzer', 'iterations': 1, 'options': [], 'inline_images': [], 'review_report': rep}, ensure_ascii=False)}\n\n"
-                    )
-                    _routed_via_cortex = True
-            except Exception as _ce2:
-                logger.exception(f"[agent-chat-stream] classifier routing failed: {_ce2}")
+            # ⚠️ Hook implementation lives in stream_hooks.py for testability.
+            from .stream_hooks import run_classifier_fast_paths
+            _routed_via_cortex = await run_classifier_fast_paths(
+                message=message, project=proj,
+                event_queue=event_queue, captured=captured,
+            )
             # ────────────────────────────────────
             if _routed_via_cortex:
                 await event_queue.put(None)
@@ -8353,30 +8313,12 @@ For questions: legal@zenrex.ai
                     # If this is the first user message in the project, kick off
                     # brand_dna extraction in background and persist into memory
                     # so future turns can reuse palette/tone/voice/glossary.
-                    try:
-                        if len(history) <= 1:  # first or empty history
-                            _existing_dna = (proj.get("brand_dna") or {})
-                            if not _existing_dna:
-                                async def _extract_brand_dna_bg():
-                                    try:
-                                        from .orchestrator.brand_dna import extract_brand_dna
-                                        dna = await extract_brand_dna(message)
-                                        if dna:
-                                            await db.freebuild_projects.update_one(
-                                                {"id": pid}, {"$set": {"brand_dna": dna,
-                                                                        "brand_dna_extracted_at": datetime.now(timezone.utc).isoformat()}},
-                                            )
-                                            try:
-                                                await event_queue.put(
-                                                    f"event: brand_dna_extracted\ndata: {json.dumps({'palette': dna.get('palette'), 'tone': dna.get('tone'), 'archetypes': dna.get('archetypes')}, ensure_ascii=False)}\n\n"
-                                                )
-                                            except Exception:
-                                                pass
-                                    except Exception as _bde:
-                                        logger.warning(f"[brand_dna] bg extraction failed: {_bde}")
-                                _asyncio.create_task(_extract_brand_dna_bg())
-                    except Exception as _bdh:
-                        logger.warning(f"[brand_dna] hook setup failed: {_bdh}")
+                    # ⚠️ Implementation lives in stream_hooks.py.
+                    from .stream_hooks import spawn_brand_dna_extraction
+                    spawn_brand_dna_extraction(
+                        db=db, project_id=pid, project=proj, history=history,
+                        message=message, event_queue=event_queue,
+                    )
                     async for chunk in stream_agent_turn(
                         proj_free, message, history,
                         ctx_holder=ctx_holder,
@@ -8401,33 +8343,18 @@ For questions: legal@zenrex.ai
                                 captured["html_updated"] = done.get("html_updated", False)
                                 captured["credits_charged"] = int(done.get("credits_charged") or 0)
                                 # 🆕 HARD HOOK #2: Auto-Reviewer on HTML changes.
-                                # When the agent updates current_html, run a
-                                # fast static review and emit findings BEFORE
-                                # the done event reaches the client. The done
-                                # event itself is rewritten to include the
-                                # review_report so frontend can display issues.
+                                # ⚠️ Implementation lives in stream_hooks.py.
                                 try:
                                     if done.get("html_updated"):
                                         ctx_now = ctx_holder.get("ctx")
                                         _html = (ctx_now.current_html if ctx_now else None) or ""
-                                        if _html and len(_html) > 50:
-                                            from .orchestrator.review_cortex import review_code, render_review_report_ar
-                                            _rep = review_code(_html, "html")
-                                            _crit = [i for i in (_rep.get("issues") or []) if i.get("severity") in ("critical", "high")]
-                                            await event_queue.put(
-                                                f"event: auto_review\ndata: {json.dumps({'score': _rep.get('score'), 'passed': _rep.get('passed'), 'critical_high_count': len(_crit), 'total_issues': len(_rep.get('issues') or [])}, ensure_ascii=False)}\n\n"
-                                            )
-                                            captured["review_report"] = _rep
-                                            # Append a brief warning to summary if critical found
-                                            if _crit:
-                                                done["summary"] = (done.get("summary") or "") + (
-                                                    f"\n\n⚠️ **مراجعة تلقائية:** عُثر على {len(_crit)} مشاكل حرجة. "
-                                                    f"الـ score: {_rep.get('score')}/100. "
-                                                    "اطلب `run_reviewer` للتفاصيل."
-                                                )
-                                                # Re-serialize and replace chunk
-                                                chunk = f"event: done\ndata: {json.dumps(done, ensure_ascii=False)}\n\n"
-                                                captured["summary"] = done["summary"]
+                                        from .stream_hooks import run_auto_reviewer_on_html
+                                        done = await run_auto_reviewer_on_html(
+                                            done=done, current_html=_html,
+                                            event_queue=event_queue, captured=captured,
+                                        )
+                                        # Re-serialize done chunk (review may have appended a warning)
+                                        chunk = f"event: done\ndata: {json.dumps(done, ensure_ascii=False)}\n\n"
                                 except Exception as _arev:
                                     logger.warning(f"[auto_review] failed: {_arev}")
                             except Exception:
