@@ -2,6 +2,58 @@
 
 
 
+### 🧠 Feb 27, 2026 — Iteration 75: Orchestrator + 5 Cortices (Strangler Fig)
+
+**Owner directive (Saudi Arabic):** "كل شيء كامل مع اصلاح السلبيات. أبي افضل شيء — لما اطلب صور يعطيني افضل جودة من غير ما نغير ذكاء الذكاء. نفس الفكرة فيديوهات قابلة للصوتيات. ممكن مستقبلا تقارير دراسات."
+
+**Pattern:** Strangler Fig (Façade) — ZERO modifications to `freebuild_agent.py` (11k lines). New `orchestrator/` package overlays on top. Feature-flag controlled.
+
+**Delivered (10 new files, 1 endpoint, 0 breaking changes):**
+
+1. **`orchestrator/__init__.py`** — Entry point `stream_via_orchestrator(...)`. Reads `ORCHESTRATOR_ENABLED` env flag. When OFF → delegates 1:1 to legacy `stream_agent_turn`. When ON → classifies intent → routes to single cortex OR runs multi-domain sequential chain with shared_assets dict.
+
+2. **`orchestrator/classifier.py`** — Pure regex domain classifier (zero LLM cost, ~20μs per call). Domains: `code` / `visual` / `audio` / `video` / `narrative` / `multi`. Arabic-first keyword sets (handles whitespace boundaries, not `\b`). Multi-detection on `+`, "بالإضافة", "مع", or 2+ domains scoring ≥1.
+
+3. **`orchestrator/cortices/code_cortex.py`** — 100% pass-through to `freebuild_agent.stream_agent_turn`. Optionally prepends a `📦 أصول جاهزة` note when called inside multi-domain chain (so the AI knows about pre-generated logo URLs etc).
+
+4. **`orchestrator/cortices/visual_cortex.py`** — Two-step: (a) Claude refines Arabic brief into a polished English prompt (with photography vocabulary: angle, lighting, style, palette, detail), (b) gpt-image-1 generates image, falls back to fal.ai/flux/schnell on failure. Emits `asset_produced` SSE so multi-domain chain captures the URL. Saves under `/app/backend/uploads/visual_cortex/`. Charges 50 credits per image.
+
+5. **`orchestrator/cortices/audio_cortex.py`** — Sub-classifies into `tts` / `music` / `ambient` / `sfx`. TTS via OpenAI gpt-4o-mini-tts (Emergent key). Music/ambient/sfx → emits ready-to-embed Tone.js boilerplate (drifting chords ambient, melodic pattern, click/pop SFX). Charges 20 (TTS) or 10 (snippet) credits.
+
+6. **`orchestrator/cortices/video_cortex.py`** — Claude builds a structured scene plan (title, scenes[] with shot/camera/lighting/audio_cue, music_brief, voiceover_text, aspect_ratio) → calls existing `workflow_tools.generate_video` for real video → if `voiceover_text` exists, internally invokes AudioCortex TTS. Charges 200 (success) or 5 (plan-only fallback).
+
+7. **`orchestrator/cortices/narrative_cortex.py`** — Pure Claude with specialised creative-writing system prompt (Apple/Tesla/McKinsey grade). Use cases: slogans, scripts, articles, brand voice, feasibility studies. Cost ~ proportional to output length (15-120 credits).
+
+8. **`freebuild_chat.py` — ADDED** a NEW endpoint `POST /api/freebuild-chat/project/{pid}/orchestrator-stream` right before `return router`. Accepts optional `force_domain` form param. The OLD `/agent-chat-stream` endpoint is **byte-for-byte unchanged**.
+
+9. **`.env` — ADDED** `ORCHESTRATOR_ENABLED=true`. Setting to `false` makes the new endpoint behave identically to legacy.
+
+10. **`tests/test_orchestrator.py`** — 8 unit + integration tests covering classifier accuracy, feature-flag toggling, every cortex's happy path + fallback path, source-level verification that CodeCortex truly delegates, and existence of both endpoints in `freebuild_chat`.
+
+**Test results:** 57/57 PASS (8 orchestrator + 11 library_registry + 38 regression).
+
+**Live evidence captured:**
+- NarrativeCortex via force_domain produced 3 Arabic slogans for "متجر قهوة عُماني فاخر" in ~8s
+- AudioCortex generated Tone.js ambient pattern (PolySynth + Reverb + drifting chords)
+- VisualCortex prompt refinement returned proper shape with EMERGENT_LLM_KEY active
+- Legacy `/agent-chat-stream` emits identical events to before (event: start / provider / text_delta)
+
+**Rollback procedure** (3 options, escalating):
+1. `ORCHESTRATOR_ENABLED=false` in `.env` + restart → orchestrator endpoint becomes identical to legacy (no code touched).
+2. `git checkout pre-orchestrator-refactor /app/backend/modules/freebuild/freebuild_chat.py` → removes the new endpoint.
+3. `git reset --hard pre-orchestrator-refactor` → full revert.
+
+**Future cortices (easy to add):**
+- `report_cortex.py` for feasibility studies (Claude + JSON Schema-driven output)
+- `novel_cortex.py` for serialized fiction (carries chapter context)
+- `image_studio_cortex.py` for photo editing (Nano Banana inpaint/outpaint)
+- All follow the same signature → register in `_get_cortex()` and they're live.
+
+**Test report:** `/app/test_reports/iteration_75.json`.
+
+
+
+
 ### 📚 Feb 27, 2026 — Iteration 73: Capability Atlas (Library Registry + inject_library)
 
 **Owner directive (Saudi Arabic):** "أبدا نحط له مكاتب يستردها — لا نقفل الأشياء الصعبة، نعلمه يحلها. أنت كذكاء صناعي، شنو الأفضل؟". I answered: hybrid Library Registry (45 vetted libs, 15 categories) > pure-search or fixed-injection. User said "implement everything in 3 hours, then tell me when done".

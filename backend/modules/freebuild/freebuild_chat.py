@@ -8613,6 +8613,77 @@ For questions: legal@zenrex.ai
             },
         )
 
+    # ─────────────────────────────────────────────────────────────────────
+    # 🧠 NEW: Orchestrator endpoint — Strangler Fig refactor entry point.
+    # Routes the request via the new Orchestrator (CodeCortex / VisualCortex /
+    # AudioCortex / VideoCortex / NarrativeCortex). Feature-flagged via env
+    # `ORCHESTRATOR_ENABLED=true`. When disabled, this endpoint is identical
+    # to /agent-chat-stream (zero behavioural change).
+    # ─────────────────────────────────────────────────────────────────────
+    @router.post("/project/{pid}/orchestrator-stream")
+    async def orchestrator_chat_stream(
+        pid: str,
+        message: str = Form(...),
+        user_language: str = Form("ar"),
+        mode: str = Form("default"),
+        force_domain: str = Form(""),  # optional: code/visual/audio/video/narrative — bypass classifier
+        user=Depends(get_current_user),
+    ):
+        """Streams events through the new Orchestrator. Falls back to legacy
+        path automatically if ORCHESTRATOR_ENABLED=false or any cortex errors."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404, "مشروع غير موجود")
+        try:
+            from .orchestrator import stream_via_orchestrator, is_orchestrator_enabled
+            from .orchestrator.classifier import classify_intent_domain, DomainIntent
+            from fastapi.responses import StreamingResponse
+        except Exception:
+            logger.exception("orchestrator import failed")
+            raise HTTPException(500, "orchestrator module unavailable")
+
+        history = proj.get("messages") or []
+        is_platform_owner_stream = (user.get("role") or "").lower() in ("owner", "admin", "superuser")
+        ctx_holder = {"ctx": None}
+        _agent_token = None
+        try:
+            from .auth_helpers import issue_internal_agent_token  # noqa
+            _agent_token = issue_internal_agent_token(user) if "issue_internal_agent_token" in dir() else None
+        except Exception:
+            _agent_token = None
+
+        async def event_stream():
+            try:
+                async for chunk in stream_via_orchestrator(
+                    proj, message, history,
+                    ctx_holder=ctx_holder,
+                    user_language=user_language,
+                    auth_token=_agent_token,
+                    db=db,
+                    is_owner=is_platform_owner_stream,
+                    max_iterations=60,
+                    inject_workflow_addendum=False,
+                    force_domain=force_domain if force_domain in ("code","visual","audio","video","narrative","multi") else None,
+                ):
+                    yield chunk
+            except Exception:
+                logger.exception("orchestrator stream failed")
+                import json as _json
+                yield (f"event: error\n"
+                       f"data: {_json.dumps({'message': 'orchestrator stream failed'}, ensure_ascii=False)}\n\n")
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+            },
+        )
+
     return router
 
 
