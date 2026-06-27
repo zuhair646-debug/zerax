@@ -3394,6 +3394,12 @@ function DiscoveryPanel({ projectId, project, onReadyToBuild }) {
   const [answers, setAnswers] = useState({}); // qid -> string
   const [submitting, setSubmitting] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [creditBalance, setCreditBalance] = useState(null);
+  const [skipped, setSkipped] = useState(false);
+
+  // Cost constants — kept in sync with backend (DISCOVERY_INIT_COST / DISCOVERY_BATCH_COST)
+  const INIT_COST = 100;
+  const BATCH_COST = 75;
 
   // Fetch status on mount
   useEffect(() => {
@@ -3465,6 +3471,7 @@ function DiscoveryPanel({ projectId, project, onReadyToBuild }) {
       }
       setBlueprint(d.blueprint);
       setStarted(true);
+      if (d.credit_balance != null) setCreditBalance(d.credit_balance);
       toast.success('✨ تم بناء خارطة الطريق — جاوب على الأسئلة');
     } catch (e) {
       toast.error(e.message);
@@ -3524,6 +3531,7 @@ function DiscoveryPanel({ projectId, project, onReadyToBuild }) {
       }
       setBlueprint(d.blueprint);
       setAnswers({});
+      if (d.credit_balance != null) setCreditBalance(d.credit_balance);
       if (d.summary_for_customer_ar) toast.success(d.summary_for_customer_ar);
       if (d.ready_to_build) toast.success('🎯 الخطة مكتملة — جاهز للبناء!');
     } catch (e) {
@@ -3562,6 +3570,24 @@ function DiscoveryPanel({ projectId, project, onReadyToBuild }) {
     );
   }
 
+  // Skipped explicitly → render a tiny resume bar
+  if (skipped) {
+    return (
+      <button
+        type="button"
+        onClick={() => setSkipped(false)}
+        data-testid="discovery-resume-btn"
+        className="w-full rounded-xl border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 p-3 flex items-center justify-between gap-2 text-amber-200 text-xs"
+      >
+        <span className="flex items-center gap-2">
+          <Sparkles className="w-3.5 h-3.5" />
+          تخطّيت المستشار — اضغط هنا لو حبيت تفعّله
+        </span>
+        <span className="text-[10px] font-bold">{INIT_COST} نقطة</span>
+      </button>
+    );
+  }
+
   // Discovery not started — show idea input
   if (!started) {
     return (
@@ -3571,9 +3597,16 @@ function DiscoveryPanel({ projectId, project, onReadyToBuild }) {
           <h3 className="text-base font-black text-cyan-100">🧠 مستشار Zenrex — قبل ما نبني</h3>
         </div>
         <p className="text-xs text-zinc-300 leading-relaxed mb-3">
-          قبل ما يكتب الذكاء أي سطر كود، خلينا نسوي تحليل سريع لفكرتك: نحدد نوع المشروع، نطلع خارطة طريق من المراحل،
-          ونطرح عليك ١٥-٢٥ سؤال على دفعات (٥ كل دفعة) عشان نبني اللي تبيه بالضبط.
+          قبل ما يكتب الذكاء أي سطر كود، خلينا نسوي تحليل سريع لفكرتك: نبحث في الويب مباشرة، نحدد نوع المشروع،
+          نطلع خارطة طريق من المراحل، ونطرح عليك ١٥-٢٥ سؤال على دفعات (٥ كل دفعة) عشان نبني اللي تبيه بالضبط.
         </p>
+        <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-2.5 mb-3" data-testid="discovery-cost-note">
+          <p className="text-[11px] text-amber-200 leading-relaxed">
+            💡 <b>تكلفة المستشار:</b> {INIT_COST} نقطة للبدء + {BATCH_COST} نقطة لكل دفعة إجابات.
+            تقدر تستخدمه حتى لو رصيدك صفر — يُخصم تلقائياً من أول شحن قادم.
+            <span className="block mt-1 text-amber-300/80">المستشار <b>اختياري</b> — اضغط «تخطّى» لو تبي تكلم الذكاء مباشرة.</span>
+          </p>
+        </div>
         <textarea
           value={initIdea}
           onChange={(e) => setInitIdea(e.target.value)}
@@ -3585,13 +3618,21 @@ function DiscoveryPanel({ projectId, project, onReadyToBuild }) {
         <div className="flex items-center justify-end gap-2 mt-3">
           <button
             type="button"
+            onClick={() => setSkipped(true)}
+            data-testid="discovery-skip-btn"
+            className="px-3 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-800/60 text-zinc-300 font-bold text-xs"
+          >
+            تخطّى المستشار
+          </button>
+          <button
+            type="button"
             onClick={startDiscovery}
             disabled={initBusy || !initIdea.trim()}
             data-testid="discovery-init-btn"
             className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-400 hover:to-sky-500 disabled:opacity-50 text-black font-black text-sm flex items-center gap-2"
           >
             {initBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            ابدأ التحليل
+            ابدأ التحليل ({INIT_COST} نقطة)
           </button>
         </div>
       </div>
@@ -3734,10 +3775,24 @@ function DiscoveryPanel({ projectId, project, onReadyToBuild }) {
       {/* Active batch of questions */}
       {status === 'in_discovery' && activeQuestions.length > 0 && (
         <div className="space-y-3" data-testid="discovery-questions">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-[11px] font-bold text-cyan-200">
               💬 أسئلة الدفعة {activeBatch} ({activeQuestions.length} من {allQuestions.length})
             </p>
+            <div className="flex items-center gap-2 text-[10px]">
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-200 font-bold" data-testid="discovery-batch-cost">
+                تكلفة الدفعة: {BATCH_COST} نقطة
+              </span>
+              {creditBalance != null && (
+                <span className={`px-2 py-0.5 rounded-full border font-bold ${
+                  creditBalance < 0
+                    ? 'bg-rose-500/15 border-rose-500/40 text-rose-200'
+                    : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-200'
+                }`} data-testid="discovery-balance">
+                  رصيدك: {Math.round(creditBalance)}
+                </span>
+              )}
+            </div>
           </div>
           <div className="space-y-3">
             {activeQuestions.map((q, qi) => (
@@ -3758,7 +3813,7 @@ function DiscoveryPanel({ projectId, project, onReadyToBuild }) {
             className="w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-400 hover:to-sky-500 text-black font-black text-sm flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            احفظ الإجابات وكمّل
+            احفظ الإجابات وكمّل ({BATCH_COST} نقطة)
           </button>
         </div>
       )}

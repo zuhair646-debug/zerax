@@ -7329,6 +7329,23 @@ def make_freebuild_chat_router(db, get_current_user):
     # 15-25 progressive questions. AI #1.5 between Receptionist and
     # Builder. Stops the Builder from "guessing" the scope.
     # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════
+    # 🧠 Discovery Brain — AI #1.5 (consultant before builder).
+    # Routes:
+    #   POST /project/{pid}/discovery/init        — analyze idea + roadmap
+    #   POST /project/{pid}/discovery/answer      — submit batch answers
+    #   GET  /project/{pid}/discovery/status      — fetch blueprint
+    #   POST /project/{pid}/discovery/start-build — kick off the Builder.
+    #
+    # Pricing (negative-balance allowed — paid back on next top-up):
+    #   • init   — 100 credits  (covers Tavily research + first batch)
+    #   • answer — 75 credits   (per batch of up to 5 questions)
+    # The customer can SKIP Discovery entirely (it's optional); charges
+    # only apply when they actively engage with the panel.
+    # ═══════════════════════════════════════════════════════════════
+    DISCOVERY_INIT_COST = 100
+    DISCOVERY_BATCH_COST = 75
+
     @router.post("/project/{pid}/discovery/init")
     async def discovery_init(
         pid: str,
@@ -7343,6 +7360,17 @@ def make_freebuild_chat_router(db, get_current_user):
         # Refuse to overwrite an existing in-progress discovery unless explicitly reset.
         if proj.get("discovery") and proj["discovery"].get("status") != "done":
             return {"ok": True, "blueprint": proj["discovery"], "reused": True}
+        # Charge BEFORE running the LLM (allow negative balance — paid back later).
+        try:
+            from modules.pricing.credits import deduct_credits_allow_negative
+            new_balance = await deduct_credits_allow_negative(
+                db, user["user_id"], DISCOVERY_INIT_COST,
+                reason="discovery:init",
+                meta={"project_id": pid, "idea_preview": (idea or "")[:120]},
+            )
+        except Exception as e:
+            log.warning(f"[discovery/init] credit deduction failed: {e}")
+            new_balance = None
         from modules.freebuild.discovery_brain import classify_and_plan
         result = await classify_and_plan(idea)
         if not result.get("ok"):
@@ -7351,7 +7379,13 @@ def make_freebuild_chat_router(db, get_current_user):
         await db.freebuild_projects.update_one(
             {"id": pid}, {"$set": {"discovery": bp, "discovery_idea_seed": (idea or "")[:500]}},
         )
-        return {"ok": True, "blueprint": bp, "reused": False}
+        return {
+            "ok": True,
+            "blueprint": bp,
+            "reused": False,
+            "credit_charged": DISCOVERY_INIT_COST,
+            "credit_balance": new_balance,
+        }
 
     @router.post("/project/{pid}/discovery/answer")
     async def discovery_answer(
@@ -7371,6 +7405,17 @@ def make_freebuild_chat_router(db, get_current_user):
             raise HTTPException(400, "answers_json invalid")
         if not isinstance(answers, dict):
             raise HTTPException(400, "answers_json must be an object {qid: answer}")
+        # Charge per batch (allow negative balance — settled on next top-up).
+        new_balance = None
+        try:
+            from modules.pricing.credits import deduct_credits_allow_negative
+            new_balance = await deduct_credits_allow_negative(
+                db, user["user_id"], DISCOVERY_BATCH_COST,
+                reason="discovery:batch",
+                meta={"project_id": pid, "answers_count": len(answers)},
+            )
+        except Exception as e:
+            log.warning(f"[discovery/answer] credit deduction failed: {e}")
         from modules.freebuild.discovery_brain import advance_discovery
         result = await advance_discovery(proj["discovery"], answers)
         if not result.get("ok"):
@@ -7384,6 +7429,8 @@ def make_freebuild_chat_router(db, get_current_user):
             "blueprint": bp,
             "ready_to_build": result.get("ready_to_build", False),
             "summary_for_customer_ar": result.get("summary_for_customer_ar", ""),
+            "credit_charged": DISCOVERY_BATCH_COST,
+            "credit_balance": new_balance,
         }
 
     @router.get("/project/{pid}/discovery/status")

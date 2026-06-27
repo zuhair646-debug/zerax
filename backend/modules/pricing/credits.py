@@ -88,6 +88,49 @@ async def has_balance(db, user_id: str, amount: float) -> bool:
     return await get_balance(db, user_id) >= amount
 
 
+async def deduct_credits_allow_negative(
+    db,
+    user_id: str,
+    amount: float,
+    reason: str,
+    meta: Optional[Dict[str, Any]] = None,
+) -> float:
+    """Deduct credits even if it pushes balance below zero.
+
+    Used by the Smart Discovery flow where the customer is allowed to spend
+    points BEFORE topping up — the negative balance is collected on the
+    customer's next top-up (deducted from incoming credits automatically).
+
+    Returns the new balance (may be negative). Never raises on insufficient
+    funds; always logs the transaction with `negative=True` flag in meta.
+    """
+    if amount <= 0:
+        return await get_balance(db, user_id)
+    res = await db.users.find_one_and_update(
+        {"id": user_id},
+        {"$inc": {"credits": -amount}},
+        return_document=True,
+        projection={"credits": 1, "_id": 0},
+        upsert=False,
+    )
+    if not res:
+        # User document missing — should not happen, but fail safely.
+        log.error(f"[credits] deduct_allow_negative: user {user_id} not found")
+        return 0
+    new_balance = float(res.get("credits", 0) or 0)
+    await db.credit_transactions.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "type": "debit",
+        "amount": float(amount),
+        "balance_after": new_balance,
+        "reason": reason,
+        "meta": {**(meta or {}), "allow_negative": True, "negative": new_balance < 0},
+        "ts": datetime.now(timezone.utc).isoformat(),
+    })
+    return new_balance
+
+
 async def charge_user(
     db,
     user_id: str,

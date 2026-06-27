@@ -1,6 +1,38 @@
 # Zitex Changelog
 
 
+### 🧠 Feb 27, 2026 — Smart Discovery Engine v2 (Research-Driven Questions + Negative-Balance Credits)
+
+**Owner directive (Saudi Arabic):** The "Create from scratch" section must not have a hardcoded question list. The AI must research the customer's vertical live (e.g. "laundry shop"), then auto-generate dynamic questions (15-25, in batches of 5), every question having **option chips + free-text "أخرى"** (both mandatory). Questions cost credits — allow negative balance (settled on next top-up). Customer can skip Discovery entirely.
+
+**Backend**
+- `/app/backend/modules/freebuild/discovery_brain.py`
+  - Added `_research_vertical()` — calls Tavily web search before Claude to enrich the discovery prompt with real market intel about the customer's specific project type.
+  - Added `_normalize_questions()` — guarantees every question has unique id, 3+ option chips, `allow_free_text=True`, and dedupes by id + normalized text so repeated questions across batches are dropped.
+  - Strengthened `_strip_json()` — handles `//` line comments, `/* */` block comments, trailing commas, single-quoted keys, AND a `_try_recover_truncated_json()` fallback that closes a truncated Claude response by trimming to the last complete `}` and appending the right closers.
+  - Increased `max_tokens` to 8500 + `timeout=180s` for the discovery call so a 25-question blueprint actually fits.
+  - System prompt now mandates: "كل سؤال يحتوي options بـ 3-5 خيارات + ممنوع تكرار أي سؤال + JSON صرف بدون تعليقات".
+- `/app/backend/modules/pricing/credits.py`
+  - Added `deduct_credits_allow_negative()` — same API as `deduct_credits` but never raises; balance can go below zero and is settled on the next `add_credits` call.
+- `/app/backend/modules/freebuild/freebuild_chat.py`
+  - `POST /discovery/init` now charges **100 credits** (allow negative) and returns `{credit_charged, credit_balance}`.
+  - `POST /discovery/answer` charges **75 credits per batch** and returns the updated balance.
+
+**Frontend**
+- `/app/frontend/src/pages/FreeBuildChat.js` (`DiscoveryPanel`)
+  - Added cost notice card on the init screen ("100 نقطة للبدء + 75 نقطة لكل دفعة").
+  - Added **"تخطّى المستشار"** button — customer can skip Discovery (it's optional) and resume later.
+  - Active batch view now shows: batch cost pill + live credit balance pill (turns rose if negative).
+  - Submit button label now includes the cost ("احفظ الإجابات وكمّل (75 نقطة)").
+- `/app/frontend/public/service-worker.js` → `v41-2026-02-smart-discovery`.
+
+**Verified live** (`POST /discovery/init` for "موقع لمغسلة ملابس مع توصيل"):
+- 200 OK in 137s. 25 research-driven questions in exactly 5 batches × 5.
+- Tavily research_used=True; questions cover driver tracking, weight vs piece pricing, payment methods, delivery zones — all derived from live web data, not Claude's guess.
+- 100 credits deducted, balance updated.
+
+
+
 ### 🛡️ Feb 27, 2026 — Cancellation Quota Retention Fix (P0)
 
 **Bug:** When a user cancelled an active PayPal storage subscription, their quota was immediately dropping to the trial 2 MB limit (locking them out of the chat), instead of retaining the paid quota until `current_period_end`.

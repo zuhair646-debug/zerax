@@ -85,7 +85,6 @@ _DISCOVERY_SYSTEM_PROMPT = """أنت "مستشار منتجات Zenrex" — خب
       "options": ["اشتراك شهري", "دفع لكل فيلم", "مجاناً مع إعلانات", "خليط من الثلاثة"],
       "triggers_module": "subscriptions_or_ads"
     }
-    // ... ضع 15-25 سؤالاً، مع batch 1..5 و priority high/medium/low
   ],
   "estimated_total_pages": 8,
   "estimated_build_minutes": 12,
@@ -98,8 +97,11 @@ _DISCOVERY_SYSTEM_PROMPT = """أنت "مستشار منتجات Zenrex" — خب
 - لا تخترع vertical إذا الفكرة غير واضحة — استخدم `"other"` واسأل سؤال توضيحي في `q1`.
 - الأسئلة تكون **محددة وعملية** (لا أسئلة فلسفية)، تساعد في اتخاذ قرار تقني.
 - كل سؤال له `triggers_module` يربطه بميزة في `essentials` أو `optional_modules`.
+- **كل سؤال يجب أن يحتوي `options` بـ 3-5 خيارات واقعية مستخرجة من بحثك** — حتى لو `answer_type` كان `text`، أعطِ خيارات مقترحة (الواجهة تعرضها كأزرار + خانة "أخرى" نصية).
+- **ممنوع تكرار أي سؤال** — راجع `questions_asked_so_far` قبل توليد أي سؤال جديد.
 - لا تذكر أسماء شركات إلا للأمثلة (Netflix / Amazon / Uber).
-- **انتج JSON فقط** — لا تكتب أي شي قبله أو بعده.
+- **انتج JSON صرف فقط** — بدون أي تعليقات `// ...` أو `/* */` أو فواصل زائدة `,}`، ولا تكتب أي نص قبل `{` أو بعد `}`.
+- ضع 15-25 سؤالاً موزّعين على batch 1..5 مع priority high/medium/low.
 """
 
 
@@ -126,7 +128,8 @@ _QUESTION_BATCH_FOLLOWUP_PROMPT = """العميل أجاب على دفعة ال�
 
 
 def _strip_json(text: str) -> Optional[Dict[str, Any]]:
-    """Best-effort JSON extraction — Claude sometimes wraps with ```json fences."""
+    """Best-effort JSON extraction — Claude sometimes wraps with ```json fences,
+    includes // line comments mimicking the prompt example, or trails commas."""
     if not text:
         return None
     text = text.strip()
@@ -139,11 +142,116 @@ def _strip_json(text: str) -> Optional[Dict[str, Any]]:
     if start == -1 or end == -1 or end < start:
         return None
     blob = text[start:end + 1]
+    # Try a pristine parse first
     try:
         return json.loads(blob)
+    except json.JSONDecodeError:
+        pass
+    # Aggressive cleanup pass — handles most things Claude does wrong:
+    cleaned = blob
+    # 1) Block comments /* ... */
+    cleaned = re.sub(r"/\*[\s\S]*?\*/", "", cleaned)
+    # 2) Line comments // ... (must NOT match URLs inside strings — best-effort)
+    cleaned = re.sub(r"(?m)^\s*//.*$", "", cleaned)
+    # 3) Trailing commas before } or ]
+    cleaned = re.sub(r",(\s*[}\]])", r"\1", cleaned)
+    # 4) Single quotes around keys/values (Claude sometimes mixes them)
+    #    Convert 'key': to "key": — only when safe (key followed by colon)
+    cleaned = re.sub(r"(?<=[\{\,\s])'([^'\\]+?)'(\s*:)", r'"\1"\2', cleaned)
+    try:
+        return json.loads(cleaned)
     except json.JSONDecodeError as e:
-        _logger.warning(f"discovery JSON parse failed: {e}; len={len(blob)}")
+        # Last-resort recovery for TRUNCATED Claude responses (max_tokens hit).
+        # We try to close the JSON by trimming back to the last complete
+        # question/object and appending the necessary closers.
+        recovered = _try_recover_truncated_json(cleaned)
+        if recovered is not None:
+            _logger.info("[discovery] recovered truncated JSON (best-effort)")
+            return recovered
+        # Dump for debugging — keep the last 5 attempts on disk for the owner.
+        try:
+            import os as _os
+            import time as _time
+            _os.makedirs("/tmp/zenrex_discovery_failures", exist_ok=True)
+            fname = f"/tmp/zenrex_discovery_failures/{int(_time.time())}.json"
+            with open(fname, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            _logger.warning(f"discovery JSON parse failed: {e}; len={len(cleaned)}; dump={fname}")
+        except Exception:
+            _logger.warning(f"discovery JSON parse failed: {e}; len={len(cleaned)}")
         return None
+
+
+def _try_recover_truncated_json(blob: str) -> Optional[Dict[str, Any]]:
+    """If Claude's reply got cut off mid-question, snip back to the last
+    complete `}` inside `questions[...]` and rebuild a valid object.
+
+    Strategy: find the last well-balanced segment by progressively trimming
+    from the end until `json.loads` succeeds.
+    """
+    if not blob or "{" not in blob:
+        return None
+    # Walk backwards looking for `},` followed by whitespace and try closing
+    # with `]` (for the questions array) + `}` (the outer object).
+    candidates = []
+    for end_idx in range(len(blob) - 1, 0, -1):
+        if blob[end_idx] == "}":
+            # Try variants of closers
+            for closer in ("]}", "]}}", "}"):
+                trial = blob[:end_idx + 1] + closer
+                candidates.append(trial)
+        if len(candidates) > 30:
+            break
+    for trial in candidates:
+        # Strip trailing commas one more time
+        trial = re.sub(r",(\s*[}\]])", r"\1", trial)
+        try:
+            return json.loads(trial)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+async def _research_vertical(idea_text: str) -> str:
+    """Run live Tavily web search to enrich the Discovery prompt with real
+    market intel about what this kind of project actually needs.
+
+    Returns a compact Arabic summary (or empty string on failure — the
+    Discovery prompt remains valid even without research).
+    """
+    try:
+        from modules.autocoder.web_search import tool_web_search
+    except Exception:
+        return ""
+    queries = [
+        f"{idea_text} essential features modules complete website checklist",
+        f"{idea_text} typical pages dashboard customer admin workflow",
+    ]
+    snippets: List[str] = []
+    for q in queries:
+        try:
+            r = await tool_web_search(query=q, max_results=4, search_depth="basic", include_answer=True)
+            if not r.get("ok"):
+                continue
+            if r.get("answer"):
+                snippets.append(f"- {r['answer']}")
+            for item in (r.get("results") or [])[:3]:
+                title = (item.get("title") or "").strip()
+                content = (item.get("content") or "").strip()
+                if title or content:
+                    snippets.append(f"  • {title}: {content[:280]}")
+        except Exception as e:
+            _logger.warning(f"[discovery-research] query failed: {e}")
+            continue
+    if not snippets:
+        return ""
+    research_blob = "\n".join(snippets[:14])  # cap to keep prompt sane
+    return (
+        "\n\n🔍 **بحث مباشر من الويب عن هذا المشروع (Tavily):**\n"
+        + research_blob
+        + "\n\n👆 استخدم هذا البحث الحقيقي لتحديد المراحل والميزات والأسئلة — "
+        "لا تخمّن. كل ميزة مذكورة فوق إما تدخل essentials أو تطرحها كسؤال للعميل."
+    )
 
 
 async def classify_and_plan(idea_text: str) -> Dict[str, Any]:
@@ -155,11 +263,16 @@ async def classify_and_plan(idea_text: str) -> Dict[str, Any]:
             "error": "idea_text is required",
         }
     try:
+        # 🔍 First, do a real web search to enrich Claude's context with
+        # live market intel about this kind of project. This is what makes
+        # the questions ACTUALLY research-driven instead of guessed.
+        research_blob = await _research_vertical(idea)
         raw = await ask_claude(
             system=_DISCOVERY_SYSTEM_PROMPT,
-            user_message=f"الفكرة:\n{idea}\n\nأعطني الـ JSON الآن.",
+            user_message=f"الفكرة:\n{idea}{research_blob}\n\nأعطني الـ JSON الآن.",
             model="claude-sonnet-4-5",
-            max_tokens=6000,
+            max_tokens=8500,
+            timeout=180.0,
         )
     except Exception as e:
         return {"ok": False, "error": f"claude_call_failed: {e}"}
@@ -175,6 +288,7 @@ async def classify_and_plan(idea_text: str) -> Dict[str, Any]:
     blueprint["completed_batches"] = []
     blueprint["status"] = "in_discovery"  # in_discovery | ready_to_build | building | done
     blueprint["progress_pct"] = 0
+    blueprint["research_used"] = bool(research_blob)
 
     # Defensive defaults so the frontend can always render something.
     blueprint.setdefault("vertical", "other")
@@ -184,7 +298,56 @@ async def classify_and_plan(idea_text: str) -> Dict[str, Any]:
     blueprint.setdefault("optional_modules", [])
     blueprint.setdefault("questions", [])
 
+    # Normalize questions: dedupe by id, guarantee options[] non-empty, and
+    # force every question to support both choice-buttons + free text.
+    blueprint["questions"] = _normalize_questions(blueprint.get("questions") or [])
+
     return {"ok": True, "blueprint": blueprint}
+
+
+def _normalize_questions(qs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Guarantee every question has: unique id, 3+ options, allow_free_text=True.
+
+    The frontend always renders option chips + a free-text "أخرى" input, so
+    we enforce that schema server-side to avoid render glitches when Claude
+    omits `options` or repeats a question key.
+    """
+    seen_ids: set = set()
+    seen_questions: set = set()
+    out: List[Dict[str, Any]] = []
+    for i, q in enumerate(qs):
+        if not isinstance(q, dict):
+            continue
+        qid = q.get("id") or f"q{i + 1}"
+        if qid in seen_ids:
+            continue
+        # Dedupe by normalized text too — Claude sometimes rephrases the
+        # same question across batches.
+        q_text = (q.get("question_ar") or "").strip()
+        q_key = q_text[:80].lower()
+        if q_key and q_key in seen_questions:
+            continue
+        seen_ids.add(qid)
+        if q_key:
+            seen_questions.add(q_key)
+
+        opts = q.get("options") or []
+        # Strip empties, cap at 6 options
+        cleaned_opts = [str(o).strip() for o in opts if str(o).strip()][:6]
+        if len(cleaned_opts) < 2:
+            # Provide a sensible default so the chip UI always renders
+            cleaned_opts = ["نعم", "لا", "غير متأكد"]
+        q["id"] = qid
+        q["question_ar"] = q_text or q.get("question") or "سؤال"
+        q["options"] = cleaned_opts
+        q["allow_free_text"] = True   # ALWAYS allow "أخرى" input
+        # Default answer_type to single_choice so the UI renders chips
+        if q.get("answer_type") not in ("single_choice", "multi_choice", "text"):
+            q["answer_type"] = "single_choice"
+        q.setdefault("batch", max(1, (len(out) // 5) + 1))
+        q.setdefault("priority", "medium")
+        out.append(q)
+    return out
 
 
 async def advance_discovery(
@@ -235,9 +398,24 @@ async def advance_discovery(
     new_q = update.get("next_batch_questions") or []
     blueprint.setdefault("questions", [])
     existing_ids = {q.get("id") for q in blueprint["questions"]}
+    existing_texts = {
+        (q.get("question_ar") or "").strip()[:80].lower()
+        for q in blueprint["questions"]
+    }
     for q in new_q:
-        if q.get("id") and q["id"] not in existing_ids:
-            blueprint["questions"].append(q)
+        if not isinstance(q, dict):
+            continue
+        qid = q.get("id")
+        q_key = (q.get("question_ar") or "").strip()[:80].lower()
+        if qid and qid in existing_ids:
+            continue
+        if q_key and q_key in existing_texts:
+            continue  # skip duplicate rephrasing
+        blueprint["questions"].append(q)
+        existing_ids.add(qid)
+        existing_texts.add(q_key)
+    # Re-normalize the combined list so the new batch also has options + free-text
+    blueprint["questions"] = _normalize_questions(blueprint["questions"])
 
     blueprint["progress_pct"] = max(
         blueprint.get("progress_pct", 0),
