@@ -1,0 +1,73 @@
+{
+  "summary": "Iter 71 — Verified end-to-end the new FreeBuild autonomy pipeline (Multi-Deploy + Silent Supervisor + Honesty Wrapper + Escalation Bridge + project_status footer). 22/22 unit tests pass. Live SSE stream on /api/freebuild-chat/project/{pid}/agent-chat-stream emits all three new events in order (honesty_check → escalation → project_status → done). Owner notifications API persists ai_escalation entries with correct Arabic title/message. UI loads FreeBuildChat for the test project and confirms file-upload input + textarea + Honesty Mandate refusal text appearing in the persisted chat history.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/owner/notifications", "issue": "Legacy entries (pre-Jan-2026 api_timeout records) use the old schema {category, summary, ts, created_at:<float>} instead of the new {type, title, message, created_at:<ISO>}. UI may render them with empty title. New ai_escalation entries use the correct schema."},
+      {"endpoint": "/api/freebuild-chat/project/{pid}/chat (Form-based)", "issue": "This non-streaming endpoint requires multipart/form-data (message=Form(...), files=File(...)). Sending application/json returns 422 'Field required'. Documented here so the next agent doesn't waste a turn — for SSE + honesty/escalation testing always use /agent-chat-stream."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "project_status footer persistence", "issue": "The project_status card (deploy buttons + honest_note_ar) is appended to liveSteps which is local-only state. After page reload the card disappears even though the assistant message is persisted. Users lose the 4 deploy buttons unless they trigger another chat turn. Consider persisting project_status events into message.steps[] in DB.", "affected_selectors": ["[data-testid^=\"project-status-\"]","[data-testid^=\"deploy-option-\"]"]}
+    ],
+    "design_issues": []
+  },
+  "verified_sse_events": [
+    "event: start",
+    "event: provider",
+    "event: text_delta (× 30)",
+    "event: text_end",
+    "event: build_plan",
+    "event: honesty_check  → {verified:false, claim_excerpt:..., verification_tools_used:[]}",
+    "event: escalation     → {reason:'honesty_violation', severity:'low', escalated:true, suppressed:false}",
+    "event: project_status → {pages_total:0, pending_items:[...], deploy_options:[zenrex,vercel,cloudflare_pages,github_pages], honest_note_ar:'المشروع لم يكتمل بعد...', supervisor_interventions:0}",
+    "event: done"
+  ],
+  "verified_endpoints": [
+    "POST /api/auth/login → 200, owner token issued",
+    "POST /api/freebuild-chat/project → 200, project id returned (note: singular 'project', not 'projects')",
+    "GET  /api/freebuild-chat/projects → 200, includes the new project",
+    "POST /api/freebuild-chat/project/{pid}/agent-chat-stream → 200 (SSE) all 3 new events fire on completion-claim message; AI refused to lie about deploy success",
+    "GET  /api/owner/notifications → 200, ai_escalation entry appeared for project_id=49da1e1a-... with Arabic title '🛡️ فحص الصدق: ادّعى الذكاء إنجازاً بدون تحقق' and severity=low"
+  ],
+  "verified_ui_elements": [
+    "Login → admin redirect works for owner@zerax.com",
+    "/freebuild/chat/{pid} loads project 'smoke-deploy-test'",
+    "Textarea data-testid='discovery-idea-input' present (project still in discovery phase)",
+    "File-upload input (paperclip) present (1 file input on page)",
+    "Persisted chat history shows the AI's honest refusal: 'أعتذر، لا أقدر أنفذ هذا الطلب' citing 'قاعدة #8 من دستوري الذهبي: Verified Honesty Mandate' — Honesty Wrapper end-to-end success"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_supervisor_and_deploy.py",
+    "/app/backend/tests/test_honesty_and_escalation.py",
+    "/app/backend/tests/conftest.py (new — sets sys.path)",
+    "/app/test_reports/pytest/iter71_supervisor_honesty.xml"
+  ],
+  "action_items": [
+    "(Low) Persist project_status SSE events into the assistant message's steps[] on the server side so the deploy-button card survives page reload.",
+    "(Low) One-off migration to backfill legacy owner_notifications entries with type/title/message fields (or update AdminNotifications.js to read from both schemas).",
+    "(Low) Optionally rename POST /api/freebuild-chat/project → /projects for REST consistency; currently both singular create + plural list co-exist."
+  ],
+  "critical_code_review_comments": [
+    "GOOD: escalation_bridge.create_escalation() de-dupes identical reasons within 5 min — prevents spam in owner_notifications.",
+    "GOOD: project_status event includes pages_substantive (>800 chars) — honest reflection of empty/weak pages instead of just count.",
+    "GOOD: deploy_to_vercel / _cloudflare_pages / _github_pages all return {ok:false, error:'token + project_name مطلوبان'} on missing creds — fails honestly per requirement.",
+    "GOOD: DEPLOY_OPTIONS_AR catalog enforces credential_url+label for providers where needs_credentials=true (verified by test_deploy_catalog_has_four_options).",
+    "MINOR: /api/freebuild-chat/project/{pid}/chat is JSON-incompatible (Form fields only). Either accept JSON or document the multipart requirement in the OpenAPI schema — testers will keep hitting 422.",
+    "MINOR: tests/ had no conftest.py — pytest couldn't resolve `modules.*` imports without PYTHONPATH=/app/backend. Fixed by adding /app/backend/tests/conftest.py.",
+    "GOOD: Honesty wrapper triggered cleanly on the test message — AI text included Honesty Mandate refusal AND backend marked verified=false, AND escalation landed in DB. Full pipeline integrity confirmed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (new — adds backend root to sys.path)",
+    "/app/test_reports/iteration_71.json (this file)"
+  ],
+  "success_rate": {"backend": "100% (22/22 unit + 1 live SSE round-trip)", "frontend": "100% (login + project load + file-input + persisted Honesty refusal verified)"},
+  "test_credentials": "owner@zerax.com / owner123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created freebuild project id=49da1e1a-7a9f-45ce-a310-f9bfe099a9a5 name='smoke-deploy-test'. One owner_notifications row was created as a side-effect of the honesty-violation test (intentional — confirms the bridge wrote to DB).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "1) Always use /agent-chat-stream (multipart Form) for SSE event testing — NOT /chat (also Form, returns plain JSON). 2) SSE timing: a no-tool 'echo' message takes ~30-60s; tool-using turns take 60-180s. Cloudflare 502s after ~100s on the preview URL — hit http://localhost:8001 directly. 3) The smoke project (49da1e1a-...) is still in discovery phase; if next agent wants to test the project_status footer rendering live, click 'تخطي المستشار' or run /discovery/init first to advance to chat. 4) /api/owner/notifications already has the test escalation row — feel free to filter by project_id to find it. 5) Honesty wrapper is intentionally aggressive: even ASKING the AI to recite a completion sentence triggers a violation (because it has no test_page/verify_my_work evidence). This is BY DESIGN.",
+  "rca_of_the_issue": "Not a bug — full success. The Honesty Wrapper pipeline (claims_completion → verification_evidence → honesty_check event → should_escalate → create_escalation → owner_notifications + Resend email) is wired end-to-end. The AI even surfaced 'قاعدة #8: Verified Honesty Mandate' in its system response, confirming the honesty nudge from the previous turn is being injected back into the next turn's system prompt as designed."
+}
