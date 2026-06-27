@@ -1,6 +1,48 @@
 # Zitex Changelog
 
 
+### 🤖 Feb 27, 2026 — Multi-Deploy + Silent Supervisor + Status Footer (Owner-Mandated Autonomy Push)
+
+**Owner directive (Saudi Arabic):**
+1. Wire the **4 real deploy options** so the AI can actually push to each provider (not just recommend them).
+2. **Always append at the end of every AI reply**: what's still pending + the 4 deploy options. Honesty is mandatory.
+3. **Silent Supervisor**: when the AI is stuck in a loop or keeps failing, **automatically detect it and silently inject corrective guidance** — without surfacing E1 or the operator. The AI must LEARN from each correction so it doesn't repeat the mistake. Goal: lower error rate, raise autonomy.
+
+**Backend — Multi-Deploy module**
+- New `/app/backend/modules/freebuild/multi_deploy.py`
+  - `deploy_to_vercel()` — real REST call to `https://api.vercel.com/v13/deployments`. Bundles `pages` as `{file, data, encoding}` per Vercel spec. Requires customer's Vercel Personal Token (saved encrypted in `freebuild_credentials`).
+  - `deploy_to_cloudflare_pages()` — Direct-Upload via `https://api.cloudflare.com/client/v4/accounts/{acc}/pages/projects/{slug}/deployments`. Auto-creates the project if missing. Requires `cloudflare_token` (Pages:Edit) + `cloudflare_account_id`.
+  - `deploy_to_github_pages()` — commits the bundle to `main` via Contents API, enables Pages from root. Requires `github_token` (scopes: `repo`, `pages`).
+  - `_bundle_to_files()` — normalizes `home` / `index` keys to `index.html` so all 3 static hosts serve the root URL correctly.
+  - `_safe_project_slug()` — produces a slug all 3 providers accept.
+  - `DEPLOY_OPTIONS_AR` — the catalog used by the per-message status footer.
+
+**Backend — Silent Supervisor module**
+- New `/app/backend/modules/freebuild/silent_supervisor.py`
+  - `SupervisorState` — per-session sliding window of the last 12 tool events.
+  - `record_tool_event()` + `record_assistant_text()` — log every tool call result and detect "I can't" / "أعتذر" sentinels.
+  - `detect_stuck_pattern()` — 3 patterns: (a) same tool failing 3× in a row, (b) identical (name+payload-hash) call repeated 3×, (c) explicit give-up text.
+  - `build_supervisor_injection()` — produces a strict Arabic guidance message tailored to the detected pattern (different advice for each).
+  - `persist_lesson()` — saves the guidance to `ai_learned_lessons` MongoDB collection.
+  - `recent_lessons_for_prompt()` — returns the last 5 lessons (project + global) for system-prompt injection.
+
+**Backend — `freebuild_agent.py` integration**
+- Registered 3 new tool definitions: `deploy_to_vercel`, `deploy_to_cloudflare_pages`, `deploy_to_github_pages`. Each dispatch branch pulls the customer's encrypted credentials from `freebuild_credentials` and surfaces an honest `request_credential` hint if missing.
+- After every tool execution, the supervisor records the event, checks for stuck patterns, and (if found) injects the guidance into the next turn's context as a system-style message. Max 2 interventions per turn. The lesson is also persisted to the DB.
+- On chat start, `recent_lessons_for_prompt()` injects the last 5 learned lessons into the system prompt under "# 🧠 دروس مستفادة" — so the AI literally remembers past mistakes across sessions.
+- Before the final `done` SSE event, a new `project_status` SSE event is emitted containing: pages_total, pages_substantive, pending_items (honest list of incomplete pages or audit issues), the full 4-provider deploy catalog, supervisor_interventions counter, and a one-line `honest_note_ar` ("جاهز للنشر" vs "لم يكتمل بعد"). The frontend renders this as a sticky footer under every assistant message.
+
+**Tests (all passing)**
+- New `/app/backend/tests/test_supervisor_and_deploy.py` — 11 cases covering: stuck-pattern detection (failure / loop / give-up), injection content, bundling rules, slug normalization, deploy catalog integrity. Combined with existing `test_cancellation_quota_retention.py` → 15/15 pass.
+
+**Service worker:** bumped to `v42-2026-02-multi-deploy-supervisor`.
+
+**Notes (honest)**
+- The frontend rendering of the `project_status` event as a visible footer card under every assistant message still needs UI wiring (next turn).
+- The honesty-mandate wrapper (intercept "خلصت/done" claims without `test_page` call) is queued as P1 — next.
+
+
+
 ### 🧠 Feb 27, 2026 — Smart Discovery Engine v2 (Research-Driven Questions + Negative-Balance Credits)
 
 **Owner directive (Saudi Arabic):** The "Create from scratch" section must not have a hardcoded question list. The AI must research the customer's vertical live (e.g. "laundry shop"), then auto-generate dynamic questions (15-25, in batches of 5), every question having **option chips + free-text "أخرى"** (both mandatory). Questions cost credits — allow negative balance (settled on next top-up). Customer can skip Discovery entirely.

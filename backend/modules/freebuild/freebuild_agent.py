@@ -849,6 +849,59 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "deploy_to_vercel",
+        "description": (
+            "🌐 Deploy the current project's HTML/CSS/JS bundle to Vercel via "
+            "REST API. The CUSTOMER must own the Vercel token (free tier OK). "
+            "If the token isn't saved yet, call `request_credential('vercel_token', ...)` "
+            "FIRST with the instructions from https://vercel.com/account/tokens. "
+            "Returns the live URL on success — or {ok:false, error} (NEVER claim success on failure)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_name": {"type": "string", "description": "Vercel project slug (lowercase, dashes, 3-50)."},
+                "team_id": {"type": "string", "description": "Optional Vercel team ID (omit for personal account)."},
+            },
+            "required": ["project_name"],
+        },
+    },
+    {
+        "name": "deploy_to_cloudflare_pages",
+        "description": (
+            "☁️ Deploy the bundle to Cloudflare Pages (Direct Upload). "
+            "Requires the customer's CF API Token (Pages:Edit scope) AND Account ID. "
+            "If either is missing, call `request_credential` first with link "
+            "https://dash.cloudflare.com/profile/api-tokens. "
+            "Returns {ok, url, deployment_id} or honest error."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_name": {"type": "string"},
+            },
+            "required": ["project_name"],
+        },
+    },
+    {
+        "name": "deploy_to_github_pages",
+        "description": (
+            "🐙 Deploy by committing the bundle to a GitHub repo's main branch "
+            "and enabling GitHub Pages. Requires a Personal Access Token with "
+            "`repo` + `pages` scopes from https://github.com/settings/tokens. "
+            "If the repo doesn't exist yet, call `github_create_repo` first."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string", "description": "GitHub username or org"},
+                "repo": {"type": "string", "description": "Repository name"},
+                "commit_message": {"type": "string", "description": "Default: 'Zenrex deploy'"},
+            },
+            "required": ["owner", "repo"],
+        },
+    },
+    {
         "name": "call_self_test_agent",
         "description": (
             "🤖 Autonomous self-test: AI generates browser scenarios from "
@@ -4922,6 +4975,95 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                     return {"ok": True, "url": data.get("url"), "slug": slug, "message": f"✅ موقعك مُتاح الآن على {data.get('url')}"}
             except Exception as e:
                 return {"ok": False, "error": f"publish failed: {type(e).__name__}: {str(e)[:200]}"}
+
+        # ── Real customer-owned deploy targets (Vercel / CF Pages / GH Pages) ──
+        if name in ("deploy_to_vercel", "deploy_to_cloudflare_pages", "deploy_to_github_pages"):
+            from .multi_deploy import (
+                deploy_to_vercel as _vc,
+                deploy_to_cloudflare_pages as _cf,
+                deploy_to_github_pages as _gh,
+            )
+            if not ctx.pages:
+                return {"ok": False, "error": "المشروع فاضي — أنشئ صفحات قبل النشر"}
+
+            async def _get_cred(service: str) -> Optional[str]:
+                """Fetch a stored credential for this project (decrypted)."""
+                if ctx.project_id is None or ctx.db is None:
+                    return None
+                try:
+                    doc = await ctx.db.freebuild_credentials.find_one(
+                        {"project_id": ctx.project_id, "service": service}
+                    )
+                    if not doc or not doc.get("value_enc"):
+                        return None
+                    from cryptography.fernet import Fernet
+                    import base64 as _b64, hashlib as _hl, os as _os
+                    seed = _os.environ.get("JWT_SECRET", "fallback-dev-secret-do-not-use")
+                    key = _b64.urlsafe_b64encode(_hl.sha256(seed.encode()).digest())
+                    return Fernet(key).decrypt(doc["value_enc"].encode()).decode()
+                except Exception:
+                    return None
+
+            if name == "deploy_to_vercel":
+                token = await _get_cred("vercel_token")
+                if not token:
+                    return {
+                        "ok": False,
+                        "error": "vercel_token غير محفوظ — استخدم request_credential('vercel_token', ...) أولاً",
+                        "needs_credential": "vercel_token",
+                        "where_to_get": "https://vercel.com/account/tokens",
+                    }
+                pname = (args.get("project_name") or "").strip() or f"zenrex-{ctx.project_id}"
+                return await _vc(
+                    token=token,
+                    project_name=pname,
+                    pages=dict(ctx.pages),
+                    team_id=args.get("team_id"),
+                )
+
+            if name == "deploy_to_cloudflare_pages":
+                cf_token = await _get_cred("cloudflare_token")
+                cf_account = await _get_cred("cloudflare_account_id")
+                missing = []
+                if not cf_token:
+                    missing.append("cloudflare_token")
+                if not cf_account:
+                    missing.append("cloudflare_account_id")
+                if missing:
+                    return {
+                        "ok": False,
+                        "error": f"بيانات Cloudflare ناقصة: {', '.join(missing)} — اطلبها بـ request_credential",
+                        "needs_credentials": missing,
+                        "where_to_get": "https://dash.cloudflare.com/profile/api-tokens",
+                    }
+                pname = (args.get("project_name") or "").strip() or f"zenrex-{ctx.project_id}"
+                return await _cf(
+                    api_token=cf_token,
+                    account_id=cf_account,
+                    project_name=pname,
+                    pages=dict(ctx.pages),
+                )
+
+            if name == "deploy_to_github_pages":
+                gh_token = await _get_cred("github_token")
+                if not gh_token:
+                    return {
+                        "ok": False,
+                        "error": "github_token غير محفوظ — استخدم request_credential('github_token', ...) (scopes: repo, pages)",
+                        "needs_credential": "github_token",
+                        "where_to_get": "https://github.com/settings/tokens",
+                    }
+                owner = (args.get("owner") or "").strip()
+                repo = (args.get("repo") or "").strip()
+                if not owner or not repo:
+                    return {"ok": False, "error": "owner + repo مطلوبان"}
+                return await _gh(
+                    token=gh_token,
+                    owner=owner,
+                    repo=repo,
+                    pages=dict(ctx.pages),
+                    commit_message=(args.get("commit_message") or "Zenrex deploy"),
+                )
 
         if name == "request_credential":
             service = (args.get("service") or "").strip().lower()
@@ -9864,6 +10006,20 @@ async def _stream_one_provider(
         except Exception:
             _docs_block = ""
         sys_prompt = get_system_prompt(project, is_owner=is_owner) + _lang_directive + (_docs_block or "") + (_wf_addendum or "")
+        # 🧠 Inject lessons learned from prior Silent Supervisor interventions
+        # so the AI doesn't repeat the same mistake across sessions.
+        try:
+            from .silent_supervisor import recent_lessons_for_prompt
+            _lessons = await recent_lessons_for_prompt(db, project.get("id"), limit=5) if db else []
+            if _lessons:
+                _lesson_block = (
+                    "\n\n# 🧠 دروس مستفادة من جلسات سابقة (لا تكرر هذه الأخطاء):\n"
+                    + "\n\n".join(f"### درس {i + 1}\n{ls}" for i, ls in enumerate(_lessons))
+                )
+                sys_prompt = sys_prompt + _lesson_block
+                logger.info(f"[agent] injected {len(_lessons)} learned lessons into system prompt")
+        except Exception as _le:
+            logger.debug(f"[agent] lesson injection skipped: {_le}")
         # ── 🔪 SURGICAL MODE — replace 55KB monolith with 4KB focused prompt
         # when user request is clearly an edit on an existing project. This is
         # the radical cure for "AI adds unrequested sections" recommended by
@@ -10521,6 +10677,56 @@ async def _stream_one_provider(
                 else:
                     messages.append({"role": "tool", "tool_call_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)[:6000]})
 
+                # ── 👁️ SILENT SUPERVISOR — auto-detect "AI is stuck" patterns
+                # and silently inject corrective guidance so the model learns
+                # without bothering the customer.
+                try:
+                    from .silent_supervisor import (
+                        record_tool_event,
+                        detect_stuck_pattern,
+                        build_supervisor_injection,
+                        persist_lesson,
+                    )
+                    if not hasattr(ctx, "_supervisor"):
+                        from .silent_supervisor import SupervisorState
+                        ctx._supervisor = SupervisorState()
+                    record_tool_event(ctx._supervisor, tu["name"], tu.get("input") or {}, result)
+                    pattern = detect_stuck_pattern(ctx._supervisor)
+                    if pattern and ctx._supervisor.interventions_this_turn < 2:
+                        lesson = build_supervisor_injection(pattern, {
+                            "pages": list((ctx.pages or {}).keys()),
+                        })
+                        if lesson:
+                            ctx._supervisor.interventions_this_turn += 1
+                            ctx._supervisor.intervention_count_total += 1
+                            logger.info(
+                                f"[supervisor] intervention #{ctx._supervisor.intervention_count_total} "
+                                f"pattern={pattern.get('pattern')} tool={pattern.get('tool_name','?')}"
+                            )
+                            # Inject as a SYSTEM-style message so the model treats
+                            # it as guidance, not a user request. Anthropic accepts
+                            # `role:user` with a clear sentinel prefix.
+                            if provider in ("anthropic", "emergent_anthropic"):
+                                messages.append({
+                                    "role": "user",
+                                    "content": [{"type": "text", "text": lesson}],
+                                })
+                            else:
+                                messages.append({"role": "system", "content": lesson})
+                            # Persist the lesson for future sessions.
+                            try:
+                                await persist_lesson(ctx.db, ctx.project_id, lesson, pattern)
+                            except Exception:
+                                pass
+                            # Notify frontend so debug panel can show interventions.
+                            yield _sse("supervisor", {
+                                "pattern": pattern.get("pattern"),
+                                "tool": pattern.get("tool_name"),
+                                "intervention_count": ctx._supervisor.intervention_count_total,
+                            })
+                except Exception as _sup_e:
+                    logger.debug(f"[supervisor] hook error: {_sup_e}")
+
                 # ── 🔬 FORCE POST-WRITE VERIFICATION (Fix #1 from RCA) ────
                 # After ANY HTML-mutating tool, automatically:
                 # (a) run list_sections so Claude SEES the actual structure
@@ -10834,6 +11040,52 @@ async def _stream_one_provider(
                 })
     except Exception as _ar_e:
         logger.warning(f"[agent-stream] auto-republish skipped: {_ar_e}")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 📋 PROJECT-STATUS FOOTER — emitted before `done` so the frontend can
+    # render an Arabic banner under every assistant message that shows:
+    #   • What's still pending (honest list of incomplete pages / audit issues)
+    #   • The 4 real deploy options (Zenrex / Vercel / Cloudflare / GitHub)
+    # The customer ALWAYS sees this — even if the AI text doesn't mention it —
+    # because the AI cannot be trusted to always include it.
+    # ─────────────────────────────────────────────────────────────────────────
+    try:
+        from .multi_deploy import DEPLOY_OPTIONS_AR
+        _pages_total = len(ctx.pages or {})
+        _pages_substantive = sum(1 for h in (ctx.pages or {}).values() if len(h or "") > 800)
+        _pending: List[str] = []
+        if _pages_total == 0:
+            _pending.append("لا توجد صفحات بعد — أنشئ index.html على الأقل")
+        elif _pages_substantive < _pages_total:
+            _pending.append(f"{_pages_total - _pages_substantive} صفحة فيها محتوى ضعيف (<800 حرف)")
+        try:
+            for entry in (ctx.tool_log or [])[-12:]:
+                if entry.get("name") in ("audit_html", "validate_html"):
+                    _issues = (entry.get("result") or {}).get("issues") or []
+                    if _issues:
+                        _pending.append(f"{len(_issues)} مشكلة من آخر فحص ({entry.get('name')})")
+                        break
+        except Exception:
+            pass
+        _sup_count = 0
+        try:
+            _sup_count = getattr(getattr(ctx, "_supervisor", None), "intervention_count_total", 0) or 0
+        except Exception:
+            _sup_count = 0
+        yield _sse("project_status", {
+            "pages_total": _pages_total,
+            "pages_substantive": _pages_substantive,
+            "pending_items": _pending,
+            "is_complete": (_pages_total > 0 and not _pending),
+            "deploy_options": DEPLOY_OPTIONS_AR,
+            "supervisor_interventions": _sup_count,
+            "honest_note_ar": (
+                "هذا الموقع جاهز للنشر — اختر طريقة من الخيارات الأربعة." if (_pages_total > 0 and not _pending)
+                else "المشروع لم يكتمل بعد — راجع القائمة أعلاه قبل النشر."
+            ),
+        })
+    except Exception as _ps_e:
+        logger.debug(f"[agent-stream] project_status footer failed: {_ps_e}")
 
     yield _sse("done", {
         "summary": summary,
