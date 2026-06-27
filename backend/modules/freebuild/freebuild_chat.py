@@ -8656,6 +8656,22 @@ For questions: legal@zenrex.ai
 
         async def event_stream():
             try:
+                # ────── CONCIERGE PRECHECK ──────
+                try:
+                    from .concierge_hooks import precheck_integrations, stream_wizard_as_sse
+                    check = await precheck_integrations(
+                        db=db, user_id=user["user_id"], project_id=pid, user_message=message,
+                    )
+                    if check.get("should_block_build"):
+                        for evt in stream_wizard_as_sse(check):
+                            yield evt
+                        # Block build until creds arrive
+                        import json as _j
+                        yield f"event: done\ndata: {_j.dumps({'paused_for_setup': True, 'pending_integrations': [p['integration_id'] for p in check['pending']]}, ensure_ascii=False)}\n\n"
+                        return
+                except Exception as _ce:
+                    logger.warning(f"concierge precheck failed (continuing): {_ce}")
+                # ────────────────────────────────
                 async for chunk in stream_via_orchestrator(
                     proj, message, history,
                     ctx_holder=ctx_holder,

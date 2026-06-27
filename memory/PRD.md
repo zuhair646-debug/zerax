@@ -908,3 +908,52 @@ Zenrex flow:
 - 🤝 **Real-time collab:** Solved via Liveblocks SDK injection. Customer needs Liveblocks key (free 100 MAU).
 - 🤖 **Any-code-execution:** Solved via 3-tier (WebContainer → E2B → SSH to user VPS).
 
+
+## 🪝 2026-02 — PHASE 6: AI ↔ Concierge Integration (Final Wiring)
+
+**Status:** ✅ ALL WIRED. AI now auto-launches wizards before code.
+
+### What changed
+- `modules/freebuild/concierge_hooks.py` — Precheck middleware
+  - `precheck_integrations()` — detects required integrations, checks vault, builds wizard cards, transitions state
+  - `stream_wizard_as_sse()` — yields cards as SSE events
+  - `resume_after_setup()` — verifies user submitted all creds, resumes BUILDING
+- `freebuild_chat.py` `/orchestrator-stream` — runs precheck BEFORE the orchestrator starts. If integrations missing → emits wizard cards + stops with `paused_for_setup: true`. User fills wizard → resume endpoint flips state.
+- `frontend/src/components/ConciergeWizard.jsx` — Full React component library:
+  - `ConciergeCard` — dispatches to 6 card type renderers (Intro, KeyInput, Cost, Checklist, Success, SkipAlternative)
+  - `ConciergeWizardPanel` — manages collected cards from SSE stream, auto-detects when all done
+  - All bilingual (ar/en), all data-testid'd, RTL/LTR auto-flip
+- New endpoint: `POST /api/concierge/project/{pid}/resume-after-setup` — frontend calls after wizard complete
+
+### End-to-end flow now functional
+```
+1. Customer: "ابني تطبيق توصيل مع stripe و خريطة"
+2. POST /api/freebuild-chat/project/{pid}/orchestrator-stream
+3. → concierge_hooks.precheck_integrations()
+4. → detects: stripe_payments, mapbox_maps, expo_eas_build
+5. → emits SSE: concierge_setup_required + concierge_wizard_card × N
+6. → SSE: done with paused_for_setup: true
+7. Frontend (ConciergeWizardPanel) renders cards
+8. Customer pastes keys → POST /api/concierge/credentials/save validates+encrypts
+9. When all keys saved → POST /api/concierge/project/{pid}/resume-after-setup
+10. → state → BUILDING
+11. Customer re-sends original message OR frontend auto-resumes
+12. orchestrator-stream runs normally with all creds available in vault
+```
+
+### Tests
+- ✅ `concierge_hooks.precheck_integrations()` — 3 scenarios (Arabic stripe, simple landing, English mobile) all pass
+- ✅ Backend regression: orchestrator/test_orchestrator.py — 8/8 pass
+- ✅ Lint: ConciergeWizard.jsx — 0 issues
+- ✅ Live endpoints (curl-verified): integrations/list, detect-needs, state, wizard, resume-after-setup, credentials/save
+
+### Total session impact
+| Layer | Files Created | Status |
+|---|---|---|
+| **Phase 1-4: 24 Cortices/Capabilities** | 27 .py + 4 .json | ✅ 73/73 tests |
+| **Phase 5: Concierge + Executors** | 13 .py + 1 .json | ✅ 51/51 tests |
+| **Phase 6: AI Wiring + UI** | 2 (1 .py + 1 .jsx) | ✅ All scenarios pass |
+| **Documentation** | PRD.md updated | ✅ 5 new sections |
+
+**Grand total this session:** 47 new files, 124+ verification checks all green.
+

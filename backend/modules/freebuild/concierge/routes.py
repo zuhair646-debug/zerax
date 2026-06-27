@@ -208,6 +208,15 @@ async def project_state_transition(project_id: str, body: StateTransitionBody, r
     return {"transitioned": True, "new_state": new_state.value}
 
 
+@router.post("/project/{project_id}/resume-after-setup")
+async def project_resume_after_setup(project_id: str, request: Request):
+    """Called by frontend after user completes the setup wizard."""
+    from ..concierge_hooks import resume_after_setup  # noqa: E402
+    db = await _get_db(request)
+    uid = await _get_user_id(request)
+    return await resume_after_setup(db, uid, project_id)
+
+
 @router.get("/project/{project_id}/wizard")
 async def project_wizard(project_id: str, request: Request, language: str = "ar"):
     """Return next pending wizard card(s) for a project."""
