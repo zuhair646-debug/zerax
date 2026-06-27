@@ -2881,7 +2881,7 @@ def create_autocoder_router(db, get_current_user, require_owner):
                 if "noneType" in err_str or "'NoneType'" in err_str:
                     friendly = f"خلل داخلي تم تجاوزه. حاول مرة ثانية. (التفاصيل: {err_str[:150]})"
                 elif "credit_balance" in low or "billing" in low:
-                    friendly = "رصيد Anthropic منخفض. بدّل الموديل لـLlama (Groq) — مجاني."
+                    friendly = "⚠️ نواجه ضغط مؤقت — حاول بعد قليل أو بدّل الموديل لـLlama (Groq) — مجاني."
                 elif "rate" in low or "429" in low:
                     friendly = "تجاوزت حد الطلبات. استنّى ~30 ثانية ثم حاول."
                 elif "timeout" in low:
@@ -3635,7 +3635,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
             err_str = str(e)
             low = err_str.lower()
             if "credit_balance" in low or "billing" in low:
-                yield {"type": "error", "message": "💰 رصيد Anthropic منخفض. بدّل الموديل لـLlama (Groq) من الزر أعلى الشاشة — مجاني."}
+                yield {"type": "error", "message": "⚠️ نواجه ضغط مؤقت على الموديل. حاول مرة ثانية بعد قليل، أو بدّل لـLlama (Groq) من الزر أعلى الشاشة — مجاني."}
             elif "rate" in low or "429" in low:
                 yield {"type": "error", "message": "⏱️ تجاوزت حد الطلبات على Anthropic. استنّى ~30 ثانية ثم حاول."}
             elif "overloaded" in low or "529" in low:

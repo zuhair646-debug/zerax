@@ -230,7 +230,7 @@ async def run_claude_agent(
             msg = f"{type(stream_err).__name__}: {str(stream_err)[:200]}"
             logger.exception(f"[{section_label}] anthropic stream failed", exc_info=stream_err)
             if any(k in msg.lower() for k in ["credit", "balance", "401", "402", "429", "quota"]):
-                err = "⚠️ رصيد Anthropic منتهي. شحن من: console.anthropic.com/settings/billing"
+                err = "⚠️ نواجه ضغط مؤقت على المزود. حاول مرة ثانية بعد دقيقة أو دقيقتين. لو استمرت المشكلة بعد نصف ساعة، تواصل مع الدعم."
                 yield _sse("error", {"message": err})
                 yield _sse("done", {"summary": err, "options": [], "iterations": iterations,
                                     "model_used": "", "html_updated": captured.get("html_updated", False),
