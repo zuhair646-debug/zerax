@@ -17,6 +17,17 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **Owner Engineer Portal** (`/admin/engineer`) — read + write + browser-audit.
 - **🗂️ Design Archive (المحفوظات)** — visual snapshot history per project.
 
+
+## 🆕 2026-02-27 — Cortex Tools + Concierge Engine WIRED & VERIFIED ✅
+The 47 orphaned files from the previous session are now LIVE end-to-end:
+- **21 Cortex Tools** registered in `TOOLS_SCHEMA` (`freebuild_agent.py` line ~1871): `run_architect`, `run_reviewer`, `extract_brand_dna`, `convert_to_typescript`, `refactor_rename`, `audit_a11y`, `audit_seo`, `optimize_performance`, `inject_pwa`, `setup_i18n`, `design_database`, `inject_liveblocks`, `trigger_eas_build`, `run_in_webcontainer`, `run_in_pyodide`, `generate_tests`, `generate_openapi_spec`, `inject_integration`, `inject_recipe`, `apply_shader`, `inject_backend_pattern`. AI now sees them in tool schema (166 total tools).
+- **`_dispatch_tool` wired** to `cortex_tools.dispatch` (line ~3911) so when AI calls any of the 21, the handler runs.
+- **`capabilities_addendum.py`** injected into `AGENT_SYSTEM_PROMPT` — AI knows golden rules (use `extract_brand_dna` on new projects, `run_reviewer` before delivery, `run_architect` for complex SaaS, Concierge handles 3rd-party setup).
+- **Concierge Precheck** integrated into `/agent-chat-stream` (freebuild_chat.py line ~8256): when user types "تطبيق موبايل" / "live cursors" / "stripe payments", the SSE stream emits `concierge_setup_required` + `concierge_wizard_card` events and PAUSES the build until creds arrive. Within ~3 seconds, no Claude invocation.
+- **Frontend `ConciergeWizardPanel`** rendered in `FreeBuildChat.js` (line ~6516) for `concierge_setup_required` steps. User can paste key → validate → resume.
+- **Verified via 15-test pytest suite** at `/app/backend/tests/test_concierge_wiring.py` (100% pass, iteration_77).
+
+
 ## Pricing Tiers (Final — 2026-02)
 | Tier | Price | What's included |
 |---|---|---|
