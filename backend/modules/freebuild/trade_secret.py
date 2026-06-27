@@ -50,7 +50,9 @@ _PROVIDER_PATTERNS = [
     (r"\btavily\b", "محرك البحث الداخلي"),
     (r"\bperplexity\b", "محرك البحث الداخلي"),
     (r"\bbrave\s+search\b", "محرك البحث الداخلي"),
-    # Internal tool / module names — they leak architecture
+    # Bare "sonnet" (even unversioned, even as "Zenrex Sonnet")
+    (r"\bsonnet\b", "AI"),
+    # Internal tool / module names — they leak architecture. Comprehensive list.
     (r"\b(test_page|verify_my_work|validate_html|audit_html|read_current_html|"
      r"write_full_html|apply_section|inject_global_css|analyze_uploaded_file|"
      r"troubleshoot_agent|recursive_test_agent|design_agent_full_stack|"
@@ -58,12 +60,16 @@ _PROVIDER_PATTERNS = [
      r"compare_visuals|check_navigation_graph|validate_js_handlers|"
      r"request_credential|deploy_to_vercel|deploy_to_cloudflare_pages|"
      r"deploy_to_github_pages|deploy_to_production|publish_site|"
-     r"web_search|integration_playbook_live|recommend_service|"
-     r"save_credential|github_create_repo|github_push_file|"
-     r"list_pages|list_sections|lock_design|unlock_design|"
+     r"web_search|integration_playbook_live|integration_playbook_expert_v2|"
+     r"recommend_service|save_credential|github_create_repo|github_push_file|"
+     r"github_get_file|list_pages|list_sections|lock_design|unlock_design|"
      r"revert_to_last_snapshot|restore_snapshot|list_snapshots|"
      r"remember|recall|run_safe_bash|run_python_in_sandbox|run_js_in_sandbox|"
-     r"notify_owner|classify_and_plan|advance_discovery)\b", "أداتي الداخلية"),
+     r"notify_owner|classify_and_plan|advance_discovery|"
+     r"create_page|update_nav|unify_pages_layout|lint_javascript|"
+     r"generate_image|generate_voiceover|download_media|search_and_download_media|"
+     r"fetch_url|crawl_url_deep|deploy_to|"
+     r"ask_design_expert|ask_testing_expert|ask_troubleshoot_expert)\b", "أداتي الداخلية"),
     # API endpoint leaks
     (r"https?://api\.(anthropic|openai|tavily)\.com\S*", "خدمتنا الداخلية"),
     (r"\bAPI[_\s]?KEY\b", "مفتاحنا الداخلي"),
