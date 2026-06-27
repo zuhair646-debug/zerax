@@ -6653,6 +6653,80 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                         onConfirm={submitOptionAnswer}
                       />
                     )}
+                    {/* 📋 Persisted project_status footer — same shape as the
+                        live-stream card. Survives page reload now (Feb 2026
+                        autonomy v3). Only rendered on assistant messages that
+                        actually carry a project_status payload. */}
+                    {m.role === 'assistant' && m.project_status && (
+                      (() => {
+                        const ps = m.project_status;
+                        const isComplete = !!ps.is_complete;
+                        const pending = ps.pending_items || [];
+                        const deploys = ps.deploy_options || [];
+                        return (
+                          <div
+                            data-testid={`project-status-persisted-${i}`}
+                            className={`my-3 rounded-xl border p-3.5 ${
+                              isComplete
+                                ? 'border-emerald-400/40 bg-gradient-to-br from-emerald-500/10 to-zinc-900/80'
+                                : 'border-amber-400/40 bg-gradient-to-br from-amber-500/10 to-zinc-900/80'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                              <div className="flex items-center gap-2 text-[12px] font-black">
+                                <span>{isComplete ? '✅' : '🚧'}</span>
+                                <span className={isComplete ? 'text-emerald-200' : 'text-amber-200'}>
+                                  {ps.honest_note_ar}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[10px]">
+                                <span className="px-2 py-0.5 rounded-full bg-zinc-800/60 border border-zinc-700 text-zinc-300">
+                                  {ps.pages_substantive}/{ps.pages_total} صفحة
+                                </span>
+                                {ps.supervisor_interventions > 0 && (
+                                  <span
+                                    className="px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-200"
+                                    title="مراقب تلقائي تدخّل بصمت"
+                                    data-testid={`supervisor-badge-persisted-${i}`}
+                                  >
+                                    🛡️ {ps.supervisor_interventions}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {pending.length > 0 && (
+                              <ul className="text-[11px] text-amber-100/90 mb-3 space-y-1 list-disc pr-5" data-testid={`status-pending-persisted-${i}`}>
+                                {pending.map((p, pi) => (
+                                  <li key={pi}>{p}</li>
+                                ))}
+                              </ul>
+                            )}
+                            <div className="border-t border-zinc-700/40 pt-2.5">
+                              <p className="text-[10px] font-bold text-zinc-300 mb-1.5">🚀 خيارات النشر:</p>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {deploys.map((d, di) => (
+                                  <button
+                                    key={d.id || di}
+                                    type="button"
+                                    data-testid={`deploy-option-persisted-${d.id}`}
+                                    onClick={() => {
+                                      if (d.id === 'zenrex') setMessage('انشر الموقع على Zenrex');
+                                      else if (d.id === 'vercel') setMessage('انشره على Vercel');
+                                      else if (d.id === 'cloudflare_pages') setMessage('انشره على Cloudflare Pages');
+                                      else if (d.id === 'github_pages') setMessage('انشره على GitHub Pages');
+                                    }}
+                                    className="text-right rounded-lg border border-zinc-700/60 bg-zinc-900/60 hover:bg-cyan-500/10 hover:border-cyan-400/50 transition px-2 py-1.5 group"
+                                  >
+                                    <div className="text-[11px] font-bold text-cyan-200 group-hover:text-cyan-100">{d.name_ar}</div>
+                                    <div className="text-[9px] text-zinc-400 group-hover:text-zinc-300 truncate">{d.tagline_ar}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()
+                    )}
                     {/* In website mode the live-preview tab is removed; we
                         no longer show the "اضغط للمشاهدة" CTA because it
                         used to switch to a tab that no longer exists. The AI

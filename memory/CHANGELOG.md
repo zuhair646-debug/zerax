@@ -1,6 +1,25 @@
 # Zitex Changelog
 
 
+### 🔁 Feb 27, 2026 — End-to-End Verification Pass + Persistence Fixes
+
+**What the testing agent verified live** (iteration_71.json):
+- ✅ All 22 unit tests pass + 1 live SSE round-trip on `/agent-chat-stream`.
+- ✅ The honesty wrapper fired on a synthetic completion-claim and the AI **refused to lie** — even quoting "قاعدة #8: Verified Honesty Mandate" in its reply (proves the lesson from a prior nudge was re-injected into the system prompt and the model obeyed it).
+- ✅ `escalation_bridge.create_escalation()` wrote an `ai_escalation` row to `owner_notifications` with the correct Arabic title `🛡️ فحص الصدق: ادّعى الذكاء إنجازاً بدون تحقق` and severity=low.
+- ✅ SSE event order on a violating turn: `honesty_check → escalation → project_status → done`.
+- ✅ The 4-provider deploy catalog (Zenrex + Vercel + Cloudflare Pages + GitHub Pages) reaches the UI footer card and each provider has the right credential URL.
+- ✅ All 3 customer-token deploy tools return `{ok:false, error}` with the real HTTP code (Vercel 403 / CF 404 / GH 401) when given bad credentials — they do NOT claim success.
+
+**Fixes shipped after the testing report**
+1. **Persistence**: `freebuild_chat.py` `_run_agent_in_background()` now captures `project_status`, `honesty_check`, `supervisor`, and `escalation` SSE events into the `captured` dict and persists them on the assistant message so the footer card + deploy buttons survive page reload.
+2. **Frontend persisted renderer**: `FreeBuildChat.js` now reads `m.project_status` on every historical assistant message and renders the same color-coded honest footer + 4 deploy buttons (with `data-testid="project-status-persisted-{i}"` for QA).
+3. **AdminNotifications schema compatibility**: rewrote the items renderer to handle BOTH the legacy `{category, summary, created_at:<float>}` shape AND the new `{type, title, message, created_at:<ISO>}` shape. New CATEGORY_LABEL entry: `ai_escalation → '🛡️ تصعيد AI'`. Verified live on `/admin/notifications` — the 2 honesty-violation escalations show with clean Arabic titles and bodies; the 2 legacy `fal.ai timeout` entries also still render correctly.
+
+**Service worker:** bumped to `v44-2026-02-status-persist`.
+
+
+
 ### 🛡️ Feb 27, 2026 — Honesty Wrapper + Escalation Bridge + Status Footer UI (Autonomy v3)
 
 **Owner directive (Saudi Arabic):** keep pushing autonomy. Render the project-status footer in the UI as a card under every reply. Block the AI from lying (claims of completion without verification). When all autonomous mitigations fail, email the operator silently.

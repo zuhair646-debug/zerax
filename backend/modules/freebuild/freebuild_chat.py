@@ -8298,6 +8298,16 @@ For questions: legal@zenrex.ai
                                 captured["credits_charged"] = int(done.get("credits_charged") or 0)
                             except Exception:
                                 logger.exception("default stream: failed to parse done event")
+                        # 🆕 Capture project_status / honesty_check / supervisor / escalation
+                        # so they get persisted on the assistant message and survive reload.
+                        for _ev_name in ("project_status", "honesty_check", "supervisor", "escalation"):
+                            if chunk.startswith(f"event: {_ev_name}\n"):
+                                try:
+                                    _dl = [ln for ln in chunk.split("\n") if ln.startswith("data:")][0][5:].strip()
+                                    captured[_ev_name] = json.loads(_dl)
+                                except Exception:
+                                    pass
+                                break
                         if chunk.startswith("event: tool\n") and '"phase": "done"' in chunk:
                             ctx_now = ctx_holder.get("ctx")
                             if ctx_now and ctx_now.changes_made > last_persisted_changes and ctx_now.current_html:
@@ -8411,7 +8421,14 @@ For questions: legal@zenrex.ai
                                  "inline_video": captured["inline_video"],
                                  "design_variants": [],
                                  "agent_iterations": captured["iterations"],
-                                 "model_used": ""},
+                                 "model_used": "",
+                                 # 🆕 Sticky autonomy events so the footer card
+                                 # (status + 4 deploy buttons + supervisor pill)
+                                 # survives page reload.
+                                 "project_status": captured.get("project_status"),
+                                 "honesty_check": captured.get("honesty_check"),
+                                 "supervisor_event": captured.get("supervisor"),
+                                 "escalation_event": captured.get("escalation")},
                             ]
                         }
                     }

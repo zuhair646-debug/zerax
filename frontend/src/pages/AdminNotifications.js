@@ -25,6 +25,7 @@ const CATEGORY_LABEL = {
   key_invalid: 'مفتاح غير صالح',
   api_timeout: 'انتهت المهلة',
   user_complaint: 'شكوى عميل',
+  ai_escalation: '🛡️ تصعيد AI',
   other: 'متفرقات',
 };
 
@@ -145,6 +146,14 @@ export default function AdminNotifications() {
             {items.map((it) => {
               const sev = SEVERITY[it.severity] || SEVERITY.medium;
               const Icon = sev.icon;
+              // Schema compatibility: legacy entries use {category, summary, created_at:<float>}.
+              // New ai_escalation entries use {type, title, message, created_at:<ISO>}.
+              const _label = CATEGORY_LABEL[it.category] || CATEGORY_LABEL[it.type] || it.category || it.type || 'إشعار';
+              const _heading = it.title || it.summary || '—';
+              const _body = it.message || it.details || '';
+              const _ts = typeof it.created_at === 'number'
+                ? new Date(it.created_at * 1000)
+                : (it.created_at ? new Date(it.created_at) : null);
               return (
                 <div
                   key={it.id}
@@ -157,19 +166,21 @@ export default function AdminNotifications() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">{sev.label}</span>
                         <span className="text-[10px] bg-black/30 px-1.5 py-0.5 rounded">
-                          {CATEGORY_LABEL[it.category] || it.category}
+                          {_label}
                         </span>
-                        {it.created_at && (
+                        {_ts && (
                           <span className="text-[10px] opacity-60">
-                            {new Date(it.created_at * 1000).toLocaleString('ar-SA')}
+                            {_ts.toLocaleString('ar-SA')}
                           </span>
                         )}
                       </div>
-                      <p className="text-sm font-bold mt-1 leading-snug">{it.summary}</p>
-                      {it.details && (
-                        <pre className="mt-1.5 text-[11px] bg-black/30 rounded p-2 overflow-x-auto whitespace-pre-wrap leading-relaxed font-mono">
-                          {it.details}
-                        </pre>
+                      <p className="text-sm font-bold mt-1 leading-snug" data-testid={`notif-title-${it.id}`}>{_heading}</p>
+                      {_body && (
+                        <div
+                          className="mt-1.5 text-[12px] bg-black/30 rounded p-2 leading-relaxed"
+                          data-testid={`notif-body-${it.id}`}
+                          dangerouslySetInnerHTML={{ __html: _body }}
+                        />
                       )}
                       {it.project_id && (
                         <a
