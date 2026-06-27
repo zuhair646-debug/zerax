@@ -8290,10 +8290,9 @@ For questions: legal@zenrex.ai
                 if _intent.primary == "architect" and _intent.confidence >= 0.85:
                     from .orchestrator.cortices.architect_cortex import stream_architect_cortex
                     async for chunk in stream_architect_cortex(
-                        project=proj, user_message=message, history=history,
-                        ctx_holder=ctx_holder, user_language=user_language,
-                        auth_token=_agent_token, db=db, is_owner=is_platform_owner_stream,
-                        max_iterations=10, inject_workflow_addendum=False,
+                        user_message=message,
+                        project=proj,
+                        brand_dna=proj.get("brand_dna"),
                     ):
                         await event_queue.put(chunk)
                         if chunk.startswith("event: done\n"):
@@ -8325,7 +8324,7 @@ For questions: legal@zenrex.ai
                     )
                     _routed_via_cortex = True
             except Exception as _ce2:
-                logger.warning(f"[agent-chat-stream] classifier routing skipped: {_ce2}")
+                logger.exception(f"[agent-chat-stream] classifier routing failed: {_ce2}")
             # ────────────────────────────────────
             if _routed_via_cortex:
                 await event_queue.put(None)
@@ -8411,7 +8410,7 @@ For questions: legal@zenrex.ai
                                     if done.get("html_updated"):
                                         ctx_now = ctx_holder.get("ctx")
                                         _html = (ctx_now.current_html if ctx_now else None) or ""
-                                        if _html and len(_html) > 200:
+                                        if _html and len(_html) > 50:
                                             from .orchestrator.review_cortex import review_code, render_review_report_ar
                                             _rep = review_code(_html, "html")
                                             _crit = [i for i in (_rep.get("issues") or []) if i.get("severity") in ("critical", "high")]
