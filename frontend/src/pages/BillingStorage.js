@@ -252,17 +252,38 @@ export default function BillingStorage() {
               </div>
             )}
 
-            {/* Cancel subscription — visible only when user has an active paid sub */}
-            {!isArchived && sub.plan_id && sub.plan_id !== 'trial' && sub.plan_id !== 'free' && sub.plan_price_usd > 0 && (
+            {/* Cancel subscription — visible whenever the user has any
+                ongoing PayPal subscription (pending/active/past_due). */}
+            {!isArchived && ['pending_approval', 'active', 'past_due'].includes(sub.status) && (
               <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 flex items-start gap-3" data-testid="cancel-subscription-block">
                 <Info className="w-5 h-5 text-zinc-400 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-zinc-200 mb-1">إدارة الاشتراك</p>
+                  <p className="text-sm font-bold text-zinc-200 mb-1">
+                    إدارة الاشتراك
+                    {sub.status === 'pending_approval' && (
+                      <span className="ms-2 inline-block text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+                        بانتظار تأكيد PayPal
+                      </span>
+                    )}
+                    {sub.status === 'past_due' && (
+                      <span className="ms-2 inline-block text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300">
+                        فشل التجديد
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
-                    اشتراكك يُجدّد تلقائياً عبر PayPal كل شهر. عند الإلغاء:
-                    <span className="block mt-1.5">• تحتفظ بصلاحياتك حتى نهاية الشهر المدفوع.</span>
-                    <span className="block">• لا نسحب أي مبلغ بعدها.</span>
-                    <span className="block">• ملفاتك تبقى محفوظة، وتحتاج لدفع <b className="text-rose-300">ضعف سعر باقتك</b> لاستردادها مستقبلاً.</span>
+                    {sub.status === 'pending_approval' ? (
+                      <>
+                        لم تكتمل عملية الموافقة في PayPal بعد. تقدر تكمل الموافقة الآن أو تلغي قبل أي سحب.
+                      </>
+                    ) : (
+                      <>
+                        اشتراكك يُجدّد تلقائياً عبر PayPal كل شهر. عند الإلغاء:
+                        <span className="block mt-1.5">• تحتفظ بصلاحياتك حتى نهاية الشهر المدفوع.</span>
+                        <span className="block">• لا نسحب أي مبلغ بعدها.</span>
+                        <span className="block">• ملفاتك تبقى محفوظة، وتحتاج لدفع <b className="text-rose-300">ضعف سعر باقتك</b> لاستردادها مستقبلاً.</span>
+                      </>
+                    )}
                   </p>
                   <button
                     onClick={cancelSubscription}
@@ -270,7 +291,7 @@ export default function BillingStorage() {
                     className="px-4 py-2 rounded-lg border border-rose-500/40 hover:bg-rose-500/10 text-rose-300 text-xs font-black inline-flex items-center gap-2"
                   >
                     <XCircle className="w-3.5 h-3.5" />
-                    إلغاء الاشتراك
+                    {sub.status === 'pending_approval' ? 'إلغاء قبل الدفع' : 'إلغاء الاشتراك'}
                   </button>
                 </div>
               </div>
