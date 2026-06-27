@@ -738,3 +738,40 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
 - ✅ Auth endpoints unaffected
 - ✅ NEW: Global knowledge module retrieves seeded restaurant/ecommerce practices and
   injects them into every chat turn's system prompt
+
+
+## 🆕 2026-02 — Orchestrator + 5 Cortices (Strangler Fig)
+- 🧠 **Orchestrator routes intent → specialized cortex** (Code, Visual, Audio, Video, Narrative)
+- 📚 **Capability Atlas** (`library_registry.json`) — 45 libraries across 15 categories (Three.js, GSAP, Leaflet, Chart.js, Fabric.js, Tone.js, etc.) injectable via `inject_library` tool
+- 🧠 **Shared Memory** (`freebuild_project_memory`) — brand_dna, glossary, past_outputs persist across turns
+- 🛡️ **Per-cortex Rate Limit** (visual=10/min, video=3/min, audio=20/min, narrative=30/min, code=60/min)
+- 🚦 **Feature flag** `ORCHESTRATOR_ENABLED=true` — fallback to legacy on any cortex error
+- 🆕 **New endpoint** `POST /api/freebuild-chat/project/{pid}/orchestrator-stream` (legacy `/agent-chat-stream` unchanged for safety)
+
+## 🔬 2026-02 — DEEP AUDIT: Comprehensive Cortex Health Check
+**Date:** Feb 2026 — Status: ✅ ALL 49 CRITICAL CHECKS GREEN
+- ✅ Classifier (14 edge cases — Arabic + English + empty/whitespace + multi-domain)
+- ✅ Feature flag (default-off, ON, case-insensitive)
+- ✅ Rate Limiter (per-cortex isolation, per-user isolation, deny at limit+1)
+- ✅ Shared Memory (round-trip, append, merge brand_dna, system-hint render)
+- ✅ Library Registry (45 libs across 15 categories, Three.js present, atlas markdown 1629 chars)
+- ✅ Trade Secret Scrubber (tool-name leak blocked in all 4 sample outputs)
+- ✅ NarrativeCortex (real Claude LLM call, 4 events, auto_refunded=false)
+- ✅ AudioCortex (Tone.js injection for music/ambient/sfx + TTS via Emergent OpenAI)
+- ✅ VisualCortex (graceful fallback when EMERGENT_LLM_KEY missing)
+- ✅ **VideoCortex `_FakeCtx` fix verified** — `_Ctx` instance properly initialized with `db`, `project_id`, `user_id`, `auth_token`, `emit` no-op. Scene plan generated, no AttributeError traceback.
+- ✅ CodeCortex (still delegates to legacy `stream_agent_turn`)
+- ✅ SSE event shape (all `event:` and `data:` lines valid JSON)
+- ✅ Multi-domain pipeline (visual+narrative+audio classifies correctly)
+- ✅ Honesty Wrapper (detects lie + allows questions, `is_zero_tool_lie` correct)
+- ✅ Memory continuity across 2 turns (1 → 2 past_outputs)
+- ✅ Backend endpoint registered (`orchestrator-stream` route, uses `stream_via_orchestrator`)
+- 📄 Audit script: `/app/backend/tests/comprehensive_cortex_audit.py` (49 PASS / 0 FAIL in 165s)
+
+## Next Tasks (Post-Audit — 2026-02 Final Sprint)
+- 🔴 **P0**: Asset Pipeline integration — auto-call Nano Banana / Sora / AudioGen from Atlas based on category match
+- 🔴 **P0**: Shaders & Post-FX category in `library_registry.json` (postprocessing.js + custom GLSL)
+- 🔴 **P0**: Creative Recipe Book — 30 pre-made recipes (cosmic_immersive_landing, etc.) in `/app/backend/data/creative_recipes.json`
+- 🟡 **P1**: AudioCortex polish — ElevenLabs voice cloning + ffmpeg merge for voiceover sync
+- 🟡 **P1**: Truly parallel multi-domain (currently sequential with shared_assets)
+- 🟢 **P2**: Absorb `freebuild_agent.py` (11k lines) into CodeCortex; build `report_cortex.py` + `novel_cortex.py`; Admin UI for `cortex_usage_stats`

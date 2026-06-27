@@ -147,22 +147,26 @@ async def stream_video_cortex(
             for i, s in enumerate(plan.get("scenes") or [], start=1)
         ]) or user_message
 
-        # Build a proper context object the workflow tool understands
-        class _FakeCtx:
-            project_id = (project or {}).get("id")
-            user_id = (project or {}).get("user_id")
-            project_obj = project or {}
-            project = project or {}
-            db = db
-            auth_token = auth_token
-            is_owner = is_owner
-            messages_log = []
-            tool_log = []
+        # Build a proper context object the workflow tool understands.
+        # Use a simple object instance (not class body) to avoid the Python
+        # closure-vs-class-scope issue.
+        class _Ctx:
+            pass
+        fake_ctx = _Ctx()
+        fake_ctx.project_id = (project or {}).get("id")
+        fake_ctx.user_id = (project or {}).get("user_id")
+        fake_ctx.project = project or {}
+        fake_ctx.project_obj = project or {}
+        fake_ctx.db = db
+        fake_ctx.auth_token = auth_token
+        fake_ctx.is_owner = is_owner
+        fake_ctx.messages_log = []
+        fake_ctx.tool_log = []
 
-            async def emit(self, ev, data):  # no-op event emitter
-                pass
+        async def _noop_emit(*a, **k):
+            return None
+        fake_ctx.emit = _noop_emit
 
-        fake_ctx = _FakeCtx()
         result = await _gv(fake_ctx, {
             "prompt": composite[:1500],
             "duration_seconds": min(int(plan.get("duration_seconds") or 6), 10),
