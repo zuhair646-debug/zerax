@@ -4742,6 +4742,10 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
       } catch { setContinuationSetupDone(false); }
     })();
   }, [isContinuationMode, projectId]);
+  // Stable callback so the wizard's useEffect doesn't re-run + reset state.
+  const handleContinuationSetupCompleted = useCallback(() => {
+    setContinuationSetupDone(true);
+  }, []);
   // Website-from-scratch mode — هذا اللي المستخدم طلب فيه:
   // إلغاء تبويبات "المعاينة الحية" و "المعتمدات" بالكامل، وخلي بس المحادثة + المراحل.
   // الـ studios والـ app modes تحافظ على تبويباتها (تحتاج المعاينة المرئية).
@@ -6183,10 +6187,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               {isContinuationMode && continuationSetupDone === false && (
                 <ContinuationOnboarding
                   projectId={projectId}
-                  onCompleted={() => {
-                    setContinuationSetupDone(true);
-                    refreshProject();
-                  }}
+                  onCompleted={handleContinuationSetupCompleted}
                 />
               )}
               {/* 💳 Continuation payment banner — only after setup is done + first update delivered */}

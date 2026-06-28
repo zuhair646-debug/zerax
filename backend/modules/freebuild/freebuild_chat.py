@@ -1662,6 +1662,7 @@ def make_freebuild_chat_router(db, get_current_user):
                     "expires_at": expires_at.isoformat(),
                     "saved_at": _now(),
                 },
+                "continuation_setup": {"state": "llm", "completed": False},
                 "updated_at": _now(),
             }},
         )

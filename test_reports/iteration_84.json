@@ -1,0 +1,22 @@
+{
+  "summary": "Re-tested Continuation Onboarding Wizard after iteration_83 RCA fixes. Both fixes verified working: (1) save_continuation_credential now persists continuation_setup={state:'llm', completed:false} server-side — confirmed via direct API check (GET /setup returns state='llm' after save-credential). (2) handleContinuationSetupCompleted is memoized with useCallback([], []) in FreeBuildChat.js, preventing the wizard's useEffect re-run/state-reset race. Backend 14/14 pytest passed. Frontend Playwright e2e: all 11 wizard checks passed including the previously flaky credential→llm transition (now appears in 1.81s, well within the 5s P0 budget) AND the P1 no-flicker check (llm-key-step remained visible after additional 2.5s wait, did NOT flicker back to credential-capture). End-to-end flow completed: inspector→provider(github)→credential(GITHUB_TOKEN)→llm(emergent)→consent(4 clauses + signature) → wizard disappeared, chat input unlocked, 'Signed — Engineer has started working' toast shown.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_continuation_wizard.py",
+    "/app/test_reports/pytest/continuation_wizard_84.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Both RCA fixes from iteration_83 are correctly applied. Server-side state advance in save_continuation_credential (lines ~1639-1671 of freebuild_chat.py) sets continuation_setup={state:'llm', completed:false}. Frontend memoization (lines ~4746-4748 of FreeBuildChat.js) wraps onCompleted in useCallback with empty deps, eliminating the dependency-change race in ContinuationOnboarding.jsx's useEffect.",
+    "Tutorial video URLs (zenrex.ai/videos/...) still point to placeholder URLs — not regression-related but should be replaced before launch per iteration_83 note."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "owner@zerax.com / owner123",
+  "seed_data_creation": "Test creates one TEST_wizard_regression84 continuation project per run, soft-deleted via API at end. The pytest fixture also cleans prior https://wordpress.com continuation projects for owner before run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Continuation wizard regression suite is fully green (14/14 backend + 11/11 frontend). Use /app/backend/tests/test_continuation_wizard.py as the regression baseline. The state-advance fix in save_continuation_credential is implicitly covered by test_05/test_07 (which rely on the wizard being on 'llm' state to call save-llm-key). Frontend selectors used: inspector-url-input, inspector-scan-btn, inspector-proceed-btn, provider-selector, provider-card-github, provider-confirm-btn, credential-capture, credential-input-{KEY}, credential-save-btn, llm-key-step, llm-option-emergent, llm-key-save-btn, consent-step, consent-clause-{i}, signature-name-input, consent-sign-btn, continuation-onboarding, continuation-input-locked.",
+  "rca of the issue": "iteration_83 RCA was correct. Both fixes applied and validated: (a) server now persists state='llm' on save-credential, so any client reload during the credential→llm transition gets the correct state from the server; (b) onCompleted memoization stops the wizard's useEffect from firing on every parent render, eliminating the snap-back to provider_key. Credential→llm transition is now consistently <2s and stable."
+}
