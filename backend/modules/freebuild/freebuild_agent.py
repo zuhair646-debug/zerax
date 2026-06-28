@@ -2066,9 +2066,47 @@ def tools_for_continuation_project(is_owner: bool) -> List[Dict[str, Any]]:
 
     The AI keeps everything else (cortex, integrations, deploy, snapshots,
     sandbox file ops, app/store tools) so its reach inside the customer's
-    real repo is unrestricted."""
+    real repo is unrestricted.
+
+    NOTE: We reorder the list so that the most important sandbox tools
+    (`write_sandbox_file`, `propose_sandbox_change`, `read_sandbox_file`,
+    `list_sandbox_files`, `run_sandbox_command`, `delete_sandbox_file`,
+    `move_sandbox_file`, `create_snapshot`) appear FIRST. With 199+ tools
+    in the schema, Claude can otherwise be biased toward tools that
+    appear early in the list. Putting the canonical write tools at index
+    0..7 measurably improves compliance.
+    """
     base = tools_for_user(is_owner)
-    return [t for t in base if t["name"] not in SITE_ONLY_TOOL_NAMES]
+    filtered = [t for t in base if t["name"] not in SITE_ONLY_TOOL_NAMES]
+    PRIORITY_FRONT = [
+        "write_sandbox_file",
+        "propose_sandbox_change",
+        "read_sandbox_file",
+        "list_sandbox_files",
+        "run_sandbox_command",
+        "delete_sandbox_file",
+        "move_sandbox_file",
+        "apply_patch",
+        "create_snapshot",
+        "list_sandbox_snapshots",
+        "restore_sandbox_snapshot",
+        "detect_project_stack",
+    ]
+    front: List[Dict[str, Any]] = []
+    rest: List[Dict[str, Any]] = []
+    front_names = set(PRIORITY_FRONT)
+    seen: set = set()
+    # Maintain PRIORITY_FRONT order, then preserve original order for the rest.
+    by_name = {t["name"]: t for t in filtered}
+    for name in PRIORITY_FRONT:
+        if name in by_name and name not in seen:
+            front.append(by_name[name])
+            seen.add(name)
+    for t in filtered:
+        if t["name"] not in front_names and t["name"] not in seen:
+            rest.append(t)
+            seen.add(t["name"])
+    return front + rest
 
 
 def _smart_merge_preserve_sections(old_html: str, new_html: str) -> tuple:
@@ -6947,6 +6985,34 @@ AI:
 - 📸 **Snapshot قبل أي تعديل خطر**: `create_snapshot` (auto-creates قبل كل write — لكن تقدر تنشئ يدوياً قبل عمليات معقّدة).
 - ⏪ **استرجاع**: `restore_sandbox_snapshot` (لا تستخدم `restore_snapshot` المتعلّق بالـ HTML).
 
+📋 **أمثلة عملية — اتبعها حرفياً**:
+
+مثال 1 — إنشاء مكوّن React Native جديد:
+```
+العميل: "أضف ملف Hello.tsx فيه مكوّن بسيط"
+✅ صحيح: استدعِ write_sandbox_file بـ:
+   path = "frontend/components/Hello.tsx"
+   new_content = "import React from 'react';\nimport { View, Text } from 'react-native';\nexport default function Hello() {\n  return <View><Text>Hi</Text></View>;\n}"
+   ← ثم استدعِ read_sandbox_file على نفس path للتأكد.
+❌ خطأ: تكتب "✅ تم إنشاء Hello.tsx" بدون استدعاء write_sandbox_file.
+```
+
+مثال 2 — تغيير لون أساسي في الـ theme:
+```
+العميل: "غيّر لون primary من #007AFF إلى #FF6B35"
+✅ صحيح: 
+   1. read_sandbox_file على frontend/constants/Colors.ts (لمعرفة المحتوى)
+   2. write_sandbox_file بنفس path مع المحتوى الجديد كاملاً.
+❌ خطأ: تستخدم apply_patch بدون قراءة الملف أولاً.
+```
+
+مثال 3 — تثبيت تبعية جديدة:
+```
+العميل: "أضف expo-secure-store"
+✅ صحيح: run_sandbox_command بـ command = "cd frontend && npx expo install expo-secure-store"
+   ← ثم read_sandbox_file على package.json للتأكد إنها أُضيفت.
+```
+
 ⚠️ **القاعدة الذهبية**: ممنوع تنسخ موقع العميل أو تعيد بناءه من الصفر. مشروعه قائم ويحتاج **صيانة + تطوير**، ليس استبدالاً. لو لاحظت نفسك تكتب HTML من الصفر بناءً على رابط فقط، **توقّف فوراً** — أنت غلطان.
 
 **1) مرحلة الاستلام (acquisition)** — قبل أي شي، اسأل العميل عبر `ask_user_inline`:
@@ -9496,6 +9562,11 @@ async def _run_anthropic_agent(
                 tools=_tools_list,
                 messages=messages,
             )
+            # 🩺 AI-Doctor retry guard: if we already corrected a lie this
+            # turn, force the next iteration to actually call a tool.
+            # `tool_choice="any"` makes Anthropic guarantee a tool_use block.
+            if getattr(ctx, "_lie_retry_done", False) and not (ctx.tool_log or []):
+                _create_kwargs["tool_choice"] = {"type": "any"}
             if _force_any_tool_next:
                 _create_kwargs["tool_choice"] = {"type": "any"}
                 _force_any_tool_next = False
@@ -10648,6 +10719,54 @@ async def _stream_one_provider(
                 })
                 iterations += 1
                 continue
+
+            # 🆕 Inline auto-correction for "zero-tool lie" within continuation
+            # mode. If the AI produced a textual claim like "✅ تم إنشاء" / "تم
+            # التعديل" / "تم الحفظ" without calling any tool in this turn AND
+            # the entire conversation also has no tool_log so far, force one
+            # corrective retry before yielding text_end to the customer. This
+            # is the "AI doctor" behaviour the user requested: when the AI
+            # fakes work, we teach it in-flight rather than after the fact.
+            try:
+                _is_cont_proj = (
+                    isinstance(getattr(ctx, "project", None), dict)
+                    and ctx.project.get("mode") == "continuation"
+                )
+                if _is_cont_proj and not tool_uses and not (ctx.tool_log or []):
+                    _all_text = "\n".join(text_chunks)
+                    _claim_markers = (
+                        "✅", "تم إنشاء", "تم التعديل", "تم الحفظ", "تم الكتابة",
+                        "أنشئ بنجاح", "بنجاح", "نجحت", "قمت بإنشاء", "قمت بتعديل",
+                        "successfully", "created", "modified", "saved", "written",
+                    )
+                    _has_claim = any(m in _all_text for m in _claim_markers)
+                    _already_retried = getattr(ctx, "_lie_retry_done", False)
+                    if _has_claim and not _already_retried:
+                        ctx._lie_retry_done = True
+                        yield _sse("info", {
+                            "message": "🩺 الـ AI Doctor: تم اكتشاف ادّعاء بدون أدوات — إعادة محاولة تلقائية مع توجيه تصحيحي.",
+                        })
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                "🚨 توقف. في ردك السابق ادّعيت إنجاز عمل (مثل '✅ تم') "
+                                "بدون أن تستدعي أي أداة. هذا انتهاك صريح لقواعد وضع التكملة. "
+                                "أعد المحاولة الآن مع:\n"
+                                "1) استدعِ `write_sandbox_file` لكل ملف تريد إنشاءه/تعديله "
+                                "بـ `path` + `new_content` الكاملين.\n"
+                                "2) استدعِ `read_sandbox_file` بعدها للتحقق من المحتوى.\n"
+                                "3) لا تكتب '✅' أو 'تم' حتى ترى ردّ الأداة `{\"ok\": true}` بنفسك.\n"
+                                "4) إذا لم تعرف الأداة الصحيحة استخدم `ask_user_inline` بدل الكذب.\n"
+                                "ابدأ التنفيذ الحقيقي الآن."
+                            ),
+                        })
+                        iterations += 1
+                        # Drop the lying text from the user-facing stream
+                        text_chunks = []
+                        all_text_chunks = [t for t in all_text_chunks if t not in _all_text]
+                        continue
+            except Exception as _lie_e:
+                logger.debug(f"[ai-doctor] inline retry skipped: {_lie_e}")
         else:
             try:
                 # GPT-5.x and o-series models require `max_completion_tokens`.
