@@ -829,12 +829,118 @@ def get_tool_names() -> List[str]:
 
 
 async def dispatch(tool_name: str, args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
-    """Central dispatcher used by freebuild_agent's tool-use loop."""
+    """Central dispatcher used by freebuild_agent's tool-use loop.
+
+    Auto-writes an audit log entry for every continuation-mode tool call so
+    `continuation_audit_logs` always reflects the AI's full activity on the
+    customer's code — required for legal / SAMA / ZATCA compliance. The
+    audit write is best-effort: a logging failure never breaks the tool.
+    """
     fn = TOOL_HANDLERS.get(tool_name)
     if not fn:
         return {"ok": False, "error": f"unknown tool '{tool_name}'"}
     try:
-        return await fn(args or {}, ctx)
+        result = await fn(args or {}, ctx)
     except Exception as e:
         logger.exception(f"[cortex_tools] {tool_name} failed")
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    # ── Best-effort audit log ──
+    try:
+        # Only audit continuation projects (where the audit trail matters
+        # legally). Site/builder tools don't touch customer-owned code.
+        pid = getattr(ctx, "project_id", None) if ctx else None
+        db = getattr(ctx, "db", None) if ctx else None
+        proj = getattr(ctx, "project", None) if ctx else None
+        # `mode` may live at the top level OR under `metadata` depending on
+        # which call-site constructed the FreeBuildToolContext. Check both.
+        proj_mode = None
+        if isinstance(proj, dict):
+            proj_mode = proj.get("mode") or (proj.get("metadata") or {}).get("mode")
+        is_continuation = (proj_mode == "continuation")
+        logger.info(
+            "[cortex_tools] audit-check tool=%s pid=%s has_db=%s mode=%s is_cont=%s",
+            tool_name, bool(pid), db is not None, proj_mode, is_continuation,
+        )
+        if pid and db is not None and is_continuation:
+            from .continuation_audit import write_audit  # local import keeps cortex_tools lightweight
+            uid = getattr(ctx, "user_id", None) or "system"
+            # Scrub args to avoid logging secrets in plaintext
+            safe_args = _scrub_secrets_for_log(args or {})
+            details = {
+                "args_redacted": safe_args,
+                "ok": bool((result or {}).get("ok", True)),
+                "error": (result or {}).get("error"),
+            }
+            await write_audit(
+                db, pid, uid,
+                action=tool_name,
+                tool_name=tool_name,
+                success=bool((result or {}).get("ok", True)),
+                details=details,
+            )
+            logger.info("[cortex_tools] ✅ audit-written tool=%s pid=%s", tool_name, pid)
+    except Exception:
+        logger.exception(f"[cortex_tools] audit write failed for {tool_name} (non-fatal)")
+
+    return result
+
+
+# ── Secret scrubbing for audit logs ─────────────────────────────────────
+# Tool args occasionally contain tokens / passwords / private keys that
+# the AI legitimately needs at runtime but MUST NOT end up persisted in the
+# audit trail. Scrub anything that *looks* like a credential before logging.
+_SECRET_KEY_HINTS = (
+    "token", "secret", "password", "passwd", "api_key", "apikey", "key",
+    "credential", "auth", "cookie", "session", "private", "jwt",
+    "service_account", "keystore", "p8", "base64",
+)
+_TOKEN_PATTERN = None  # compiled lazily
+
+
+def _scrub_secrets_for_log(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a shallow copy of `args` with anything secret-looking masked.
+
+    Two layers of defence:
+    1. Any key whose name matches a credential hint → replaced with mask.
+    2. Any string value that matches a high-entropy token pattern (ghp_*,
+       sk_*, AKIA*, bearer tokens, JWTs, etc.) → replaced with mask.
+    """
+    import re as _re
+    global _TOKEN_PATTERN
+    if _TOKEN_PATTERN is None:
+        _TOKEN_PATTERN = _re.compile(
+            r"\b("
+            r"ghp_[A-Za-z0-9]{30,}"           # GitHub PAT
+            r"|gho_[A-Za-z0-9]{30,}"          # GitHub OAuth
+            r"|ghu_[A-Za-z0-9]{30,}"          # GitHub user-to-server
+            r"|sk-[A-Za-z0-9]{20,}"           # OpenAI / Anthropic
+            r"|AKIA[0-9A-Z]{16}"              # AWS access key
+            r"|eyJ[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}"  # JWT
+            r"|xox[bpoa]-[A-Za-z0-9-]{10,}"   # Slack
+            r")\b"
+        )
+
+    def _mask(v):
+        if isinstance(v, str):
+            if len(v) > 12:
+                return v[:4] + "***" + v[-4:]
+            return "***"
+        return "***"
+
+    def _walk(value):
+        if isinstance(value, dict):
+            return {
+                k: (_mask(v) if any(h in str(k).lower() for h in _SECRET_KEY_HINTS) else _walk(v))
+                for k, v in value.items()
+            }
+        if isinstance(value, list):
+            return [_walk(v) for v in value]
+        if isinstance(value, str):
+            return _TOKEN_PATTERN.sub(lambda m: _mask(m.group(0)), value)
+        return value
+
+    try:
+        return _walk(args)
+    except Exception:
+        return {"_scrub_error": "redacted"}

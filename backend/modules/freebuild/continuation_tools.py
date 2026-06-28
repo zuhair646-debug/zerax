@@ -296,6 +296,17 @@ async def handle_clone_remote_repo(args: Dict[str, Any], ctx: Any = None) -> Dic
     if not res["ok"]:
         return {"ok": False, "error": "git clone failed", "stderr": safe_err[:500]}
 
+    # ── Strip credentials from `.git/config` so the token doesn't sit on
+    # disk in plaintext for the lifetime of the sandbox. We re-write the
+    # remote URL to the clean public URL; future fetch/push calls will be
+    # re-authenticated by the AI tools on demand using the encrypted token
+    # in DB, never read off disk.
+    clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    try:
+        await _run(["git", "remote", "set-url", "origin", clean_url], cwd=target)
+    except Exception:
+        logger.warning("[clone_remote_repo] could not scrub remote URL — token may persist on disk")
+
     # File count
     file_count = sum(1 for _ in target.rglob("*") if _.is_file() and ".git/" not in str(_))
     total_size = sum(p.stat().st_size for p in target.rglob("*") if p.is_file())

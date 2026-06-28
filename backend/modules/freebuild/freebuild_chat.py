@@ -1921,13 +1921,25 @@ def make_freebuild_chat_router(db, get_current_user):
             stack = proj.get("continuation_app_stack") or {}
             app_kind = (proj.get("app_kind") or stack.get("app_kind") or "غير محدد")
             targets = ", ".join(stack.get("target_platforms") or []) or "غير محدد"
+            repo_hint = stack.get("repo_url_hint")
+            # Surface the EXACT repo URL the customer typed into the wizard
+            # so the AI never has to guess the owner/org. Hallucinated owners
+            # ("oelboussouni11/zitex-app" instead of "zuhair646-debug/zitex-app")
+            # used to silently turn into "Repository not found" failures.
+            repo_line = (
+                f"📦 رابط المستودع الذي قدّمه العميل: {repo_hint}\n"
+                "   استخدم هذا الرابط بالضبط في `clone_remote_repo` — لا تخترع URL.\n"
+                if repo_hint else
+                "📦 لم يقدّم العميل رابط المستودع بعد — اسأله قبل الاستنساخ.\n"
+            )
             kickoff = (
                 "✅ **اكتمل الإعداد الآمن للتطبيق** — العميل وقّع الموافقة وزوّدنا بمفاتيح الوصول المشفّرة.\n\n"
                 f"📱 نوع التقنية: {app_kind}\n"
                 f"🎯 المنصات المستهدفة: {targets}\n"
+                f"{repo_line}"
                 "🔐 المفاتيح: محفوظة بتشفير AES-128 ومتاحة عبر أدوات الاستنساخ الآمن للتطبيق.\n\n"
                 "🎯 **مهمتك الآن (كمدير هندسي للتطبيقات):**\n"
-                "1) استنسخ الكود إلى sandbox معزول.\n"
+                "1) استنسخ الكود إلى sandbox معزول (استخدم رابط العميل أعلاه حرفياً).\n"
                 "2) استدعِ `detect_project_stack` لتأكيد التقنية + أوامر البناء + المتطلبات.\n"
                 "3) قدّم تقرير تشخيص شامل (التقنية، التبعيات القديمة، أمان/أداء، مشاكل البناء المتوقعة).\n"
                 "لا تلمس الإنتاج إطلاقاً ولا ترسل للمتاجر قبل موافقة العميل الصريحة."

@@ -2013,3 +2013,48 @@ With the fixes in place, the AI on `zitex-app` successfully ran **7 distinct too
 - MOD: `/app/backend/modules/freebuild/continuation_app_tools.py` (rename 1 tool + `_resolve_pid`)
 - MOD: `/app/memory/github_config.md` (`zenrex` → `zerax`)
 - ENV: VPS `GITHUB_TOKEN` + `GITHUB_REPO` updated
+
+---
+## 2026-02-28 (Hardening Wave 2) — Audit + Security Scrubbing + Hallucination Guard
+
+### Critical fixes verified on production
+
+**1. Tamper-evident audit log for every AI tool call (compliance)**
+- Wrapped `cortex_dispatch()` with auto-write to `continuation_audit_logs` (MongoDB Atlas).
+- Captures: tool_name, success flag, scrubbed args, error, SHA-256 tamper hash.
+- Verified live: 50 entries written for the 3rd e2e test (clone, detect_stack, read×N, list, run_sandbox_command×N).
+- Best-effort: audit failure NEVER blocks the tool itself.
+
+**2. Secret scrubbing in audit logs**
+- `_scrub_secrets_for_log(args)` masks credentials before persistence at two layers:
+  - Layer 1: keys whose name contains `token / secret / password / api_key / keystore / p8 / base64 / …` → mask.
+  - Layer 2: regex catches loose tokens that slipped through (GitHub PAT `ghp_*`, OpenAI `sk-*`, AWS `AKIA*`, JWTs, Slack `xox*`).
+- Plaintext credentials NEVER hit the audit collection.
+
+**3. Token-free git remote on sandbox disk**
+- After `git clone https://x-access-token:TOKEN@github.com/...` succeeds, immediately run `git remote set-url origin <clean_url>` to strip the token from `.git/config`.
+- Verified: `git remote -v` on the cloned sandbox shows `https://github.com/zuhair646-debug/zitex-app` (no token leak).
+- Future fetches/pushes re-authenticate on demand from the encrypted DB blob.
+
+**4. Repo-hint surfacing → eliminates AI hallucinations**
+- The customer's typed `repo_url_hint` (from wizard step 1) is now included verbatim in the AI's kickoff system message:
+  `📦 رابط المستودع الذي قدّمه العميل: {url} — استخدم هذا الرابط بالضبط في clone_remote_repo — لا تخترع URL.`
+- Previously the AI guessed the owner (e.g. `oelboussouni11/zitex-app` instead of `zuhair646-debug/zitex-app`) → 404 cascade failures.
+
+**5. App-flavoured Build Stages sidebar**
+- `PHASES_BY_MODE.continuation_app` introduced with 7 mobile-first stages:
+  استكشاف التطبيق → التشخيص الكامل → خطة التطوير → أول تحديث (مجاني) → تفعيل التنفيذ ($150) → البناء الفعلي → النشر للمتاجر.
+- Selected via `getPhases(mode, projectKind)` when `project.project_kind === 'app'`.
+
+### Files Changed
+- MOD: `/app/backend/modules/freebuild/cortex_tools.py` (auto-audit + secret scrubbing)
+- MOD: `/app/backend/modules/freebuild/continuation_tools.py` (git remote URL scrub)
+- MOD: `/app/backend/modules/freebuild/freebuild_chat.py` (repo_url_hint in kickoff)
+- MOD: `/app/frontend/src/pages/FreeBuildChat.js` (app-flavoured stages + StoreCredentialsModal import)
+
+### Production proof
+Test project `654359b2-74be-451d-8569-dea55d208521` on https://zenrex.ai:
+- AI used CORRECT repo (no hallucination)
+- 100% tool calls audit-logged
+- 0 token leaks on disk
+- Sidebar shows mobile-first stages

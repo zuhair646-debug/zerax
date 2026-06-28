@@ -9,6 +9,7 @@ import StorageIndicator from '../components/StorageIndicator';
 import ContinuationOnboarding from './ContinuationOnboarding';
 import ContinuationAppOnboarding from './ContinuationAppOnboarding';
 import ContinuationPreviewPanel from './ContinuationPreviewPanel';
+import StoreCredentialsModal from './StoreCredentialsModal';
 import { EngineerAuditModal } from '../components/EngineerAuditModal';
 import { ConciergeWizardPanel } from '../components/ConciergeWizard';
 // UsageIndicator removed — duplicate of the credits pill, was confusing users.
@@ -104,9 +105,28 @@ const PHASES_BY_MODE = {
     { id: 'execute',    title: 'التنفيذ الكامل',     icon: '🛠️', desc: 'بناء + إصلاح + تطوير' },
     { id: 'handover',   title: 'التسليم + الصيانة',  icon: '🚀', desc: 'نشر + متابعة مستمرة' },
   ],
+  // App continuation gets app-flavoured labels so the sidebar reflects
+  // mobile/app realities (build status, store submission) instead of
+  // site-builder terminology (preview, hosting).
+  continuation_app: [
+    { id: 'explore',    title: 'استكشاف التطبيق',     icon: '🔍', desc: 'استنساخ + كشف التقنية' },
+    { id: 'diagnose',   title: 'التشخيص الكامل',     icon: '📋', desc: 'أمان + امتثال + أداء' },
+    { id: 'plan',       title: 'خطة التطوير',        icon: '🎯', desc: 'إصلاحات + ميزات + بناء' },
+    { id: 'first_fix',  title: 'أول تحديث (مجاني)',  icon: '✨', desc: 'sandbox فقط — بدون نشر' },
+    { id: 'unlock',     title: 'تفعيل التنفيذ',      icon: '💳', desc: '$150 — مرة وحدة' },
+    { id: 'build',      title: 'البناء الفعلي',      icon: '🔨', desc: 'APK / IPA / Bundle' },
+    { id: 'submit',     title: 'النشر للمتاجر',      icon: '🏪', desc: 'Track Internal أولاً' },
+  ],
 };
 
-const getPhases = (mode) => PHASES_BY_MODE[mode] || PHASES_DEFAULT;
+const getPhases = (mode, projectKind) => {
+  // App-continuation projects use a tailored phase list so the right
+  // sidebar speaks mobile-first language to the customer.
+  if (mode === 'continuation' && projectKind === 'app') {
+    return PHASES_BY_MODE.continuation_app;
+  }
+  return PHASES_BY_MODE[mode] || PHASES_DEFAULT;
+};
 
 // Backward-compat alias for code paths that still reference PHASES directly.
 const PHASES = PHASES_DEFAULT;
@@ -4783,7 +4803,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   const [engineerOpen, setEngineerOpen] = useState(false);
   const sidebarPhases = isVideoMode
     ? VIDEO_PHASES.map((p) => ({ id: p.id, title: p.label, icon: VIDEO_PHASE_EMOJI[p.id] || '🎬', desc: p.desc }))
-    : getPhases(project?.mode);
+    : getPhases(project?.mode, project?.project_kind);
   const [previewMode, setPreviewMode] = useState('desktop');
   // For app mode: which device frame to show (iphone | android) — initial pick from project.platform
   const [appDevice, setAppDevice] = useState('iphone');
