@@ -1670,11 +1670,6 @@ def make_freebuild_chat_router(db, get_current_user):
         return {"ok": True, "key_name": key_name, "mask": masked,
                 "expires_at": expires_at.isoformat()}
 
-    # NOTE: The previously-existing save-llm-key endpoint has been REMOVED.
-    # The platform's AI brain runs on the platform's OWN keys
-    # (ANTHROPIC_API_KEY on this server) — fully independent of any external
-    # provider. The user is never asked to choose or supply an LLM key.
-
     @router.post("/project/{pid}/continuation/setup/consent")
     async def sign_continuation_consent(pid: str, payload: dict, request: Request, user=Depends(get_current_user)):
         """Step 5 — record the electronic signature unlocking AI work.
@@ -1716,6 +1711,69 @@ def make_freebuild_chat_router(db, get_current_user):
             {"$push": {"messages": {"role": "user", "content": kickoff, "created_at": _now()}}},
         )
         return {"ok": True, "completed": True}
+
+    # ─── Continuation sandbox preview + audit read endpoints ────────────────
+    @router.get("/project/{pid}/continuation/sandbox/files")
+    async def sandbox_list_files(pid: str, path: str = "", user=Depends(get_current_user)):
+        """Browse the cloned sandbox for the customer to verify what the AI sees."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1},
+        )
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=404, detail="not found")
+        from .continuation_tools import handle_list_sandbox_files
+        return await handle_list_sandbox_files({"project_id": pid, "path": path, "max_entries": 300})
+
+    @router.get("/project/{pid}/continuation/sandbox/file")
+    async def sandbox_read_file(pid: str, path: str, user=Depends(get_current_user)):
+        """Read a single file from the sandbox (used by the Preview tab)."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1},
+        )
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=404, detail="not found")
+        from .continuation_tools import handle_read_sandbox_file
+        return await handle_read_sandbox_file({"project_id": pid, "path": path})
+
+    @router.get("/project/{pid}/continuation/snapshots")
+    async def sandbox_list_snapshots(pid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1},
+        )
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=404, detail="not found")
+        from .continuation_tools import handle_list_snapshots
+        return await handle_list_snapshots({"project_id": pid})
+
+    @router.post("/project/{pid}/continuation/snapshots/restore")
+    async def sandbox_restore_snapshot(pid: str, payload: dict, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1},
+        )
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=404, detail="not found")
+        from .continuation_tools import handle_restore_snapshot
+        from .continuation_audit import write_audit
+        snap_id = (payload.get("snapshot_id") or "").strip()
+        if not snap_id:
+            raise HTTPException(status_code=400, detail="snapshot_id required")
+        res = await handle_restore_snapshot({"project_id": pid, "snapshot_id": snap_id})
+        await write_audit(db, pid, user["user_id"], "restore_snapshot",
+                          tool_name="restore_snapshot", success=res.get("ok", False),
+                          details={"snapshot_id": snap_id})
+        return res
+
+    @router.get("/project/{pid}/continuation/audit")
+    async def sandbox_audit_logs(pid: str, limit: int = 100, user=Depends(get_current_user)):
+        """Return the tamper-evident audit log for legal/compliance."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1},
+        )
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=404, detail="not found")
+        from .continuation_audit import fetch_audit
+        logs = await fetch_audit(db, pid, limit=min(max(limit, 1), 500))
+        return {"ok": True, "count": len(logs), "logs": logs}
 
     @router.post("/projects/continuation/create")
     async def create_continuation_project(

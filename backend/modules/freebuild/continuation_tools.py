@@ -29,6 +29,12 @@ from typing import Any, Dict, List, Optional
 
 from .secure_credentials import decrypt_secret
 
+try:
+    from .continuation_audit import write_audit  # async (db, pid, uid, action, **)
+except Exception:  # pragma: no cover
+    async def write_audit(*a, **kw):  # type: ignore
+        return None
+
 logger = logging.getLogger("zenrex.continuation_tools")
 
 # ────────────── Sandbox root ──────────────
@@ -243,6 +249,10 @@ async def handle_clone_remote_repo(args: Dict[str, Any], ctx: Any = None) -> Dic
             },
         }},
     )
+    await _audit(ctx, db, pid, "clone_remote_repo",
+                 tool_name="clone_remote_repo", success=True,
+                 details={"repo_url": repo_url, "branch": branch,
+                          "file_count": file_count, "size_bytes": total_size})
     return {
         "ok": True,
         "sandbox_path": str(target),
@@ -251,6 +261,15 @@ async def handle_clone_remote_repo(args: Dict[str, Any], ctx: Any = None) -> Dic
         "total_size_bytes": total_size,
         "stdout": safe_out[:500],
     }
+
+
+async def _audit(ctx, db, pid, action, **kw):
+    """Best-effort audit log writer used by tool handlers."""
+    try:
+        uid = getattr(ctx, "user_id", None) or "system"
+        await write_audit(db, pid, uid, action, **kw)
+    except Exception:
+        logger.exception("[continuation_tools] audit failed (non-fatal)")
 
 
 # ────────────── FTP sync ──────────────
@@ -376,6 +395,18 @@ async def handle_propose_sandbox_change(args: Dict[str, Any], ctx: Any = None) -
     await handle_create_snapshot({"project_id": pid, "label": "pre_edit"}, ctx)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(new_content, encoding="utf-8")
+    # Audit
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        try:
+            from server import db as _db  # type: ignore
+            db = _db
+        except Exception:
+            db = None
+    if db is not None:
+        await _audit(ctx, db, pid, "propose_sandbox_change",
+                     tool_name="propose_sandbox_change", target_path=rel,
+                     success=True, details={"bytes": len(new_content.encode("utf-8"))})
     return {"ok": True, "wrote": str(p.relative_to(sandbox)), "bytes": len(new_content.encode("utf-8"))}
 
 
