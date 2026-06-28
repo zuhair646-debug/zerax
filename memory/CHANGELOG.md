@@ -2058,3 +2058,64 @@ Test project `654359b2-74be-451d-8569-dea55d208521` on https://zenrex.ai:
 - 100% tool calls audit-logged
 - 0 token leaks on disk
 - Sidebar shows mobile-first stages
+
+---
+## 2026-02-28 (Hardening Wave 3) — Real E2E Discoveries on `zitex-app`
+
+### Bugs found by hands-on testing & fixed
+
+**1. 🚨 AI lying about completion (zero-tool fake responses)**
+- Discovered: AI was outputting "✅ تم إنشاء الملف بنجاح" without calling any tool, then claiming "ما كذبت عليك" when challenged.
+- `tool_log: []`, `iterations: 1` — pure hallucination, files never touched.
+- Root causes (compound):
+  - Site-builder file tools (`write_file`, `run_bash_unrestricted`) were in the AI's tool list for continuation projects → AI used them, they wrote to wrong path `/tmp/zenrex_workspaces/`, sandbox at `/opt/zerax/sandboxes/` stayed untouched.
+  - Planner stage was firing for continuation projects → AI generated a PLAN instead of executing.
+  - No discoverable `write_sandbox_file` name (only `propose_sandbox_change`) → AI defaulted to lying when its preferred `write_file` was gone.
+- Fixes:
+  - **Filter SITE_ONLY_TOOL_NAMES** for continuation projects (10 tools removed: `write_file`, `read_file`, `list_files`, `delete_file`, `rename_file`, `ask_about_file`, `run_shell`, `run_bash_unrestricted`, `write_full_html`, `patch_html`, `patch_full_html`).
+  - **Skip planner** for continuation projects (no need — they have the repo, just execute).
+  - **`write_sandbox_file` alias** of `propose_sandbox_change` so AI can use the discoverable name.
+  - **`lie_detected` SSE event + frontend banner** — when honesty_wrapper detects zero-tool lie, customer sees a red banner with refund notice + engineer alert.
+
+**2. 🔁 Clone idempotency (was wiping AI edits)**
+- `clone_remote_repo` was being called 4× per turn, each time deleting the previous AI work.
+- Fix: detect existing checkout with same remote, skip re-clone + `git pull --ff-only` instead.
+
+**3. 📛 Tool name dedupe (silent Anthropic 400)**
+- `restore_snapshot`, `list_snapshots`, `get_integration_playbook` defined in BOTH site-builder and continuation tools — Anthropic rejects whole request.
+- Fix: renamed continuation versions to `restore_sandbox_snapshot`, `list_sandbox_snapshots`, `get_saudi_integration_playbook`.
+
+**4. 🎯 `project_id: "current"` sentinel**
+- AI was passing placeholders like `"current"`, `"this"`, `"{{project_id}}"` → tools failed with `project_not_found`.
+- Fix: `_resolve_pid(args, ctx)` recognises 9 sentinels and falls back to `ctx.project_id`.
+
+**5. 🤥 AI hallucinating repo owner**
+- AI guessed `oelboussouni11/zitex-app` instead of the customer's `zuhair646-debug/zitex-app`.
+- Fix: customer's `repo_url_hint` (collected in wizard step 1) is now surfaced verbatim in the AI's kickoff system message: "استخدم هذا الرابط بالضبط — لا تخترع URL".
+
+**6. 🔒 Token in git remote config**
+- `git clone https://x-access-token:TOKEN@github.com/...` left token on disk in `.git/config`.
+- Fix: `git remote set-url origin <clean_url>` runs immediately after successful clone.
+
+**7. 📜 Audit logs empty**
+- Tool calls weren't being audit-logged (compliance gap).
+- Fix: `cortex_dispatch()` wraps every tool call with auto-write to `continuation_audit_logs` + 2-layer secret scrubbing (key-name hints + regex catches for ghp_/sk-/AKIA/JWT/xox tokens).
+
+**8. 🏷️ Build Stages site labels on app projects**
+- Right sidebar showed "Site Exploration", "Hosting", etc. on app projects.
+- Fix: `PHASES_BY_MODE.continuation_app` with 7 mobile-first stages: استكشاف التطبيق → التشخيص → خطة التطوير → أول تحديث مجاني → تفعيل ($150) → البناء الفعلي → النشر للمتاجر.
+
+### Engineer escalation (already wired — verified live)
+- `escalation_bridge.create_escalation()` fires on:
+  - Zero-tool lie (severity=low)
+  - Stuck pattern detected by `silent_supervisor.py`
+  - 3 consecutive same-tool failures
+- Persists to `ai_escalations` + `admin_notifications`, sends Resend email to staff.
+- `auto_e1.py` runs senior-engineer review automatically if no human responds within threshold → produces a corrective lesson injected into next AI turn.
+
+### Production proof
+Test project on https://zenrex.ai with `zitex-app`:
+- 98 audit-log entries persisted, all scrubbed
+- Git remote scrubbed (no token on disk)
+- Lie-detected banner emits on bad turns
+- 199 unique tools, 0 duplicates, clean Anthropic API
