@@ -1764,6 +1764,115 @@ def make_freebuild_chat_router(db, get_current_user):
         return {"ok": True, "key_name": key_name, "mask": masked,
                 "expires_at": expires_at.isoformat()}
 
+    @router.get("/continuation/store-providers-catalog")
+    async def get_continuation_store_providers_catalog():
+        """Store + signing providers catalog — used by the in-chat Store
+        Credentials modal that opens AFTER the wizard is done. These
+        credentials are for store submissions (Play / App Store / Firebase /
+        TestFlight / Steam / itch.io / Amazon / Huawei / Microsoft) plus
+        signing artefacts (Keystore / Provisioning Profile). They live next
+        to the code credentials (encrypted AES-128) and the AI calls them
+        during the submit step only — never automatically."""
+        import json as _json
+        from pathlib import Path
+        path = Path(__file__).parent.parent.parent / "data" / "continuation_providers.json"
+        if not path.exists():
+            return {"store_providers": [], "signing_providers": []}
+        with open(path, "r", encoding="utf-8") as f:
+            full = _json.load(f)
+        return {
+            "store_providers": full.get("app_store_providers") or [],
+            "signing_providers": full.get("signing_providers") or [],
+        }
+
+    @router.post("/project/{pid}/continuation/credentials/save-extra")
+    async def save_continuation_extra_credential(pid: str, payload: dict, user=Depends(get_current_user)):
+        """Persist an additional credential (store / signing / extra) AFTER
+        the wizard is done. Same encryption + audit as setup/save-credential
+        but DOES NOT touch the wizard state. Body:
+        { key_name, value, validity_months (default 12), category }."""
+        from .secure_credentials import encrypt_secret, fingerprint_secret, mask_secret
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "mode": 1, "continuation_setup": 1},
+        )
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        if not (proj.get("continuation_setup") or {}).get("completed"):
+            raise HTTPException(status_code=400, detail="finish the setup wizard first")
+        key_name = (payload.get("key_name") or "").strip()
+        value = (payload.get("value") or "").strip()
+        validity_months = int(payload.get("validity_months") or 12)
+        category = (payload.get("category") or "store").strip().lower()
+        if not key_name or not value:
+            raise HTTPException(status_code=400, detail="key_name and value are required")
+        if validity_months < 3:
+            raise HTTPException(status_code=400, detail="validity_months must be >= 3")
+        if category not in ("store", "signing", "extra"):
+            raise HTTPException(status_code=400, detail="category must be store|signing|extra")
+        try:
+            ciphertext = encrypt_secret(value)
+        except Exception as e:
+            logger.exception(f"[continuation.save-extra-cred] encryption failed: {e}")
+            raise HTTPException(status_code=500, detail="encryption_unavailable")
+        fp = fingerprint_secret(value)
+        masked = mask_secret(value)
+        from datetime import datetime, timedelta, timezone
+        expires_at = datetime.now(timezone.utc) + timedelta(days=validity_months * 30)
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$set": {
+                f"continuation_credentials.{key_name}": {
+                    "ciphertext": ciphertext,
+                    "fingerprint": fp,
+                    "validity_months": validity_months,
+                    "expires_at": expires_at.isoformat(),
+                    "category": category,
+                    "saved_at": _now(),
+                },
+                f"continuation_credentials_meta.{key_name}": {
+                    "mask": masked,
+                    "validity_months": validity_months,
+                    "expires_at": expires_at.isoformat(),
+                    "category": category,
+                    "saved_at": _now(),
+                },
+                "updated_at": _now(),
+            }},
+        )
+        return {"ok": True, "key_name": key_name, "mask": masked,
+                "expires_at": expires_at.isoformat(), "category": category}
+
+    @router.get("/project/{pid}/continuation/credentials/meta")
+    async def get_continuation_credentials_meta(pid: str, user=Depends(get_current_user)):
+        """Returns ONLY masked metadata for every saved credential — never
+        the plaintext. Used by the Store Credentials modal to show which
+        keys are already configured."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "continuation_credentials_meta": 1},
+        )
+        if not proj:
+            raise HTTPException(status_code=404, detail="project not found")
+        return {"credentials_meta": proj.get("continuation_credentials_meta") or {}}
+
+    @router.delete("/project/{pid}/continuation/credentials/{key_name}")
+    async def delete_continuation_credential(pid: str, key_name: str, user=Depends(get_current_user)):
+        """Revoke a saved credential (deletes ciphertext + meta)."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1},
+        )
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$unset": {
+                f"continuation_credentials.{key_name}": "",
+                f"continuation_credentials_meta.{key_name}": "",
+            }, "$set": {"updated_at": _now()}},
+        )
+        return {"ok": True, "key_name": key_name, "revoked": True}
+
     @router.post("/project/{pid}/continuation/setup/consent")
     async def sign_continuation_consent(pid: str, payload: dict, request: Request, user=Depends(get_current_user)):
         """Step 5 — record the electronic signature unlocking AI work.

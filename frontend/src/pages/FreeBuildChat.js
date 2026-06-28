@@ -4750,6 +4750,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   }, []);
   // Preview panel toggle (only available after setup is done in continuation mode)
   const [showContinuationPreview, setShowContinuationPreview] = useState(false);
+  const [showStoreCredentials, setShowStoreCredentials] = useState(false);
   // Help-session state — when active, the chat input is unlocked even though
   // the wizard isn't complete, so the customer can converse with the AI about
   // key extraction before resuming the wizard.
@@ -6224,9 +6225,9 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                   onUnlocked={() => setProject((p) => p ? { ...p, continuation_unlocked: true } : p)}
                 />
               )}
-              {/* 👁️ Sandbox preview / audit panel toggle */}
+              {/* 👁️ Sandbox preview / audit panel toggle + Store Credentials button (apps) */}
               {isContinuationMode && continuationSetupDone === true && (
-                <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
                   <button
                     onClick={() => setShowContinuationPreview((v) => !v)}
                     data-testid="continuation-preview-toggle"
@@ -6234,7 +6235,23 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                   >
                     👁️ {showContinuationPreview ? 'إخفاء المعاينة' : 'معاينة الـ Sandbox + السجل'}
                   </button>
+                  {project?.project_kind === 'app' && (
+                    <button
+                      onClick={() => setShowStoreCredentials(true)}
+                      data-testid="open-store-credentials-btn"
+                      className="px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-[11px] font-bold text-cyan-200 hover:bg-cyan-500/20 flex items-center gap-1.5"
+                    >
+                      🏪 إعداد المتاجر والتوقيع
+                    </button>
+                  )}
                 </div>
+              )}
+              {showStoreCredentials && (
+                <StoreCredentialsModal
+                  projectId={projectId}
+                  appKind={project?.app_kind}
+                  onClose={() => setShowStoreCredentials(false)}
+                />
               )}
               {isContinuationMode && continuationSetupDone === true && showContinuationPreview && (
                 <ContinuationPreviewPanel

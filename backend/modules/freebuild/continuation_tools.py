@@ -69,7 +69,27 @@ def _safe_path(sandbox: Path, rel: str) -> Path:
 async def _run(cmd: List[str], cwd: Optional[Path] = None,
                env: Optional[Dict[str, str]] = None,
                timeout: int = MAX_OP_SECONDS) -> Dict[str, Any]:
-    """Run a subprocess with timeout. stderr/stdout captured."""
+    """Run a subprocess with timeout. stderr/stdout captured.
+
+    If the host has the Zenrex build-toolchain installed at
+    /opt/zerax/build-images/env.sh, that file is auto-sourced so the AI
+    sandbox commands (flutter build, gradle assembleRelease, expo prebuild,
+    eas build, etc.) find the right JDK / Android SDK / Flutter / Node on
+    PATH without depending on EAS / Codemagic externally.
+
+    The behaviour is gated to bash invocations (cmd[0] == 'bash' & cmd[1]
+    == '-lc') so plain `node`, `python`, etc. calls don't get rewritten.
+    """
+    toolchain_env = Path("/opt/zerax/build-images/env.sh")
+    if (
+        toolchain_env.exists()
+        and len(cmd) >= 3
+        and cmd[0] == "bash"
+        and cmd[1] in ("-lc", "-c")
+    ):
+        wrapped = f"source {toolchain_env}; {cmd[2]}"
+        cmd = [cmd[0], cmd[1], wrapped]
+
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=str(cwd) if cwd else None,
