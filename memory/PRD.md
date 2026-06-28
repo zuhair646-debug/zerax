@@ -1057,3 +1057,41 @@ Zenrex flow:
 
 **Grand total this session:** 47 new files, 124+ verification checks all green.
 
+
+---
+
+## 🎯 Session: Continuation Onboarding Wizard (الفاحص → Keys → Consent)
+**Date:** 2026-06-28
+**Status:** ✅ SHIPPED — 100% backend + 100% frontend (iteration_84)
+
+### What was built
+A 5-step in-chat onboarding for `mode=continuation` projects that gates the Engineering-Manager AI until the user safely connects their existing project:
+
+1. **الفاحص (Inspector)** — external URL scan detects platform (Vercel/Netlify/WordPress/VPS) + framework + SSL + a recommended provider.
+2. **Provider Selector** — visual logo cards (GitHub/Vercel/FTP/cPanel/SSH/WordPress) with the recommended one auto-highlighted ⭐.
+3. **Credential Capture** — tutorial video + Arabic step-by-step + direct-link to provider's key page + password-masked paste field + 3/6/12-month validity selector.
+4. **LLM Brain** — choose between Zenrex Universal Key (Emergent) or your own Anthropic key (sk-ant-...).
+5. **Electronic Signature** — 4-clause consent + signature name → audit log {ip, user-agent, timestamp, clauses}.
+
+### Security architecture
+- **AES-128 Fernet** encryption on every credential before MongoDB write (`secure_credentials.py`).
+- New env: `CONTINUATION_FERNET_KEY`.
+- SHA-256 **fingerprint** stored alongside ciphertext for duplicate detection without exposing plaintext.
+- Display **mask** (•••• + last 4) — plaintext never returned via any API.
+- Duplicate URL detection across user's continuation projects with soft "use existing OR start new" UX.
+- Engineer-manager UI + chat input both hidden until consent signed.
+
+### Files changed
+- NEW `/app/backend/modules/freebuild/secure_credentials.py` — Fernet helpers (encrypt/decrypt/fingerprint/mask).
+- NEW `/app/frontend/src/pages/ContinuationOnboarding.jsx` — wizard component (5 sub-cards).
+- `/app/backend/modules/freebuild/freebuild_chat.py` — 7 new endpoints (`inspect-url`, `setup` GET, `save-url`, `select-provider`, `save-credential`, `save-llm-key`, `consent`).
+- `/app/frontend/src/pages/FreeBuildChat.js` — wizard wired at top of chat in continuation mode, input bar replaced with lock banner until done, `isWebsiteMode` excludes continuation.
+- `/app/backend/.env` — `CONTINUATION_FERNET_KEY` added.
+
+### Next P0/P1 (carried forward)
+- (P1) Real OAuth flows for GitHub + Vercel (currently manual PAT only).
+- (P1) Actual `clone_remote_repo` + `ftp_sync` tools in `cortex_tools.py`.
+- (P1) Sandbox isolation `/opt/zerax/sandboxes/{pid}/`.
+- (P2) Replace placeholder tutorial videos at `zenrex.ai/videos/...` with real recordings.
+- (P2) Triple-backup orchestrator (S3 snapshot + git branch + encrypted Mongo blob).
+- (P2) Nginx subdomain `sandbox.zenrex.ai/p/{pid}`.
