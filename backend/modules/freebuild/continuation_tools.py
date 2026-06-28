@@ -145,6 +145,18 @@ async def handle_create_snapshot(args: Dict[str, Any], ctx: Any = None) -> Dict[
             h.update(chunk)
     fp = h.hexdigest()
     (snap_dir / f"{snap_id}.sha256").write_text(fp)
+
+    # Fire-and-forget triple-redundancy replication (S3 + Git branch)
+    # We don't await — local snapshot is always sufficient for rollback;
+    # the off-site copies are pure insurance against server loss.
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is not None:
+        try:
+            from .continuation_backups import replicate_snapshot_triple
+            asyncio.create_task(replicate_snapshot_triple(db, pid, snap_id, sandbox))
+        except Exception as _e:
+            logger.warning(f"[continuation] backup replication scheduling failed: {_e}")
+
     return {
         "ok": True,
         "snapshot_id": snap_id,
@@ -403,6 +415,74 @@ SSH_COMMON_OPTS = [
 ]
 
 
+async def _post_deploy_health_check(url: str, timeout: int = 30, expected_status: int = 200) -> Dict[str, Any]:
+    """Hit the customer-supplied health URL after a deploy. Returns ok=True
+    only if status matches AND body is non-empty AND response was under timeout.
+    Used by Auto-Rollback to decide whether the deploy succeeded end-to-end."""
+    import aiohttp
+    import asyncio as _aio
+    if not url:
+        return {"ok": True, "skipped": True, "reason": "no health_check_url configured"}
+    try:
+        async with aiohttp.ClientSession() as session:
+            start = _aio.get_event_loop().time()
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=timeout),
+                                   allow_redirects=True) as r:
+                body = await r.text()
+                elapsed = _aio.get_event_loop().time() - start
+                ok = (r.status == expected_status and len(body) > 0)
+                return {"ok": ok, "status": r.status, "elapsed_s": round(elapsed, 2),
+                        "body_size": len(body), "url": url}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200], "url": url}
+
+
+async def _rollback_to_snapshot_on_remote(
+    db, pid: str, ssh_args: List[str], target_dir: str, source_subdir: str,
+    snap_id: str, post_cmd: str, sandbox: Path
+) -> Dict[str, Any]:
+    """When a health check fails, extract the pre-deploy snapshot locally,
+    rsync THAT back over the target, then re-run post_cmd to recover."""
+    snap_archive = sandbox / SNAPSHOT_DIR_NAME / f"{snap_id}.tar.gz"
+    if not snap_archive.exists():
+        return {"ok": False, "error": "snapshot_archive_missing", "snap_id": snap_id}
+    # Extract to a temp dir
+    import tempfile as _tmp
+    rollback_dir = Path(_tmp.mkdtemp(prefix="zenrex_rollback_"))
+    try:
+        import tarfile as _tar
+        with _tar.open(snap_archive, "r:gz") as tar:
+            tar.extractall(rollback_dir)
+        src_for_rsync = rollback_dir / source_subdir
+        if not src_for_rsync.exists():
+            return {"ok": False, "error": "rollback_source_missing_in_snapshot"}
+        # Reverse rsync — push old code back
+        rsync_cmd = [
+            "rsync", "-az", "--delete",
+            "--no-perms", "--no-owner", "--no-group",
+            "--exclude=.git", "--exclude=__pycache__", "--exclude=node_modules",
+            "-e", " ".join(ssh_args),
+            f"{src_for_rsync}/", f"{ssh_args[-1]}:{target_dir.rstrip('/')}/",
+        ]
+        res = await _run(rsync_cmd, timeout=600)
+        # Re-run post_cmd to restart services after restoring old code
+        post_result = {"ok": True, "skipped": True}
+        if post_cmd:
+            ssh_post = ssh_args + ["bash", "-lc", post_cmd]
+            post_result = await _run(ssh_post, timeout=300)
+        return {
+            "ok": res.get("ok") and post_result.get("ok", True),
+            "rolled_back_to": snap_id,
+            "rsync_stderr": (res.get("stderr") or "")[:500],
+            "post_cmd_ok": post_result.get("ok", True),
+        }
+    finally:
+        try:
+            shutil.rmtree(rollback_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+
 async def _load_deploy_target(db, pid: str) -> Optional[Dict[str, Any]]:
     """Read the customer's saved deploy-target config (target_dir, source_subdir,
     post_deploy_command, deploy_port). Returns None if not configured."""
@@ -518,12 +598,44 @@ async def handle_deploy_to_live_vps(args: Dict[str, Any], ctx: Any = None) -> Di
             post_err = (post_res.get("stderr") or "")[:2000]
 
         success = post_ok  # rsync already verified above
+
+        # ─── Auto-Rollback: verify the deploy is HEALTHY end-to-end ───
+        # Reads `health_check_url` from deploy_target. Customer can set this
+        # in the Direct Deploy modal. If status != 200 within 30s, we
+        # automatically restore the pre-deploy snapshot AND re-run post_cmd
+        # so customer never sees a broken site.
+        health_check_url = (target_cfg.get("health_check_url") or "").strip()
+        rollback_info = None
+        if success and health_check_url:
+            # Give the build a few seconds to settle before probing
+            await asyncio.sleep(5)
+            health = await _post_deploy_health_check(health_check_url, timeout=30)
+            if not health.get("ok"):
+                # Health failed → execute rollback
+                ssh_args_for_rb = [
+                    "ssh", "-i", keyfile.name, "-p", str(port),
+                    *SSH_COMMON_OPTS, f"{user}@{host}",
+                ]
+                rollback_info = await _rollback_to_snapshot_on_remote(
+                    db, pid, ssh_args_for_rb, target_dir, source_subdir,
+                    snap.get("snapshot_id"), post_cmd, sandbox,
+                )
+                success = False  # report deploy as failed (even though rsync worked)
+                await _audit(ctx, db, pid, "auto_rollback",
+                             tool_name="deploy_to_live_vps", success=bool(rollback_info.get("ok")),
+                             details={"reason": "health_check_failed",
+                                      "health_check": health,
+                                      "rollback": rollback_info,
+                                      "snapshot_id": snap.get("snapshot_id")})
+
         await _audit(ctx, db, pid, "deploy_to_live_vps",
                      tool_name="deploy_to_live_vps", success=success,
                      details={"target": target_dir, "host": host, "port": port,
                               "source_subdir": source_subdir,
                               "post_command_ran": bool(post_cmd),
                               "post_ok": post_ok,
+                              "health_check": health_check_url or None,
+                              "rolled_back": rollback_info is not None,
                               "snapshot_id": snap.get("snapshot_id")})
         return {
             "ok": success,
@@ -534,10 +646,15 @@ async def handle_deploy_to_live_vps(args: Dict[str, Any], ctx: Any = None) -> Di
             "post_stdout": post_out[:800],
             "post_stderr": post_err[:800],
             "deployed_at": _now_iso(),
+            "auto_rollback": rollback_info,
             "instructions_ar": (
-                "✅ التعديلات نُشرت مباشرة على السيرفر الحي."
-                if success else
-                "⚠️ المزامنة تمت لكن أمر ما بعد النشر فشل — راجع post_stderr."
+                "✅ التعديلات نُشرت وتم التحقق من السلامة (health check نجح)."
+                if success and health_check_url else
+                ("✅ التعديلات نُشرت مباشرة على السيرفر الحي."
+                 if success else
+                 ("⚠️ فشل health check بعد النشر — تم التراجع التلقائي للنسخة السابقة."
+                  if rollback_info and rollback_info.get("ok") else
+                  "❌ فشل النشر AND فشل التراجع التلقائي — الموقع قد يكون متضرراً، راجع يدوياً."))
             ),
         }
     finally:

@@ -130,6 +130,79 @@ def _is_command_safe(cmd: str) -> Optional[str]:
     return None
 
 
+# Tools that need a verified toolchain present BEFORE we even try the command.
+# Maps command-head → list of binaries that must exist + install hint.
+TOOLCHAIN_REQUIREMENTS = {
+    "flutter": [("flutter", "Install Flutter SDK: https://docs.flutter.dev/get-started/install/linux")],
+    "dart":    [("dart",    "Install Dart SDK or use the bundled flutter dart")],
+    "expo":    [("npx",     "Install Node.js + run: npm install -g expo-cli")],
+    "eas":     [("eas",     "Install: npm install -g eas-cli")],
+    "cap":     [("npx",     "Install: npm install -g @ionic/cli + @capacitor/cli")],
+    "ionic":   [("ionic",   "Install: npm install -g @ionic/cli")],
+    "cordova": [("cordova", "Install: npm install -g cordova")],
+    "ns":      [("ns",      "Install: npm install -g @nativescript/cli")],
+    "dotnet":  [("dotnet",  "Install .NET SDK: https://dotnet.microsoft.com/download")],
+    "cargo":   [("cargo",   "Install Rust: https://rustup.rs")],
+    "go":      [("go",      "Install Go: https://go.dev/dl")],
+    "mvn":     [("mvn",     "Install Maven: apt install maven")],
+    "gradle":  [("gradle",  "Install Gradle: apt install gradle")],
+    "./gradlew": [],  # bundled in project — assume OK
+    "composer": [("composer", "Install Composer: https://getcomposer.org")],
+    "bundle":  [("bundle",  "Install Bundler: gem install bundler")],
+    "ruby":    [("ruby",    "Install Ruby: apt install ruby")],
+    "pod":     [("pod",     "iOS only — needs macOS + Cocoapods")],
+    "swift":   [("swift",   "iOS/macOS only")],
+    "fastlane":[("fastlane","Install: gem install fastlane")],
+    "firebase":[("firebase","Install: npm install -g firebase-tools")],
+}
+
+
+def _preflight_toolchain(cmd: str) -> Optional[Dict[str, Any]]:
+    """Return a structured error if the required toolchain isn't installed.
+    Returns None if OK to proceed. This prevents the AI from running a
+    command, waiting 3 min, and getting 'command not found' — which would
+    make us look broken to the customer."""
+    try:
+        tokens = shlex.split(cmd)
+    except Exception:
+        return None
+    if not tokens:
+        return None
+    head = tokens[0]
+    if head == "cd" and "&&" in cmd:
+        try:
+            rest = cmd.split("&&", 1)[1].strip()
+            head = shlex.split(rest)[0]
+        except Exception:
+            return None
+    req = TOOLCHAIN_REQUIREMENTS.get(head)
+    if not req:
+        return None  # nothing to check
+    missing = []
+    for bin_name, hint in req:
+        if not shutil.which(bin_name):
+            missing.append({"binary": bin_name, "install_hint": hint})
+    if missing:
+        return {
+            "ok": False,
+            "error": "toolchain_missing",
+            "missing": missing,
+            "command_attempted": cmd,
+            "message_ar": (
+                f"⚠️ السيرفر ما عنده {missing[0]['binary']} مثبّت. "
+                f"إما (أ) تثبيت محلي على السيرفر، أو (ب) استخدم خدمة بناء سحابية: "
+                f"`submit_to_app_store(provider='expo_eas_submit')` أو Codemagic. "
+                f"للتثبيت اليدوي: {missing[0]['install_hint']}"
+            ),
+            "hint_for_ai": (
+                "Tell the customer this binary is not installed on the Zenrex build "
+                "server and offer them: 1) ask the platform team to add it, OR 2) use "
+                "a cloud build service (EAS / Codemagic) which already has it."
+            ),
+        }
+    return None
+
+
 # ───────────────────────────────────────────────────────────────────
 # Tool 1 — detect_project_stack
 # ───────────────────────────────────────────────────────────────────
@@ -205,6 +278,18 @@ async def handle_run_sandbox_command(args: Dict[str, Any], ctx: Any = None) -> D
         return {"ok": False, "error": str(e)}
     if not wd.exists() or not wd.is_dir():
         return {"ok": False, "error": "workdir_not_found", "hint": f"sandbox/{workdir}/ does not exist"}
+
+    # ─── Toolchain preflight: refuse to run if binary isn't installed.
+    # Better to fail fast with a clear message than waste 3 minutes and
+    # return "command not found".
+    pre = _preflight_toolchain(cmd)
+    if pre:
+        await _audit(ctx, db, pid, "run_sandbox_command",
+                     tool_name="run_sandbox_command",
+                     target_path=workdir, success=False,
+                     details={"command": cmd[:200], "reason": "toolchain_missing",
+                              "missing": pre["missing"]})
+        return pre
 
     # Auto-snapshot if this is a destructive build that might change files
     if not is_read_only:
@@ -763,6 +848,87 @@ async def handle_lookup_domain_knowledge(args: Dict[str, Any], ctx: Any = None) 
 
 
 # ───────────────────────────────────────────────────────────────────
+# Integration playbook tool — gives the AI the EXACT code, setup steps,
+# security gotchas, and common bugs for each critical Saudi integration:
+# Nafath, Mada, Tabby, SIMAH, ZATCA, STC Pay, WhatsApp Business.
+# ───────────────────────────────────────────────────────────────────
+_INTEGRATION_KB_CACHE: Optional[Dict[str, Any]] = None
+
+
+def _load_integration_kb() -> Dict[str, Any]:
+    global _INTEGRATION_KB_CACHE
+    if _INTEGRATION_KB_CACHE is not None:
+        return _INTEGRATION_KB_CACHE
+    from pathlib import Path as _P
+    import json as _json
+    kb_path = _P(__file__).parent.parent.parent / "data" / "continuation_integration_playbooks.json"
+    try:
+        _INTEGRATION_KB_CACHE = _json.loads(kb_path.read_text("utf-8"))
+    except Exception as e:
+        logger.exception(f"[continuation] failed to load integration KB: {e}")
+        _INTEGRATION_KB_CACHE = {"playbooks": {}}
+    return _INTEGRATION_KB_CACHE
+
+
+async def handle_get_integration_playbook(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """READ-ONLY. Retrieve a complete integration playbook for a Saudi-market
+    integration. Returns: where to get credentials, setup steps in Arabic,
+    code templates for Flutter/RN/Python, security gotchas, common bugs.
+
+    Use this AFTER `lookup_domain_knowledge` told you a domain needs (e.g.)
+    SIMAH integration but BEFORE you write any code. The playbook prevents
+    bugs that would cost the customer their license or regulatory standing.
+
+    Usage:
+      • Single:  get_integration_playbook(integration='nafath')
+      • Multi:   get_integration_playbook(domain='banking') → returns all 4-5 integrations the AI will likely need
+      • List:    get_integration_playbook(list_all=True)
+    """
+    kb = _load_integration_kb()
+    playbooks = kb.get("playbooks", {})
+
+    if args.get("list_all"):
+        return {
+            "ok": True,
+            "list": [
+                {"id": k, "name_ar": v.get("name_ar"), "name_en": v.get("name_en"),
+                 "category": v.get("category"), "used_in": v.get("domains_using", [])}
+                for k, v in playbooks.items()
+            ],
+            "count": len(playbooks),
+        }
+
+    # Multi-mode: return all playbooks relevant to a domain
+    domain = (args.get("domain") or "").strip().lower()
+    if domain:
+        relevant = {k: v for k, v in playbooks.items()
+                    if domain in v.get("domains_using", [])}
+        if not relevant:
+            return {"ok": True, "domain": domain, "playbooks": [], "count": 0,
+                    "hint": f"No Saudi integration playbooks tagged for domain '{domain}' yet."}
+        return {
+            "ok": True,
+            "domain": domain,
+            "playbooks": [{"id": k, **v} for k, v in relevant.items()],
+            "count": len(relevant),
+        }
+
+    integration_id = (args.get("integration") or "").strip().lower()
+    if not integration_id:
+        return {
+            "ok": False,
+            "error": "integration_required",
+            "hint": "Pass integration='nafath'/'mada_payment'/etc, OR domain='banking', OR list_all=True",
+            "available": sorted(playbooks.keys()),
+        }
+    pb = playbooks.get(integration_id)
+    if not pb:
+        return {"ok": False, "error": "unknown_integration",
+                "available": sorted(playbooks.keys())}
+    return {"ok": True, "integration_id": integration_id, **pb}
+
+
+# ───────────────────────────────────────────────────────────────────
 # Tool registry
 # ───────────────────────────────────────────────────────────────────
 CONTINUATION_APP_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
@@ -961,6 +1127,32 @@ CONTINUATION_APP_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "get_integration_playbook",
+        "description": (
+            "READ-ONLY. Retrieve a complete integration playbook for a Saudi/GCC "
+            "market integration: Nafath (national SSO), Mada payment, Tabby BNPL, "
+            "SIMAH credit bureau, ZATCA e-invoicing Phase 2, STC Pay, WhatsApp "
+            "Business Cloud API. Each playbook includes: where to get credentials, "
+            "Arabic setup steps, ready-to-paste code templates (Flutter/RN/Python), "
+            "security gotchas, common bugs to avoid. Call this BEFORE writing any "
+            "integration code — copying from the playbook prevents regulatory bugs "
+            "(SAMA/CMA/ZATCA penalties) and lost customer trust. Usage: "
+            "integration='nafath' for one, domain='banking' for all relevant, "
+            "list_all=True to see catalog."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "integration": {"type": "string",
+                                "description": "Integration id (e.g. 'nafath', 'mada_payment', 'zatca_einvoice')"},
+                "domain": {"type": "string",
+                           "description": "Get all playbooks relevant to a domain (e.g. 'banking')"},
+                "list_all": {"type": "boolean"},
+            },
+            "required": [],
+        },
+    },
 ]
 
 CONTINUATION_APP_TOOL_HANDLERS: Dict[str, Any] = {
@@ -974,4 +1166,5 @@ CONTINUATION_APP_TOOL_HANDLERS: Dict[str, Any] = {
     "inspect_saved_credentials": handle_inspect_saved_credentials,
     "read_continuation_audit": handle_read_continuation_audit,
     "lookup_domain_knowledge": handle_lookup_domain_knowledge,
+    "get_integration_playbook": handle_get_integration_playbook,
 }

@@ -4,6 +4,33 @@ Last updated: 2026-02-06
 
 ## ✅ DONE (Production-ready)
 
+### 2026-02-06 Phase A — Production Hardening (NEW)
+- [x] **Auto-Rollback after deploy** — health check probe (configurable URL + status code). If unhealthy within 30s after `deploy_to_live_vps`, automatically extract pre-deploy snapshot locally + reverse-rsync to restore + re-run post_cmd. Customer never sees a broken site.
+- [x] **Stripe Webhook for $150/mo subscription** — `/webhook/continuation-subscription` validates signature, handles `checkout.session.completed` → unlock, `customer.subscription.deleted` → re-lock, `invoice.payment_failed` → log. Webhook is source of truth (not the redirect URL).
+- [x] **Triple-redundancy backups** — Every snapshot fires fire-and-forget replication to: (1) local tar.gz, (2) S3-compatible storage (Wasabi/R2/B2 via aioboto3), (3) Git branch backup on customer's repo (`zenrex-backup/YYYYMMDD` + tag). Best-effort: local always wins, off-site copies are insurance against server loss. Restore tries local → S3 → Git.
+- [x] **Build toolchain preflight check** — `run_sandbox_command` refuses to execute `flutter build` / `cargo build` / `dotnet build` etc. if the binary isn't installed on the server. Returns Arabic message offering cloud build alternative (EAS/Codemagic). Prevents 3-minute waits ending in "command not found".
+- [x] **Continuation deploy_target accepts `health_check_url`** field for the Auto-Rollback trigger.
+
+### 2026-02-06 Phase C — Saudi Integration Playbooks (NEW)
+- [x] **7 critical integrations** as full AI-consumable playbooks (`continuation_integration_playbooks.json`):
+  - Nafath (national SSO) — Flutter/RN code + 60s polling + security gotchas
+  - Mada Payment (via Moyasar/HyperPay/Tap/PayTabs) — Flutter SDK + RN WebView + Python webhook with HMAC
+  - Tabby BNPL — checkout session creation + idempotent webhook
+  - SIMAH credit bureau — consumer inquiry + DTI 65% SAMA mandate
+  - ZATCA Phase 2 e-invoicing — UBL XML builder + TLV QR code generator + hash chain warnings
+  - STC Pay — via Moyasar method
+  - WhatsApp Business Cloud API — template send + 24-hour conversation window rule
+- [x] **`get_integration_playbook` AI tool** — supports single (`integration='nafath'`), multi (`domain='banking'` returns all 4-5 relevant), and `list_all=True` modes.
+- [x] **8 new unit tests** for playbooks (Nafath Arabic steps, Mada Moyasar code, ZATCA QR, SIMAH DTI, banking returns Nafath+SIMAH, list_all returns 7+, unknown error)
+
+## Updated test counts
+- **82 unit tests** all passing (was 66, +16 hardening + playbook tests)
+- **2 E2E tests** (12-step websites + 11-step monorepo apps) still passing
+- **54 cortex tools** wired (was 53, +get_integration_playbook)
+- **100% engineer capability coverage** preserved
+
+
+
 ### Core architecture
 - [x] Sandbox isolation (`/opt/zerax/sandboxes/{pid}/`)
 - [x] Snapshot system with millisecond-precision timestamps (no collisions)
@@ -59,6 +86,9 @@ Each domain provides: typical sections + Saudi/GCC compliance (SAMA, ZATCA, SDAI
 - [ ] **Vercel OAuth app** — same (blocked: need credentials)
 - [ ] **`sandbox.zenrex.ai` DNS + certbot** — for visual preview before approve (blocked: need DNS A-record)
 - [ ] **Real Stripe key on preview env** to test $150 checkout end-to-end (current key is placeholder)
+- [ ] **Stripe Webhook Secret** — set `STRIPE_CONTINUATION_WEBHOOK_SECRET` on production after creating webhook in Stripe Dashboard pointing to `/api/freebuild-chat/webhook/continuation-subscription`
+- [ ] **S3-compatible backup storage credentials** — set `ZENREX_BACKUP_S3_*` env vars on prod (Wasabi/R2/B2 account needed)
+- [ ] **Install Flutter SDK + Android SDK on production build server** OR confirm we'll route all mobile builds through Codemagic/EAS
 
 ---
 

@@ -1878,14 +1878,18 @@ def make_freebuild_chat_router(db, get_current_user):
         target_dir = (payload.get("target_dir") or "").strip()
         source_subdir = (payload.get("source_subdir") or "repo").strip().strip("/")
         post_deploy_command = (payload.get("post_deploy_command") or "").strip()[:500]
+        health_check_url = (payload.get("health_check_url") or "").strip()[:500]
         if not target_dir or not target_dir.startswith("/"):
             raise HTTPException(status_code=400, detail="target_dir must be absolute (/...)")
         if ".." in source_subdir:
             raise HTTPException(status_code=400, detail="source_subdir invalid")
+        if health_check_url and not (health_check_url.startswith("http://") or health_check_url.startswith("https://")):
+            raise HTTPException(status_code=400, detail="health_check_url must start with http(s)://")
         cfg = {
             "target_dir": target_dir,
             "source_subdir": source_subdir or "repo",
             "post_deploy_command": post_deploy_command,
+            "health_check_url": health_check_url,
             "updated_at": _now(),
         }
         await db.freebuild_projects.update_one(
@@ -4166,7 +4170,14 @@ def make_freebuild_chat_router(db, get_current_user):
                     "quantity": 1,
                 }],
                 mode="subscription",
-                metadata={"project_id": pid, "user_id": user["user_id"], "purpose": "continuation_subscription"},
+                metadata={"project_id": pid, "user_id": user["user_id"],
+                          "purpose": "continuation_subscription",
+                          "continuation_project_id": pid},  # webhook uses this
+                subscription_data={
+                    "metadata": {"continuation_project_id": pid,
+                                 "user_id": user["user_id"]},
+                },
+                client_reference_id=pid,
                 success_url=f"{os.environ.get('FRONTEND_BASE_URL', 'https://zenrex.ai')}/freebuild/chat/{pid}?unlocked=1",
                 cancel_url=f"{os.environ.get('FRONTEND_BASE_URL', 'https://zenrex.ai')}/freebuild/chat/{pid}?unlocked=0",
             )
@@ -4190,6 +4201,81 @@ def make_freebuild_chat_router(db, get_current_user):
             {"$set": {"first_update_delivered": True, "first_update_at": _now()}},
         )
         return {"ok": True}
+
+    @router.post("/webhook/continuation-subscription")
+    async def continuation_stripe_webhook(request: Request):
+        """Stripe webhook that closes the $150/mo subscription loop.
+        Validates signature → on `checkout.session.completed` flips
+        `continuation_unlocked=True`. On `customer.subscription.deleted`
+        flips it back. On `invoice.payment_failed` logs a warning.
+
+        Why a webhook (not the success redirect): the success URL can be
+        lost if the customer closes the browser before redirect. Webhooks
+        are Stripe's guaranteed-delivery payment confirmation."""
+        import stripe as _stripe
+        body = await request.body()
+        sig = request.headers.get("stripe-signature", "")
+        webhook_secret = os.environ.get("STRIPE_CONTINUATION_WEBHOOK_SECRET", "").strip()
+        if not webhook_secret:
+            # In dev/preview, allow the webhook through without signature check
+            # so we can test. In prod we MUST have the secret set.
+            logger.warning("[continuation] webhook secret missing — accepting unsigned event (dev mode)")
+            try:
+                event = _stripe.Event.construct_from(
+                    __import__("json").loads(body), _stripe.api_key,
+                )
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"invalid_body: {e}")
+        else:
+            try:
+                event = _stripe.Webhook.construct_event(body, sig, webhook_secret)
+            except _stripe.error.SignatureVerificationError:
+                raise HTTPException(status_code=400, detail="invalid_signature")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"webhook_error: {e}")
+
+        event_type = event.get("type") if isinstance(event, dict) else event["type"]
+        data_obj = (event.get("data") or {}).get("object", {}) if isinstance(event, dict) else event["data"]["object"]
+        # We embed pid in metadata when creating the checkout session
+        meta = data_obj.get("metadata") or {}
+        pid = (meta.get("continuation_project_id") or "").strip()
+        logger.info(f"[continuation-webhook] event={event_type} pid={pid}")
+
+        if not pid:
+            # event without our metadata — ignore safely
+            return {"ok": True, "ignored": True, "reason": "no continuation pid in metadata"}
+
+        if event_type == "checkout.session.completed":
+            await db.freebuild_projects.update_one(
+                {"id": pid},
+                {"$set": {"continuation_unlocked": True,
+                          "continuation_unlocked_at": _now(),
+                          "continuation_unlock_method": "stripe_webhook",
+                          "stripe_session_id": data_obj.get("id"),
+                          "stripe_subscription_id": data_obj.get("subscription"),
+                          "stripe_customer_id": data_obj.get("customer")}},
+            )
+            return {"ok": True, "action": "unlocked", "pid": pid}
+
+        if event_type == "customer.subscription.deleted":
+            # Customer canceled → lock again
+            sub_id = data_obj.get("id")
+            await db.freebuild_projects.update_one(
+                {"stripe_subscription_id": sub_id},
+                {"$set": {"continuation_unlocked": False,
+                          "continuation_locked_at": _now(),
+                          "continuation_unlock_method": None}},
+            )
+            return {"ok": True, "action": "re-locked"}
+
+        if event_type == "invoice.payment_failed":
+            sub_id = data_obj.get("subscription")
+            logger.warning(f"[continuation-webhook] payment failed for sub={sub_id}")
+            # Don't lock immediately — Stripe will retry. Just log.
+            return {"ok": True, "action": "logged_failure"}
+
+        # Other events: invoice.paid, etc — already covered by the above.
+        return {"ok": True, "ignored": True, "event_type": event_type}
 
     # ===== INDEPENDENCE TOOLKIT =====
     # Unlock the code/independence tier (mocked payment — wire Lemon Squeezy later)

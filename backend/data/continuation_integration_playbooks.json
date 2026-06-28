@@ -1,0 +1,216 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "description": "Saudi/GCC integration playbooks. Each playbook gives the AI engineer everything needed to add a critical Saudi-market integration to a customer's app: setup steps, code templates (Flutter/RN/Web), security gotchas, testing harness, common bugs. Loaded by handle_get_integration_playbook tool."
+  },
+  "playbooks": {
+    "nafath": {
+      "name_ar": "نفاذ",
+      "name_en": "Nafath National Single Sign-On",
+      "category": "auth",
+      "domains_using": ["banking", "lending", "stocks_trading", "real_estate", "government_services", "healthcare"],
+      "credentials_needed": ["NAFATH_CLIENT_ID", "NAFATH_CLIENT_SECRET", "NAFATH_CALLBACK_URL"],
+      "where_to_get": "https://nafath.sa/business — request approved partner status from NIC. Takes ~10 business days.",
+      "setup_steps_ar": [
+        "1) سجّل في nafath.sa/business (يتطلب CR + ترخيص نظامي مثل CMA/SAMA)",
+        "2) بعد الموافقة، تحصل على Client ID + Client Secret + RSA keypair",
+        "3) ضع callback URL في dashboard نفاذ (مثلاً https://yourapp.com/auth/nafath/callback)",
+        "4) في تطبيقك، اضف زر «تسجيل عبر نفاذ»",
+        "5) أرسل المستخدم لـ /api/v1/api/Authorize مع MFA flow",
+        "6) Nafath يرسل push notification لجوال المستخدم → يضغط الرقم المطابق → تستقبل callback"
+      ],
+      "code_templates": {
+        "flutter": "// Flutter Nafath login\nimport 'package:flutter_secure_storage/flutter_secure_storage.dart';\nimport 'package:http/http.dart' as http;\n\nclass NafathAuth {\n  static const baseUrl = 'https://api.nafath.sa/v1/api';\n  final _storage = const FlutterSecureStorage();\n\n  /// Step 1: request Nafath challenge (returns transId + random number to show user)\n  Future<Map<String, dynamic>> requestLogin(String nationalId) async {\n    final r = await http.post(\n      Uri.parse('$baseUrl/Authorize'),\n      headers: {\n        'Content-Type': 'application/json',\n        'APP-ID': const String.fromEnvironment('NAFATH_CLIENT_ID'),\n        'APP-KEY': const String.fromEnvironment('NAFATH_CLIENT_SECRET'),\n      },\n      body: '{\"nationalId\":\"$nationalId\",\"service\":\"YourService\"}',\n    );\n    if (r.statusCode != 200) throw Exception('Nafath request failed: ${r.body}');\n    return {'random': r.headers['random'], 'transId': r.headers['transid']};\n  }\n\n  /// Step 2: poll status until user approves on their phone\n  Future<bool> pollStatus(String transId, String nationalId) async {\n    for (var i = 0; i < 30; i++) {\n      await Future.delayed(const Duration(seconds: 2));\n      final r = await http.get(Uri.parse('$baseUrl/MobileRequestStatus?transId=$transId&nationalId=$nationalId'));\n      if (r.statusCode == 200) {\n        final body = r.body.toLowerCase();\n        if (body.contains('completed')) return true;\n        if (body.contains('rejected') || body.contains('expired')) return false;\n      }\n    }\n    return false;\n  }\n}",
+        "react_native": "// React Native Nafath login\nimport AsyncStorage from '@react-native-async-storage/async-storage';\nimport Keychain from 'react-native-keychain';\n\nexport class NafathAuth {\n  static baseUrl = 'https://api.nafath.sa/v1/api';\n\n  static async requestLogin(nationalId) {\n    const r = await fetch(`${this.baseUrl}/Authorize`, {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'APP-ID': Config.NAFATH_CLIENT_ID,\n        'APP-KEY': Config.NAFATH_CLIENT_SECRET,\n      },\n      body: JSON.stringify({ nationalId, service: 'YourService' }),\n    });\n    if (!r.ok) throw new Error(`Nafath request failed: ${r.status}`);\n    return { random: r.headers.get('random'), transId: r.headers.get('transid') };\n  }\n\n  static async pollStatus(transId, nationalId) {\n    for (let i = 0; i < 30; i++) {\n      await new Promise(r => setTimeout(r, 2000));\n      const r = await fetch(`${this.baseUrl}/MobileRequestStatus?transId=${transId}&nationalId=${nationalId}`);\n      const body = (await r.text()).toLowerCase();\n      if (body.includes('completed')) return true;\n      if (body.includes('rejected') || body.includes('expired')) return false;\n    }\n    return false;\n  }\n}"
+      },
+      "security_gotchas": [
+        "NEVER store the random number — it's shown to the user, then thrown away",
+        "Polling timeout must be 60s max — Nafath transactions expire at 60s",
+        "Always store NAFATH_CLIENT_SECRET in secure storage (Keychain/Keystore), NEVER in AsyncStorage",
+        "Use certificate pinning for nafath.sa requests",
+        "On callback, verify the transId belongs to the current session (XSRF protection)"
+      ],
+      "common_bugs": [
+        "Forgetting the APP-ID and APP-KEY headers (returns 401)",
+        "Not handling the 'expired' state from poll (user sees infinite spinner)",
+        "Using nationalId without prepending country code in some API versions",
+        "Not extracting transId from response HEADER (it's not in the body)"
+      ],
+      "testing_harness": "Use Nafath sandbox: https://nafath.sa/business/sandbox — supplies test nationalId 1000000001 with mock OTP."
+    },
+
+    "mada_payment": {
+      "name_ar": "بطاقة مدى",
+      "name_en": "Mada Payment Network",
+      "category": "payment",
+      "domains_using": ["ecommerce", "food_delivery", "lending", "real_estate", "automotive"],
+      "credentials_needed": ["GATEWAY_API_KEY", "GATEWAY_ENTITY_ID", "WEBHOOK_SECRET"],
+      "where_to_get": "Via a gateway aggregator: HyperPay, PayTabs, Tap, Moyasar, Geidea — sign up at any one, NEVER deal with banks directly",
+      "setup_steps_ar": [
+        "1) اختر gateway: للسعودية الأشهر Moyasar (أسعار منافسة) أو HyperPay",
+        "2) سجّل تجارياً → يطلبون CR + IBAN + هوية المدير",
+        "3) موافقة المفعّل 3-5 أيام عمل",
+        "4) احصل على Live API Key + Webhook Secret",
+        "5) في تطبيقك أضف SDK المناسب (Moyasar Flutter, PayTabs RN)",
+        "6) لا تخزّن أرقام البطاقات أبداً — استخدم tokenization",
+        "7) فعّل 3D Secure (3DS) للحماية الإضافية"
+      ],
+      "code_templates": {
+        "moyasar_flutter": "// Moyasar Flutter integration (most common for Saudi)\nimport 'package:moyasar/moyasar.dart';\n\nfinal config = PaymentConfig(\n  publishableApiKey: const String.fromEnvironment('MOYASAR_PUBLISHABLE_KEY'),\n  amount: 5000, // halalas = 50 SAR\n  currency: 'SAR',\n  description: 'طلب رقم 12345',\n  metadata: { 'order_id': '12345', 'user_id': 'user_42' },\n  creditCard: const CreditCardConfig(saveCard: false, manual: false),\n  applePay: const ApplePayConfig(merchantId: 'merchant.com.yourapp'),\n);\n\nCreditCardPaymentMethod(\n  config: config,\n  onPaymentResult: (PaymentResponse result) {\n    if (result.status == PaymentStatus.paid) {\n      // Notify your backend, NOT a redirect — use the webhook for state of truth\n    }\n  },\n);",
+        "moyasar_react_native": "// React Native via WebView (no native SDK officially — open issue)\nimport { WebView } from 'react-native-webview';\n\nconst paymentHtml = (publishableKey, amount, orderId) => `\n<!DOCTYPE html>\n<html dir=\"rtl\">\n  <head><script src=\"https://cdn.moyasar.com/mpf/1.10.5/moyasar.js\"></script></head>\n  <body>\n    <form class=\"mysr-form\" method=\"POST\"></form>\n    <script>\n      Moyasar.init({\n        element: '.mysr-form',\n        amount: ${amount}, currency: 'SAR',\n        description: 'Order ${orderId}',\n        publishable_api_key: '${publishableKey}',\n        callback_url: 'https://yourapp.com/payment/callback',\n        methods: ['creditcard', 'applepay', 'stcpay'],\n      });\n    </script>\n  </body>\n</html>`;",
+        "webhook_handler_python": "# Backend webhook to confirm payment (source of truth)\nfrom fastapi import APIRouter, Request, HTTPException\nimport hmac, hashlib, os\nrouter = APIRouter()\n\n@router.post('/api/webhooks/moyasar')\nasync def moyasar_webhook(request: Request):\n    secret = os.environ['MOYASAR_WEBHOOK_SECRET'].encode()\n    payload = await request.body()\n    signature = request.headers.get('moyasar-signature', '')\n    expected = hmac.new(secret, payload, hashlib.sha256).hexdigest()\n    if not hmac.compare_digest(signature, expected):\n        raise HTTPException(401, 'invalid signature')\n    event = await request.json()\n    if event['type'] == 'payment_paid':\n        order_id = event['data']['metadata']['order_id']\n        # ATOMIC: mark order paid in DB. Idempotent because Stripe may retry.\n        await db.orders.update_one({'id': order_id}, {'$set': {'status': 'paid'}})\n    return {'ok': True}"
+      },
+      "security_gotchas": [
+        "ZATCA requires fatura electronic invoice within 24 hours of payment",
+        "Never log card numbers, even partial. Mask to ****1234",
+        "3DS must be enabled — without it, chargebacks are not refundable to you",
+        "Webhook is source of truth, NOT the redirect URL (user may close browser)"
+      ],
+      "common_bugs": [
+        "Trusting the success redirect → customer pays but order not marked paid",
+        "Amount in wrong unit (Moyasar uses halalas = SAR × 100, NOT SAR)",
+        "Not handling 'authorized but not captured' state for COD-style flows",
+        "Webhook idempotency missing → double-credit when Stripe retries"
+      ]
+    },
+
+    "tabby_bnpl": {
+      "name_ar": "تابي (الدفع لاحقاً)",
+      "name_en": "Tabby BNPL",
+      "category": "payment",
+      "domains_using": ["ecommerce", "food_delivery", "automotive", "travel_tourism"],
+      "credentials_needed": ["TABBY_PUBLIC_KEY", "TABBY_SECRET_KEY", "TABBY_MERCHANT_CODE"],
+      "where_to_get": "https://tabby.ai/business — apply with CR; takes 5-7 business days",
+      "setup_steps_ar": [
+        "1) سجّل في tabby.ai/business",
+        "2) موافقة قسم Risk → احصل على المفاتيح",
+        "3) أضف Tabby SDK في checkout",
+        "4) عند نجاح الـ pre-scoring تظهر خيارات التقسيط (4 دفعات)",
+        "5) Webhook عند الموافقة النهائية → علّم الطلب paid"
+      ],
+      "code_templates": {
+        "tabby_checkout_session": "// POST https://api.tabby.ai/api/v2/checkout\nconst session = await fetch('https://api.tabby.ai/api/v2/checkout', {\n  method: 'POST',\n  headers: {\n    'Authorization': `Bearer ${TABBY_PUBLIC_KEY}`,\n    'Content-Type': 'application/json',\n  },\n  body: JSON.stringify({\n    payment: {\n      amount: '500.00', currency: 'SAR',\n      buyer: { phone: '+966555555555', email: 'user@example.com', name: 'محمد' },\n      shipping_address: { city: 'الرياض', country: 'SA', address: '...' },\n      order: { reference_id: orderId, items: [{ title: 'منتج', quantity: 1, unit_price: '500.00', category: 'beauty' }] },\n      buyer_history: { registered_since: user.createdAt, loyalty_level: 0 },\n      order_history: [],\n    },\n    lang: 'ar', merchant_code: TABBY_MERCHANT_CODE,\n    merchant_urls: {\n      success: `https://yourapp.com/payment/tabby/success?order=${orderId}`,\n      cancel: `https://yourapp.com/payment/tabby/cancel?order=${orderId}`,\n      failure: `https://yourapp.com/payment/tabby/failure?order=${orderId}`,\n    },\n  }),\n});\n// session.configuration.available_products tells you what plans are approved"
+      },
+      "security_gotchas": [
+        "Tabby pre-screening can REJECT — handle gracefully, don't crash UI",
+        "Webhook MUST use HMAC validation (Tabby-Signature header)",
+        "Don't expose secret key in client; only public key in mobile/web SDK"
+      ],
+      "common_bugs": [
+        "Sending phone without +966 prefix → 400 error",
+        "Buyer history dates not ISO 8601 → silent rejection",
+        "Not handling 'CANCELED' state when user backs out"
+      ]
+    },
+
+    "simah_credit_bureau": {
+      "name_ar": "سمة (الاستعلام الائتماني)",
+      "name_en": "SIMAH Credit Bureau",
+      "category": "credit",
+      "domains_using": ["lending", "banking", "real_estate", "automotive"],
+      "credentials_needed": ["SIMAH_API_TOKEN", "SIMAH_INQUIRER_NUMBER"],
+      "where_to_get": "https://simah.com — only licensed finance companies (SAMA approved). Requires SAMA finance license.",
+      "setup_steps_ar": [
+        "1) لازم تكون شركة تمويل مرخّصة من SAMA",
+        "2) سجّل في SIMAH كـ Inquirer",
+        "3) احصل على API token + Inquirer Number",
+        "4) كل استعلام يكلّف ~3-5 ريال (يُخصم من رصيدك في SIMAH)",
+        "5) لا تستعلم بدون موافقة العميل صراحة (إلزامي قانوناً)"
+      ],
+      "code_templates": {
+        "consumer_inquiry_python": "# Backend SIMAH consumer credit inquiry\nimport httpx\nfrom datetime import datetime\n\nasync def get_credit_report(national_id: str, consent_id: str):\n    '''Returns SIMAH credit score + active obligations.\n    consent_id MUST be obtained from the customer (e.g. via Nafath or signed agreement).'''\n    async with httpx.AsyncClient(timeout=30) as client:\n        r = await client.post(\n            'https://api.simah.com/v1/CCR/Individual',\n            json={\n                'NationalId': national_id,\n                'ConsentId': consent_id,\n                'InquiryReason': 'PRODUCT_DECISION',\n                'InquirerNumber': os.environ['SIMAH_INQUIRER_NUMBER'],\n            },\n            headers={'Authorization': f'Bearer {os.environ[\"SIMAH_API_TOKEN\"]}'},\n        )\n        if r.status_code != 200:\n            raise Exception(f'SIMAH error: {r.text}')\n        data = r.json()\n        return {\n            'score': data['Score'],  # 300-900\n            'risk_grade': data['RiskGrade'],  # A/B/C/D/E\n            'active_obligations': data.get('ActiveObligations', []),\n            'total_monthly_payment': sum(o['MonthlyPayment'] for o in data.get('ActiveObligations', [])),\n        }\n\ndef calculate_dti(monthly_income: float, monthly_obligations: float):\n    '''SAMA mandates DTI <= 65%. Returns approve/reject + DTI ratio.'''\n    if monthly_income <= 0: return ('reject', 1.0)\n    dti = monthly_obligations / monthly_income\n    return ('approve' if dti <= 0.65 else 'reject', round(dti, 3))"
+      },
+      "security_gotchas": [
+        "Consent ID is REQUIRED by SAMA — never inquire without explicit customer consent",
+        "Store the consent proof (Nafath signature or signed PDF) for 7 years (regulatory)",
+        "PII (national IDs, scores) must be encrypted at rest (AES-256 + key rotation)",
+        "Audit log every inquiry — SAMA may audit",
+        "Don't cache SIMAH responses beyond 24 hours — outdated data = bad decisions"
+      ],
+      "common_bugs": [
+        "Forgetting DTI 65% rule → over-lending → regulatory penalty",
+        "Misreading risk grade (A is best, E is worst — easy to invert)",
+        "Not handling 'no_record_found' (new customers with no history)",
+        "Treating monthly_payment as annual or vice versa"
+      ]
+    },
+
+    "zatca_einvoice": {
+      "name_ar": "ZATCA الفوترة الإلكترونية المرحلة الثانية",
+      "name_en": "ZATCA Phase 2 E-Invoicing",
+      "category": "tax_compliance",
+      "domains_using": ["ecommerce", "food_delivery", "logistics_shipping", "automotive", "beauty_salons", "construction", "real_estate"],
+      "credentials_needed": ["ZATCA_OTP", "ZATCA_CSR_PRIVATE_KEY", "ZATCA_PRODUCTION_CERT"],
+      "where_to_get": "https://fatoora.zatca.gov.sa — onboard via the Fatoora portal. Free.",
+      "setup_steps_ar": [
+        "1) سجّل في fatoora.zatca.gov.sa بحساب الجهاز",
+        "2) أكمل onboarding للحصول على Cryptographic Stamp Identifier",
+        "3) ولّد CSR + private key محلياً (لا ترفع الـ private key أبداً)",
+        "4) كل فاتورة لازم تشمل: BUYER name + national ID/VAT + invoice hash + QR code + previous invoice hash (chain)",
+        "5) أرسل XML invoice لـ ZATCA API → reporting (simplified) أو clearance (standard)",
+        "6) ZATCA يرجع UUID + clearance status — احفظ في DB"
+      ],
+      "code_templates": {
+        "zatca_invoice_xml_python": "# Generate ZATCA-compliant UBL 2.1 invoice XML\nimport hashlib, base64, qrcode, io\nfrom datetime import datetime, timezone\nfrom lxml import etree\n\ndef build_invoice_xml(invoice_number, seller, buyer, items, vat_rate=0.15, previous_hash=''):\n    subtotal = sum(i['quantity'] * i['unit_price'] for i in items)\n    vat = subtotal * vat_rate\n    total = subtotal + vat\n    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')\n    # Build UBL XML — abbreviated, full version is ~80 fields\n    root = etree.Element('Invoice', nsmap={None: 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2'})\n    etree.SubElement(root, 'cbc:ID').text = invoice_number\n    etree.SubElement(root, 'cbc:IssueDate').text = now[:10]\n    etree.SubElement(root, 'cbc:InvoiceTypeCode').text = '388'  # Tax invoice\n    # ... seller, buyer, items, totals ...\n    invoice_bytes = etree.tostring(root, pretty_print=True)\n    invoice_hash = base64.b64encode(hashlib.sha256(invoice_bytes).digest()).decode()\n    # ZATCA QR code (TLV-encoded)\n    qr = generate_zatca_qr(seller['name'], seller['vat_number'], now, total, vat, invoice_hash)\n    return {'xml': invoice_bytes, 'hash': invoice_hash, 'qr': qr}\n\ndef generate_zatca_qr(seller_name, vat, dt, total, vat_amount, inv_hash):\n    '''TLV format (Tag, Length, Value) — ZATCA Phase 2 mandatory.'''\n    def tlv(tag, value):\n        v = value.encode('utf-8') if isinstance(value, str) else value\n        return bytes([tag, len(v)]) + v\n    payload = (tlv(1, seller_name) + tlv(2, vat) + tlv(3, dt) +\n               tlv(4, f'{total:.2f}') + tlv(5, f'{vat_amount:.2f}') +\n               tlv(6, inv_hash))\n    return base64.b64encode(payload).decode()"
+      },
+      "security_gotchas": [
+        "Private key NEVER leaves the server — sign locally, send signed result",
+        "Hash CHAIN is critical: previous_hash → current_hash → next invoice. Break the chain and you must re-onboard.",
+        "QR code MUST be on the printed/displayed invoice — not just the XML"
+      ],
+      "common_bugs": [
+        "Wrong InvoiceTypeCode (388 = tax invoice, 381 = credit note — easy to confuse)",
+        "Missing buyer VAT number for B2B invoices (B2C uses CR or doesn't require)",
+        "VAT rate hardcoded → wrong for exempt items (medical, education)",
+        "Forgetting the QR code on simplified invoices"
+      ]
+    },
+
+    "stc_pay": {
+      "name_ar": "STC Pay",
+      "name_en": "STC Pay digital wallet",
+      "category": "payment",
+      "domains_using": ["ecommerce", "food_delivery", "automotive", "real_estate"],
+      "credentials_needed": ["STCPAY_MERCHANT_ID", "STCPAY_API_KEY", "STCPAY_SECRET"],
+      "where_to_get": "Via your payment gateway (Moyasar, HyperPay, PayTabs) — STC Pay is offered as a method, not directly",
+      "setup_steps_ar": [
+        "1) STC Pay is a payment method inside your gateway — no separate merchant account",
+        "2) Enable STC Pay in your Moyasar/HyperPay dashboard",
+        "3) The flow: user enters phone → receives OTP → confirms payment",
+        "4) Settlement is T+1 to your IBAN"
+      ],
+      "code_templates": {
+        "stc_pay_via_moyasar": "// Moyasar already supports STC Pay — just add to methods array\nMoyasar.init({\n  // ... other config\n  methods: ['creditcard', 'applepay', 'stcpay'],\n});\n// User selects STC Pay → enters mobile number → enters OTP → done"
+      },
+      "common_bugs": [
+        "Forgetting to add 'stcpay' to methods array (only credit card showed)",
+        "Phone format issues — must be +966XXXXXXXXX"
+      ]
+    },
+
+    "whatsapp_business": {
+      "name_ar": "واتساب بزنس API",
+      "name_en": "WhatsApp Business Cloud API",
+      "category": "messaging",
+      "domains_using": ["ecommerce", "food_delivery", "real_estate", "beauty_salons", "healthcare", "education", "logistics_shipping"],
+      "credentials_needed": ["WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_BUSINESS_ACCOUNT_ID"],
+      "where_to_get": "https://business.facebook.com → WhatsApp Business → Cloud API. Requires verified business + approved phone number.",
+      "setup_steps_ar": [
+        "1) Verify your business at business.facebook.com (CR + utility bill)",
+        "2) Add WhatsApp product → Get a phone number (or use your existing)",
+        "3) Verify the phone via OTP",
+        "4) Submit message templates for approval (each template takes 24-48h to approve)",
+        "5) Test with the sandbox first using +447... test numbers",
+        "6) Move to production after first template approval"
+      ],
+      "code_templates": {
+        "send_template_message_python": "# Send approved template message via WhatsApp Cloud API\nimport httpx, os\n\nasync def send_whatsapp_template(to_phone: str, template_name: str, params: list):\n    '''to_phone must be E.164 format with country code (e.g. +966555555555).\n    template_name must be pre-approved in Facebook Business Manager.'''\n    url = f'https://graph.facebook.com/v18.0/{os.environ[\"WHATSAPP_PHONE_NUMBER_ID\"]}/messages'\n    async with httpx.AsyncClient() as client:\n        r = await client.post(\n            url,\n            headers={'Authorization': f'Bearer {os.environ[\"WHATSAPP_ACCESS_TOKEN\"]}'},\n            json={\n                'messaging_product': 'whatsapp',\n                'to': to_phone.lstrip('+'),  # No leading + in body\n                'type': 'template',\n                'template': {\n                    'name': template_name,\n                    'language': {'code': 'ar'},\n                    'components': [{'type': 'body', 'parameters': [{'type': 'text', 'text': p} for p in params]}],\n                },\n            },\n        )\n        return r.json()\n\n# Example: notify customer that their order is on the way\nawait send_whatsapp_template('+966555123456', 'order_shipped', ['12345', 'سامسا', 'SA9999999'])"
+      },
+      "common_bugs": [
+        "Sending free-form text outside the 24-hour conversation window (only templates work outside it)",
+        "Template parameters in wrong language (template approved in Arabic but you send English values)",
+        "Forgetting + → leading +966 in 'to' field breaks delivery"
+      ]
+    }
+  }
+}
