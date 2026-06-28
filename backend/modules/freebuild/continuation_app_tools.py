@@ -66,7 +66,7 @@ ALLOWED_BINARIES = {
     "eslint", "ruff", "flake8", "mypy", "tsc", "clippy",
     # Code intelligence
     "git", "grep", "find", "ls", "cat", "head", "tail", "wc",
-    "diff", "patch",
+    "diff", "patch", "env", "printenv", "echo",
     # Capacitor / Cordova / Ionic
     "cap", "ionic", "cordova", "ns",
     # Cloud build CLIs
@@ -190,7 +190,7 @@ async def handle_run_sandbox_command(args: Dict[str, Any], ctx: Any = None) -> D
 
     # Paywall: only writes are gated, but we treat ALL commands as side-effects
     # except a tiny read-only allow-list (grep/find/cat/ls/head/tail/wc/diff).
-    READ_ONLY = {"grep", "find", "ls", "cat", "head", "tail", "wc", "diff", "git"}
+    READ_ONLY = {"grep", "find", "ls", "cat", "head", "tail", "wc", "diff", "git", "env", "printenv", "echo"}
     first_token = shlex.split(cmd)[0]
     is_read_only = first_token in READ_ONLY or (first_token == "cd" and any(t in READ_ONLY for t in shlex.split(cmd.split("&&", 1)[-1])))
     if not is_read_only:
@@ -413,6 +413,229 @@ def _manual_steps_for(provider: str) -> List[str]:
 
 
 # ───────────────────────────────────────────────────────────────────
+# Gap-closing tools — file ops, project status, secret inspection
+# ───────────────────────────────────────────────────────────────────
+async def handle_delete_sandbox_file(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """Delete a file in the sandbox. Snapshots before; paywall-gated."""
+    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    rel = (args.get("path") or "").strip()
+    if not pid or not rel:
+        return {"ok": False, "error": "project_id and path required"}
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        from server import db as _db  # type: ignore
+        db = _db
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
+    locked = await _guard_subscription_lock(db, pid)
+    if locked:
+        return locked
+    sandbox = _ensure_sandbox(pid)
+    try:
+        p = _safe_path(sandbox, rel)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    if not p.exists():
+        return {"ok": False, "error": "file_not_found"}
+    await handle_create_snapshot({"project_id": pid, "label": "pre_delete"}, ctx)
+    was_dir = p.is_dir()
+    if was_dir:
+        shutil.rmtree(p)
+    else:
+        p.unlink()
+    await _audit(ctx, db, pid, "delete_sandbox_file",
+                 tool_name="delete_sandbox_file", target_path=rel,
+                 success=True, details={"was_dir": was_dir})
+    return {"ok": True, "deleted": rel, "was_dir": was_dir, "at": _now_iso()}
+
+
+async def handle_move_sandbox_file(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """Rename or move a file/folder inside the sandbox. Snapshots first."""
+    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    src = (args.get("source") or "").strip()
+    dst = (args.get("destination") or "").strip()
+    if not pid or not src or not dst:
+        return {"ok": False, "error": "project_id, source, destination required"}
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        from server import db as _db  # type: ignore
+        db = _db
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
+    locked = await _guard_subscription_lock(db, pid)
+    if locked:
+        return locked
+    sandbox = _ensure_sandbox(pid)
+    try:
+        sp = _safe_path(sandbox, src)
+        dp = _safe_path(sandbox, dst)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    if not sp.exists():
+        return {"ok": False, "error": "source_not_found"}
+    if dp.exists():
+        return {"ok": False, "error": "destination_exists"}
+    await handle_create_snapshot({"project_id": pid, "label": "pre_move"}, ctx)
+    dp.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(sp), str(dp))
+    await _audit(ctx, db, pid, "move_sandbox_file",
+                 tool_name="move_sandbox_file", target_path=f"{src} → {dst}",
+                 success=True, details={"source": src, "destination": dst})
+    return {"ok": True, "moved": f"{src} → {dst}", "at": _now_iso()}
+
+
+async def handle_apply_patch(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """Apply a unified diff to a file in the sandbox. Lighter than full-file rewrite.
+    The patch must be in the standard `--- a/path\\n+++ b/path\\n@@…` format."""
+    import tempfile as _tmp
+    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    rel = (args.get("path") or "").strip()
+    patch_text = args.get("patch_text") or ""
+    if not pid or not rel or not patch_text:
+        return {"ok": False, "error": "project_id, path, patch_text required"}
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        from server import db as _db  # type: ignore
+        db = _db
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
+    locked = await _guard_subscription_lock(db, pid)
+    if locked:
+        return locked
+    sandbox = _ensure_sandbox(pid)
+    try:
+        p = _safe_path(sandbox, rel)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    if not p.exists() or not p.is_file():
+        return {"ok": False, "error": "target_file_not_found"}
+    await handle_create_snapshot({"project_id": pid, "label": "pre_patch"}, ctx)
+    # Write patch to temp file then `patch -p0 < tmp` from sandbox root
+    with _tmp.NamedTemporaryFile("w", suffix=".patch", delete=False) as tf:
+        tf.write(patch_text)
+        tf.flush()
+        tmp_name = tf.name
+    try:
+        res = await _run(["bash", "-lc", f"patch -p1 < {shlex.quote(tmp_name)}"],
+                         cwd=sandbox, timeout=30)
+    finally:
+        try:
+            os.unlink(tmp_name)
+        except Exception:
+            pass
+    success = bool(res.get("ok"))
+    await _audit(ctx, db, pid, "apply_patch",
+                 tool_name="apply_patch", target_path=rel,
+                 success=success,
+                 details={"patch_bytes": len(patch_text), "stderr": (res.get("stderr") or "")[:200]})
+    return {"ok": success, "stdout": (res.get("stdout") or "")[:500],
+            "stderr": (res.get("stderr") or "")[:500], "at": _now_iso()}
+
+
+async def handle_get_continuation_status(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """Read project's paywall + setup state. AI calls this BEFORE attempting
+    writes to know whether it's pre-mark, locked, or unlocked."""
+    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    if not pid:
+        return {"ok": False, "error": "project_id required"}
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        from server import db as _db  # type: ignore
+        db = _db
+    proj = await db.freebuild_projects.find_one(
+        {"id": pid},
+        {"_id": 0, "mode": 1, "project_kind": 1, "app_kind": 1,
+         "first_update_delivered": 1, "continuation_unlocked": 1,
+         "continuation_sandbox": 1, "continuation_credentials": 1,
+         "continuation_deploy_target": 1, "continuation_subscription_monthly_usd": 1},
+    )
+    if not proj:
+        return {"ok": False, "error": "project_not_found"}
+    if proj.get("mode") != "continuation":
+        return {"ok": False, "error": "not_continuation_mode"}
+    saved_creds = list((proj.get("continuation_credentials") or {}).keys())
+    return {
+        "ok": True,
+        "project_kind": proj.get("project_kind") or "site",
+        "app_kind": proj.get("app_kind"),
+        "first_update_delivered": bool(proj.get("first_update_delivered")),
+        "continuation_unlocked": bool(proj.get("continuation_unlocked")),
+        "paywall_active": bool(proj.get("first_update_delivered")) and not bool(proj.get("continuation_unlocked")),
+        "sandbox_ready": bool(proj.get("continuation_sandbox")),
+        "sandbox_meta": proj.get("continuation_sandbox") or None,
+        "saved_credential_keys": saved_creds,
+        "deploy_target_configured": bool(proj.get("continuation_deploy_target")),
+        "monthly_price_usd": float(proj.get("continuation_subscription_monthly_usd") or 150.0),
+    }
+
+
+async def handle_inspect_saved_credentials(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """Return ONLY THE NAMES of saved credentials — never the values. So
+    the AI can decide what to ask the customer for without leaking secrets."""
+    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    if not pid:
+        return {"ok": False, "error": "project_id required"}
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        from server import db as _db  # type: ignore
+        db = _db
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
+    proj = await db.freebuild_projects.find_one(
+        {"id": pid}, {"_id": 0, "continuation_credentials": 1},
+    )
+    creds = (proj or {}).get("continuation_credentials") or {}
+    keys = sorted(creds.keys())
+    return {
+        "ok": True,
+        "saved_keys": keys,
+        "count": len(keys),
+        "has_git": any(k.endswith("_TOKEN") and "GIT" in k or k == "GITHUB_TOKEN" for k in keys),
+        "has_ssh": all(k in keys for k in ("SSH_HOST", "SSH_USERNAME", "SSH_PRIVATE_KEY")),
+        "has_ftp": all(k in keys for k in ("FTP_HOST", "FTP_USERNAME", "FTP_PASSWORD")),
+        "has_firebase": "FIREBASE_TOKEN" in keys and "FIREBASE_APP_ID" in keys,
+        "has_eas": "EXPO_TOKEN" in keys,
+        "has_play_store": "GOOGLE_SERVICE_ACCOUNT_JSON" in keys,
+        "has_app_store": "APP_STORE_CONNECT_API_KEY" in keys,
+        "has_android_signing": "ANDROID_KEYSTORE_BASE64" in keys,
+        "has_ios_signing": "IOS_CERTIFICATE_P12_BASE64" in keys,
+    }
+
+
+async def handle_read_continuation_audit(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """Let the AI read its own audit history so it doesn't repeat
+    destructive actions or contradict prior commitments."""
+    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    limit = int(args.get("limit") or 30)
+    if not pid:
+        return {"ok": False, "error": "project_id required"}
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        from server import db as _db  # type: ignore
+        db = _db
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
+    try:
+        from .continuation_audit import fetch_audit
+        logs = await fetch_audit(db, pid, limit=min(max(limit, 1), 100))
+    except Exception:
+        logs = []
+    # Strip signatures for brevity, keep the action timeline
+    trimmed = [
+        {"ts": entry.get("ts"), "action": entry.get("action"),
+         "target_path": entry.get("target_path"), "success": entry.get("success"),
+         "summary": (entry.get("details") or {}).get("summary") or (entry.get("details") or {}).get("command", "")[:80]}
+        for entry in logs
+    ]
+    return {"ok": True, "count": len(trimmed), "logs": trimmed}
+
+
+# ───────────────────────────────────────────────────────────────────
 # Tool registry
 # ───────────────────────────────────────────────────────────────────
 CONTINUATION_APP_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
@@ -486,10 +709,116 @@ CONTINUATION_APP_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             "required": ["provider", "artifact_path"],
         },
     },
+    {
+        "name": "delete_sandbox_file",
+        "description": (
+            "Delete a file or folder in the sandbox. Auto-snapshots before "
+            "deleting so it's recoverable. Subscription-locked. Use carefully — "
+            "for refactors that need to remove files (e.g. removing deprecated components)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "path": {"type": "string", "description": "relative path inside sandbox"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "move_sandbox_file",
+        "description": (
+            "Rename or move a file/folder inside the sandbox. Auto-snapshots first. "
+            "Subscription-locked. Use for refactors (e.g. moving files into a "
+            "feature folder, renaming components)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "source": {"type": "string"},
+                "destination": {"type": "string"},
+            },
+            "required": ["source", "destination"],
+        },
+    },
+    {
+        "name": "apply_patch",
+        "description": (
+            "Apply a unified diff (`patch -p1` style) to a file in the sandbox. "
+            "Lighter than full-file rewrite via propose_sandbox_change — use this "
+            "when changes are small and you want to preserve unchanged context "
+            "without sending the whole file. Auto-snapshots first. Subscription-locked."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "path": {"type": "string"},
+                "patch_text": {"type": "string",
+                               "description": "Standard unified diff with --- a/path / +++ b/path / @@ hunks"},
+            },
+            "required": ["path", "patch_text"],
+        },
+    },
+    {
+        "name": "get_continuation_status",
+        "description": (
+            "READ-ONLY. Return the project's paywall + setup state: whether "
+            "first_update_delivered, whether continuation_unlocked, whether "
+            "sandbox is ready, which credentials are saved, monthly price, "
+            "project_kind (site/app). Call this BEFORE attempting any write "
+            "to avoid PAYWALL_LOCKED surprises."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"project_id": {"type": "string"}},
+            "required": [],
+        },
+    },
+    {
+        "name": "inspect_saved_credentials",
+        "description": (
+            "READ-ONLY (names-only — never returns secret values). Returns the "
+            "list of credential keys the customer has already provided + helpful "
+            "boolean flags (has_ssh, has_ftp, has_firebase, has_eas, "
+            "has_play_store, has_app_store, has_android_signing, has_ios_signing). "
+            "Use this to decide what to ASK the customer for before trying "
+            "deployment/store-submit tools."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"project_id": {"type": "string"}},
+            "required": [],
+        },
+    },
+    {
+        "name": "read_continuation_audit",
+        "description": (
+            "READ-ONLY. Return the project's tamper-evident audit log entries "
+            "(action, target_path, success, timestamp). Use this to recall what "
+            "you've done in previous turns so you don't repeat destructive "
+            "actions or contradict prior commitments to the customer."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "limit": {"type": "integer", "description": "default 30, max 100"},
+            },
+            "required": [],
+        },
+    },
 ]
 
 CONTINUATION_APP_TOOL_HANDLERS: Dict[str, Any] = {
     "detect_project_stack": handle_detect_project_stack,
     "run_sandbox_command": handle_run_sandbox_command,
     "submit_to_app_store": handle_submit_to_app_store,
+    "delete_sandbox_file": handle_delete_sandbox_file,
+    "move_sandbox_file": handle_move_sandbox_file,
+    "apply_patch": handle_apply_patch,
+    "get_continuation_status": handle_get_continuation_status,
+    "inspect_saved_credentials": handle_inspect_saved_credentials,
+    "read_continuation_audit": handle_read_continuation_audit,
 }

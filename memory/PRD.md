@@ -1255,3 +1255,39 @@ A 5-step in-chat onboarding for `mode=continuation` projects that gates the Engi
 **Total tools across system:** 46 cortex tools (15 منهم continuation-specific).
 **Total tests passing:** 45 unit + 2 E2E (websites 12-step + apps 11-step).
 
+---
+
+## 🔍 2026-02-06 — Engineer Coverage Audit (Pass 2) — 100% Coverage
+
+طلب فحص شامل ثاني. أنشأت audit script يلعب دور Claude ويسأل: «لكل عملية هندسية شائعة، هل عندنا أداة؟». اكتشفت **8 ثغرات**:
+
+### Gaps before second pass (71% coverage):
+- ✗ delete_file (لا يوجد أداة لحذف ملفات)
+- ✗ rename_move_file (لا يوجد أداة لإعادة تسمية/نقل)
+- ✗ apply_patch (لا يوجد أداة لتطبيق unified diff خفيف)
+- ✗ get_project_status (الـ AI ما يعرف هل الـ paywall نشط قبل ما يحاول)
+- ✗ inspect_secrets (الـ AI ما يقدر يعرف أي مفاتيح محفوظة قبل أن يطلب من العميل)
+- ✗ read_audit (الـ AI ما يقدر يقرأ سجله الخاص بين الجلسات)
+- ✗ read_logs (للوصول لـ Firebase Crashlytics مثلاً)
+- ✗ validate_env (التحقق من env vars في sandbox)
+
+### الإصلاحات (6 أدوات + توسيع whitelist):
+1. **`delete_sandbox_file`** — حذف ملف/مجلد مع auto-snapshot + paywall
+2. **`move_sandbox_file`** — نقل/إعادة تسمية مع snapshot + paywall
+3. **`apply_patch`** — تطبيق unified diff عبر `patch -p1` (أخف من full rewrite)
+4. **`get_continuation_status`** (read-only) — `paywall_active`، `sandbox_ready`، `saved_credential_keys`، `project_kind/app_kind`
+5. **`inspect_saved_credentials`** (read-only) — أسماء المفاتيح فقط (لا قيم)، booleans `has_ssh/has_ftp/has_firebase/has_eas/has_play_store/has_app_store/has_android_signing/has_ios_signing`
+6. **`read_continuation_audit`** (read-only) — للذكاء يقرأ سجل أعماله السابقة
+- توسيع whitelist بـ `env`, `printenv`, `echo` (للـ validate_env و read_logs عبر firebase CLI)
+
+### Testing (10 unit tests جديدة + audit دائم):
+- ✅ `test_continuation_gap_tools.py` — 10 tests كلها PASSED
+- ✅ test أمني حرج: `inspect_saved_credentials` لا يسرّب قيم سرّية أبداً (يفحص ciphertext في output → assert no leak)
+- ✅ `test_engineer_coverage_audit.py` — script دائم يتحقق من coverage = 100%
+
+### الأرقام النهائية:
+- **52 cortex tool registered** (15 منهم continuation-specific: 12 site + 9 app)
+- **55 unit tests** PASSED على جميع الأدوات
+- **2 E2E tests** (12-step websites + 11-step monorepo apps) PASSED
+- **28/28 capabilities = 100% coverage**
+
