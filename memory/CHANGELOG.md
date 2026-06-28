@@ -1907,3 +1907,38 @@ Bug Fixes shipped this session:
 - MOD: `/app/frontend/src/pages/FreeBuildChat.js` (conditional render based on `project.project_kind`)
 - MOD: `/app/frontend/src/pages/ContinuationPreviewPanel.jsx` (PhonePreviewTab + projectKind prop)
 - MOD: `/app/backend/modules/freebuild/freebuild_chat.py` (3 new/updated endpoints + app-aware consent kickoff)
+
+---
+## 2026-02-28 (Late) — Store Credentials + VPS Build Toolchain + Hardening
+
+### New: Store Credentials Modal (P1)
+- `StoreCredentialsModal.jsx` opens from inside the chat (data-testid="open-store-credentials-btn") after wizard is done, app projects only.
+- Smart filter: shows only platforms relevant to the chosen `app_kind` (Flutter → Play+App Store+Firebase+Amazon+Huawei; iOS native → App Store Connect+TestFlight+Firebase; Unity → Steam+itch.io+Stores; Electron/Tauri → Microsoft Store+Steam+itch.io).
+- File input for `*_JSON` and `*_BASE64` keys (auto-base64 encoding for binary keystore / provisioning profile), password input for tokens.
+- Saved credentials show mask + expiry; individual revoke button.
+
+### New Backend Endpoints
+- `GET  /api/freebuild-chat/continuation/store-providers-catalog` (9 stores + 2 signing providers).
+- `POST /api/freebuild-chat/project/{pid}/continuation/credentials/save-extra` (AES-128, requires wizard.completed).
+- `GET  /api/freebuild-chat/project/{pid}/continuation/credentials/meta` (masked metadata only).
+- `DELETE /api/freebuild-chat/project/{pid}/continuation/credentials/{key_name}` (returns `revoked: True` only when key actually existed).
+
+### Bug Fixes (from code review iter 86)
+- **MEDIUM**: `save-stack` now returns **409** if wizard already completed (prevents silent reset of completed projects).
+- **LOW**: Target platforms can now be cleared (fixed auto-refill loop using `autoFilledFor` guard).
+- **LOW**: Stack picker color highlights now render (replaced dynamic Tailwind classes with static `KIND_COLOR_CLASSES` map).
+- **LOW**: DELETE credentials returns `revoked: false` when key didn't exist (accurate signal).
+
+### New: VPS Build Toolchain (P1 — installed live)
+- `/app/deploy/install-build-toolchain.sh` installed on production VPS at `/opt/zerax/build-images/`:
+  - Java 17, Android SDK 34 + cmdline-tools 12.0 + platform-tools, Flutter stable 3.24.5, Node 20.20.2, yarn 1.22, eas-cli 20.4
+  - `env.sh` auto-sourced by `_run()` in `continuation_tools.py` (gated on `bash -lc/-c`)
+- The AI can now run `flutter build apk`, `gradlew assembleRelease`, `expo prebuild`, `eas build --local`, etc. inside the sandbox WITHOUT depending on EAS/Codemagic externally.
+
+### Tests
+- Backend: 12/12 production regressions (iter86) + 9/9 baseline (iter85) = 21/21.
+- Frontend: Wizard render verified visually on production (https://zenrex.ai) — all 9 stack options + 11 sources + Store modal render correctly.
+
+### Code Review Pass
+- All flagged items (1 MEDIUM + 3 LOW) fixed.
+- Independence verified — zero Emergent dependencies, AI brain uses platform's own ANTHROPIC_API_KEY.
