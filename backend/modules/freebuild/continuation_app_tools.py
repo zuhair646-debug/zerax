@@ -636,6 +636,133 @@ async def handle_read_continuation_audit(args: Dict[str, Any], ctx: Any = None) 
 
 
 # ───────────────────────────────────────────────────────────────────
+# Domain knowledge — lets the AI consult industry-specific playbooks
+# (banking, lending, e-commerce, healthcare, education, real estate,
+# salons, construction, government, stocks, food delivery, etc.)
+# ───────────────────────────────────────────────────────────────────
+_DOMAIN_KB_CACHE: Optional[Dict[str, Any]] = None
+
+
+def _load_domain_kb() -> Dict[str, Any]:
+    global _DOMAIN_KB_CACHE
+    if _DOMAIN_KB_CACHE is not None:
+        return _DOMAIN_KB_CACHE
+    from pathlib import Path as _P
+    import json as _json
+    kb_path = _P(__file__).parent.parent.parent / "data" / "continuation_domain_knowledge.json"
+    try:
+        _DOMAIN_KB_CACHE = _json.loads(kb_path.read_text("utf-8"))
+    except Exception as e:
+        logger.exception(f"[continuation] failed to load domain KB: {e}")
+        _DOMAIN_KB_CACHE = {"domains": {}}
+    return _DOMAIN_KB_CACHE
+
+
+def _guess_domain(text: str) -> List[str]:
+    """Cheap keyword-based domain guess. Returns up to 3 candidate domain ids
+    ordered by match strength. Used when the customer didn't tell us
+    explicitly what their app is about."""
+    if not text:
+        return []
+    t = text.lower()
+    keywords = {
+        "banking": ["بنك", "حساب", "كشف", "حوالة", "بطاقة", "ساما", "sama", "iban", "bank"],
+        "lending": ["تمويل", "قرض", "قسط", "تقسيط", "bnpl", "تابي", "تمارا", "simah", "سمة", "مرابحة"],
+        "stocks_trading": ["تداول", "أسهم", "محفظة", "اكتتاب", "بورصة", "tadawul", "stock", "trade"],
+        "ecommerce": ["متجر", "تسوق", "سلة", "checkout", "shop", "salla", "zid", "نون", "أمازون"],
+        "food_delivery": ["توصيل طعام", "مطعم", "هنقر", "جاهز", "delivery", "restaurant", "كشتات"],
+        "healthcare": ["طبيب", "موعد", "وصفة", "صحة", "telemedicine", "صيدلية", "تأمين طبي", "ehr"],
+        "education": ["دورة", "تعليم", "تدريب", "course", "lms", "اختبار", "شهادة"],
+        "real_estate": ["عقار", "بيت", "شقة", "إيجار", "ejar", "real estate", "property"],
+        "beauty_salons": ["مشغل", "صالون", "تجميل", "salon", "beauty", "spa"],
+        "construction": ["بناء", "مقاولة", "موقع إنشائي", "construction", "bim", "مشروع إنشائي"],
+        "government_services": ["نفاذ", "أبشر", "حكومي", "nafath", "absher", "yakeen", "وزارة"],
+        "logistics_shipping": ["شحن", "توصيل طرد", "smsa", "aramex", "naqel", "logistics"],
+        "automotive": ["سيارة", "صيانة سيارات", "قطع غيار", "automotive", "vehicle"],
+        "social_networking": ["تواصل اجتماعي", "feed", "stories", "social", "chat"],
+        "fitness_wellness": ["لياقة", "تمارين", "fitness", "workout", "تغذية"],
+        "media_entertainment": ["بث", "مسلسل", "أفلام", "streaming", "vod", "music"],
+        "travel_tourism": ["سفر", "حجز فندق", "طيران", "travel", "hotel", "flight"],
+    }
+    scores = {}
+    for domain, kws in keywords.items():
+        score = sum(1 for kw in kws if kw in t)
+        if score:
+            scores[domain] = score
+    return [d for d, _ in sorted(scores.items(), key=lambda kv: -kv[1])[:3]]
+
+
+async def handle_lookup_domain_knowledge(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """READ-ONLY. Look up the domain-specific playbook the AI needs to handle
+    a given industry vertical. The AI calls this RIGHT AFTER `detect_project_stack`
+    so it knows what sections the app should have, what compliance applies,
+    what integrations are standard, and what pitfalls to avoid.
+
+    Usage modes:
+      • Explicit:   lookup_domain_knowledge(domain="banking")
+      • Auto-guess: lookup_domain_knowledge(description="تطبيق توصيل طعام في الرياض")
+      • List all:   lookup_domain_knowledge(list_domains=True)
+    """
+    kb = _load_domain_kb()
+    domains = kb.get("domains", {})
+
+    if args.get("list_domains"):
+        return {
+            "ok": True,
+            "list": [{"id": k, "ar": v.get("label_ar"), "en": v.get("label_en"),
+                       "examples": v.get("examples_ar", [])[:3]}
+                     for k, v in domains.items()],
+            "count": len(domains),
+        }
+
+    domain_id = (args.get("domain") or "").strip().lower()
+    if not domain_id:
+        # Try auto-guess from description
+        guesses = _guess_domain(args.get("description") or "")
+        if not guesses:
+            return {
+                "ok": False,
+                "error": "domain_required",
+                "hint": "Pass 'domain' or 'description' to auto-guess. Or list_domains=True to see options.",
+                "available_domain_ids": sorted(domains.keys()),
+            }
+        domain_id = guesses[0]
+        suggested = guesses
+    else:
+        suggested = [domain_id]
+
+    info = domains.get(domain_id)
+    if not info:
+        return {
+            "ok": False,
+            "error": "unknown_domain",
+            "available": sorted(domains.keys()),
+            "hint": "Use list_domains=True to see all 17 domains.",
+        }
+
+    return {
+        "ok": True,
+        "domain_id": domain_id,
+        "label_ar": info.get("label_ar"),
+        "label_en": info.get("label_en"),
+        "examples_ar": info.get("examples_ar", []),
+        "typical_sections": info.get("typical_sections", []),
+        "compliance_required": info.get("compliance_required", []),
+        "common_integrations": info.get("common_integrations", []),
+        "security_critical": info.get("security_critical", []),
+        "common_pitfalls": info.get("common_pitfalls", []),
+        "kpis": info.get("kpis", []),
+        "recommended_stacks": info.get("recommended_stacks", []),
+        "anti_patterns": info.get("anti_patterns", []),
+        "auto_guess_candidates": suggested if len(suggested) > 1 else None,
+        "usage_hint_ar": (
+            f"استخدم هذه القائمة كـ checklist عند تحليل التطبيق. "
+            f"للسوق السعودي تأكّد من تطبيق: {', '.join((info.get('compliance_required') or [])[:2]) or 'لا متطلبات خاصة'}"
+        ),
+    }
+
+
+# ───────────────────────────────────────────────────────────────────
 # Tool registry
 # ───────────────────────────────────────────────────────────────────
 CONTINUATION_APP_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
@@ -809,6 +936,31 @@ CONTINUATION_APP_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "lookup_domain_knowledge",
+        "description": (
+            "READ-ONLY. Retrieve the domain-specific playbook for an industry "
+            "vertical (banking, lending, e-commerce, healthcare, education, "
+            "real_estate, beauty_salons, construction, government_services, "
+            "logistics_shipping, automotive, social_networking, fitness_wellness, "
+            "media_entertainment, travel_tourism, food_delivery, stocks_trading). "
+            "Returns: typical sections, Saudi/GCC compliance requirements, common "
+            "integrations (Nafath, SADAD, Mada, Tabby, etc.), security critical "
+            "items, common pitfalls, KPIs, recommended tech stacks, anti-patterns. "
+            "Call this RIGHT AFTER detect_project_stack so you analyze the app "
+            "with the right domain-expert lens. Pass `domain` explicitly OR "
+            "`description` for auto-guess. Pass `list_domains=True` to see all 17."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Domain id, e.g. 'banking', 'food_delivery'"},
+                "description": {"type": "string", "description": "App description; will auto-guess domain"},
+                "list_domains": {"type": "boolean", "description": "Return list of all available domains"},
+            },
+            "required": [],
+        },
+    },
 ]
 
 CONTINUATION_APP_TOOL_HANDLERS: Dict[str, Any] = {
@@ -821,4 +973,5 @@ CONTINUATION_APP_TOOL_HANDLERS: Dict[str, Any] = {
     "get_continuation_status": handle_get_continuation_status,
     "inspect_saved_credentials": handle_inspect_saved_credentials,
     "read_continuation_audit": handle_read_continuation_audit,
+    "lookup_domain_knowledge": handle_lookup_domain_knowledge,
 }

@@ -1,0 +1,619 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "description": "Domain knowledge base for Continuation Mode. Each entry gives the AI Engineer Manager a checklist of standard sections, compliance requirements, common integrations, security concerns, KPIs, and recommended tech stacks for that industry vertical. Used by `lookup_domain_knowledge` tool.",
+    "last_updated": "2026-02-06",
+    "primary_market": "Saudi Arabia / GCC"
+  },
+  "domains": {
+    "banking": {
+      "label_ar": "البنوك والخدمات المصرفية",
+      "label_en": "Banking & Financial Services",
+      "examples_ar": ["الراجحي", "الأهلي", "STC Pay", "urpay"],
+      "typical_sections": [
+        "تسجيل + توثيق هوية (KYC)",
+        "كشف الحساب والمعاملات",
+        "حوالات داخلية + SARIE/SWIFT دولية",
+        "بطاقات (إصدار، تجميد، PIN)",
+        "إدارة المستفيدين",
+        "خدمات SADAD للفواتير",
+        "المنتجات الإسلامية (مرابحة، إجارة، تورق)",
+        "الأهداف الادخارية + الاستثمار",
+        "التنبيهات والإشعارات",
+        "محادثة دعم آمنة"
+      ],
+      "compliance_required": [
+        "SAMA Cybersecurity Framework (SAMA CSF) — إلزامي للسعودية",
+        "PCI-DSS Level 1 لمعاملات البطاقات",
+        "AML / KYC وفق نزاهة + ساما",
+        "BS 10012 لخصوصية البيانات",
+        "Sharia Board Approval للمنتجات الإسلامية"
+      ],
+      "common_integrations": [
+        "Nafath (التحقق الموحد)",
+        "SADAD (للمدفوعات الحكومية)",
+        "Mada Pay (شبكة الدفع المحلية)",
+        "Apple Pay + Google Pay",
+        "Tabby / Tamara (BNPL)",
+        "Twilio / Unifonic للـ OTP SMS",
+        "Jumio / Onfido (KYC liveness)"
+      ],
+      "security_critical": [
+        "End-to-end encryption لكل بيانات الحساب",
+        "Biometric auth (Face ID / Touch ID / SAMA Biometric)",
+        "Device binding + JWT short TTL (≤5 min)",
+        "Certificate pinning في كل API calls",
+        "Anti-screenshot على شاشات حساسة",
+        "Jailbreak/root detection",
+        "Session timeout بعد 2 دقيقة inactivity",
+        "Transaction signing مع OTP لكل حوالة"
+      ],
+      "common_pitfalls": [
+        "تخزين أرقام البطاقات/CVV في الـ local storage",
+        "تسجيل tokens في الـ logs",
+        "عدم تطبيق SAMA's OWASP MASVS L2+",
+        "نسيان دعم RTL في شاشات الحوالات الدولية"
+      ],
+      "kpis": ["معدل تحويل التسجيل (KYC completion)", "متوسط الحوالات/مستخدم/شهر",
+               "uptime ≥ 99.9%", "p95 latency ≤ 300ms", "fraud rate"],
+      "recommended_stacks": ["Native iOS (Swift)", "Native Android (Kotlin)", "Flutter (للحالات الخاصة)"],
+      "anti_patterns": ["WebView لشاشات حساسة", "Hybrid frameworks بدون secure storage"]
+    },
+
+    "lending": {
+      "label_ar": "التمويل والقروض",
+      "label_en": "Lending & Loans",
+      "examples_ar": ["تمارا", "تابي", "بيان", "إمكان"],
+      "typical_sections": [
+        "حاسبة التمويل (Cost calculator)",
+        "طلب تمويل + رفع المستندات",
+        "نقاط الائتمان من SIMAH",
+        "جدول الأقساط + الدفع المسبق",
+        "إعادة الجدولة + الإغلاق المبكر",
+        "BNPL للتجار (دفع لاحقاً)",
+        "محفظة الالتزامات الحالية",
+        "العقود الإلكترونية الموقّعة"
+      ],
+      "compliance_required": [
+        "SAMA Finance Companies regulations",
+        "نظام نزاهة لمكافحة غسل الأموال",
+        "SIMAH integration للاستعلام الائتماني",
+        "Sharia Compliance للتمويل الإسلامي (هام جداً للسوق السعودي)",
+        "DTI (نسبة الالتزامات للدخل) ≤ 65% per SAMA"
+      ],
+      "common_integrations": [
+        "SIMAH credit bureau",
+        "Nafath للتوثيق",
+        "Yakeen للتحقق من البيانات الحكومية",
+        "DocuSign / Etimad للتوقيع الإلكتروني",
+        "Webhook للتجار (Shopify, Salla, Zid) لـ BNPL"
+      ],
+      "security_critical": [
+        "تشفير CR/Iqama/Passport في الـ DB (لازم AES-256 + key rotation)",
+        "PII redaction في logs",
+        "خصوصية صور المستندات في object storage معزول"
+      ],
+      "common_pitfalls": [
+        "حساب APR خطأ (تجاهل الرسوم والتأمين)",
+        "نسيان حالة 'متعثّر' في state machine",
+        "عدم احتساب التورق بشكل صحيح في الفقه الإسلامي"
+      ],
+      "kpis": ["نسبة الموافقة (approval rate)", "DTI متوسط", "default rate", "تكلفة الاستحواذ (CAC)"],
+      "recommended_stacks": ["Flutter", "React Native", "Native (للبنوك الكبيرة)"]
+    },
+
+    "stocks_trading": {
+      "label_ar": "الأسهم والتداول",
+      "label_en": "Stocks & Trading",
+      "examples_ar": ["تداول", "الجزيرة كابيتال", "الراجحي مال"],
+      "typical_sections": [
+        "Watchlist + التنبيهات السعرية",
+        "رسوم بيانية تفاعلية (Candlestick, RSI, MACD)",
+        "أوامر الشراء/البيع (Market, Limit, Stop)",
+        "المحفظة + الأرباح/الخسائر",
+        "أخبار السوق + تحليلات",
+        "Order book real-time",
+        "الاكتتابات الجديدة (IPOs)",
+        "صناديق REITs والصناديق الاستثمارية"
+      ],
+      "compliance_required": [
+        "CMA (هيئة السوق المالية) license",
+        "MiFID II لو فيه عملاء أوروبيين",
+        "FATCA / CRS reporting",
+        "Risk Disclosure إلزامي قبل أي تداول",
+        "Suitability Assessment (KYS — Know Your Suitability)"
+      ],
+      "common_integrations": [
+        "Saudi Exchange (Tadawul) feed عبر API",
+        "Bloomberg / Refinitiv للأخبار",
+        "TradingView charts library",
+        "Edaa للحفظ المركزي",
+        "Muqassa للتسوية"
+      ],
+      "security_critical": [
+        "WebSocket مع heartbeat + auto-reconnect",
+        "Order signing — كل أمر شراء يحتاج OTP",
+        "Two-factor auth إلزامي",
+        "Audit log لكل order مع timestamp microsecond"
+      ],
+      "common_pitfalls": [
+        "WebSocket reconnect logic ضعيف → فقدان أوامر",
+        "Race condition بين order placement و portfolio update",
+        "إظهار P&L بدون احتساب العمولات والزكاة"
+      ],
+      "kpis": ["DAU/MAU", "متوسط الـ trades/يوم", "AUM (Assets Under Management)", "نسبة عمولة/مستخدم"],
+      "recommended_stacks": ["Native iOS/Android للأداء", "React Native + WebSocket native module"]
+    },
+
+    "ecommerce": {
+      "label_ar": "التجارة الإلكترونية",
+      "label_en": "E-commerce",
+      "examples_ar": ["نون", "أمازون", "سلة (Salla)", "زد", "جاهز"],
+      "typical_sections": [
+        "كتالوج المنتجات + فلاتر",
+        "سلة + قسائم + شحن",
+        "Checkout متعدد طرق الدفع",
+        "حساب المستخدم + العناوين",
+        "Tracking الطلبات + إرجاع",
+        "تقييمات + مراجعات",
+        "Wishlist + المقارنة",
+        "إشعارات الـ flash sales",
+        "Loyalty / نقاط",
+        "Live chat للدعم"
+      ],
+      "compliance_required": [
+        "نظام التجارة الإلكترونية السعودي 2019",
+        "VAT (15%) محسوب صحيح + الفاتورة الضريبية",
+        "ZATCA Phase 2 e-invoicing (إلزامي)",
+        "Consumer Protection regulations",
+        "PCI-DSS للدفع البطاقي"
+      ],
+      "common_integrations": [
+        "Mada / Visa / Mastercard عبر HyperPay / PayTabs / Moyasar",
+        "Tabby / Tamara (BNPL)",
+        "Apple Pay + STC Pay + urpay",
+        "SMSA / Aramex / Naqel للشحن",
+        "ZATCA للفوترة",
+        "Mailchimp / SendGrid للـ marketing",
+        "Algolia / Meilisearch للبحث"
+      ],
+      "security_critical": [
+        "PCI-DSS scope minimization (لا تخزّن أرقام بطاقات)",
+        "Address validation + fraud detection",
+        "Rate limit على القسائم + flash sales"
+      ],
+      "common_pitfalls": [
+        "Race condition في خصم المخزون",
+        "نسيان حالات الـ refund/partial-refund",
+        "بطء البحث بسبب SQL LIKE بدلاً من inverted index",
+        "Cart abandonment بدون أتمتة استرجاع"
+      ],
+      "kpis": ["GMV", "AOV (Average Order Value)", "Cart abandonment rate",
+               "Repeat purchase rate", "p95 page load"],
+      "recommended_stacks": ["Next.js + Capacitor", "React Native", "Flutter"]
+    },
+
+    "food_delivery": {
+      "label_ar": "توصيل الطعام / تطبيقات الكشتات",
+      "label_en": "Food Delivery",
+      "examples_ar": ["هنقرستيشن", "جاهز", "مرسول", "ToYou", "كريم Food"],
+      "typical_sections": [
+        "خريطة المطاعم القريبة + التقييمات",
+        "قائمة طعام مع customization (ادبتس)",
+        "سلة + ETA + cutlery options",
+        "Live tracking للسائق",
+        "Schedule order (للوقت لاحقاً)",
+        "Dietary filters (حلال، صحي، حر من غلوتين)",
+        "Group ordering",
+        "Tip للسائق",
+        "Loyalty + Cashback"
+      ],
+      "compliance_required": [
+        "تصاريح بلدية للمطاعم",
+        "VAT 15% + ZATCA e-invoice",
+        "Driver background checks (مكتب العمل)",
+        "Food safety certifications"
+      ],
+      "common_integrations": [
+        "Google Maps / Mapbox للتوصيل",
+        "Firebase Realtime DB للـ tracking",
+        "Twilio Voice للاتصال السائق↔عميل بدون كشف الرقم",
+        "POS integration للمطاعم (Foodics, Marn)"
+      ],
+      "security_critical": [
+        "Phone number masking بين العميل والسائق",
+        "Driver location accuracy ≤ 10m",
+        "Background location permission handling"
+      ],
+      "common_pitfalls": [
+        "بطارية الجوال (background tracking نهم)",
+        "حساب الأجرة بدون مراعاة الحركة",
+        "نسيان حالة 'سائق لم يصل'"
+      ],
+      "kpis": ["Average delivery time", "On-time rate", "Driver utilization", "GMV/restaurant"],
+      "recommended_stacks": ["Flutter (للأداء على الخريطة)", "React Native + Mapbox"]
+    },
+
+    "healthcare": {
+      "label_ar": "الصحة والرعاية الطبية",
+      "label_en": "Healthcare",
+      "examples_ar": ["وزارة الصحة (صحتي)", "نهدي", "كيور", "Altibbi"],
+      "typical_sections": [
+        "حجز المواعيد + المتخصصون",
+        "Telemedicine (مكالمة فيديو آمنة)",
+        "السجل الصحي الإلكتروني (EHR)",
+        "الوصفات الطبية + التذكير",
+        "تحاليل المختبر + النتائج",
+        "تأمين طبي + المطالبات",
+        "صيدلية أونلاين",
+        "الطوارئ + الإسعاف"
+      ],
+      "compliance_required": [
+        "SDAIA Personal Data Protection Law (PDPL)",
+        "MOH/SCFHS guidelines",
+        "HIPAA equivalence لو فيه عملاء أمريكيين",
+        "Sharia compliance في الرعاية الطبية"
+      ],
+      "common_integrations": [
+        "صحتي / Sehhaty API",
+        "وصفتي للوصفات الإلكترونية",
+        "TwilioVideo / Agora للـ telemedicine",
+        "Stripe Health للتأمين"
+      ],
+      "security_critical": [
+        "End-to-end encryption للسجلات",
+        "Audit log لكل وصول للسجل (قانوني)",
+        "Data residency في السعودية إلزامي"
+      ],
+      "common_pitfalls": [
+        "تخزين نتائج التحاليل في cleartext",
+        "إرسال الوصفات عبر SMS بدون توقيع",
+        "ضعف validation على dosage"
+      ],
+      "kpis": ["Time to consultation", "Patient satisfaction (NPS)", "Prescription accuracy"],
+      "recommended_stacks": ["Native (للأمان)", "Flutter (لو cross-platform)"]
+    },
+
+    "education": {
+      "label_ar": "التعليم والتدريب",
+      "label_en": "Education / EdTech",
+      "examples_ar": ["نون أكاديمي", "إدراك", "روافد", "Coursera"],
+      "typical_sections": [
+        "كتالوج الدورات + التصنيفات",
+        "مشغّل الفيديو + Notes",
+        "اختبارات تفاعلية + شهادات",
+        "Forums / Discussion",
+        "Live classes (Webinar)",
+        "Progress tracking + Gamification",
+        "Subscriptions + One-time purchase",
+        "Offline downloads"
+      ],
+      "compliance_required": [
+        "وزارة التعليم accreditation",
+        "TVTC للتدريب التقني",
+        "COPPA لو فيه أطفال < 13",
+        "Content moderation"
+      ],
+      "common_integrations": [
+        "Vimeo / Mux للفيديو المحمي",
+        "Zoom / Agora للـ live",
+        "Moodle / Open edX لـ LMS",
+        "Tap / HyperPay للاشتراكات"
+      ],
+      "security_critical": [
+        "DRM على الفيديوهات (Widevine / FairPlay)",
+        "Anti-cheating في الاختبارات (proctoring)",
+        "Watermark على المحتوى"
+      ],
+      "common_pitfalls": [
+        "بدون quality switching (320p/720p/1080p)",
+        "Quiz state يضيع عند انقطاع الشبكة",
+        "Subscription renewal logic معطّل"
+      ],
+      "kpis": ["Course completion rate", "MAU", "Avg watch time", "ARPU"],
+      "recommended_stacks": ["React Native", "Flutter"]
+    },
+
+    "real_estate": {
+      "label_ar": "العقارات",
+      "label_en": "Real Estate",
+      "examples_ar": ["عقار", "بيوت", "ساكن", "إيوا"],
+      "typical_sections": [
+        "بحث + فلاتر متقدمة (موقع، سعر، نوع)",
+        "خريطة + heatmap الأسعار",
+        "جولة افتراضية 360°",
+        "حاسبة التمويل العقاري",
+        "تواصل مباشر مع الوكيل",
+        "Saved searches + alerts",
+        "Mortgage pre-approval",
+        "إدارة العقارات للملاك"
+      ],
+      "compliance_required": [
+        "الهيئة العامة للعقار (REGA)",
+        "Ejar للإيجارات",
+        "REIT regulations لو صناديق",
+        "Saudi Real Estate Refinance Company (SRC) للتمويل"
+      ],
+      "common_integrations": [
+        "Ejar API",
+        "Google Maps / Mapbox",
+        "Matterport للجولات الافتراضية",
+        "بنك التنمية / SRC للتمويل",
+        "WhatsApp Business للوكلاء"
+      ],
+      "security_critical": [
+        "صور العقار بـ watermark",
+        "حماية صور الهوية للعقود",
+        "Anti-scraping للقوائم"
+      ],
+      "common_pitfalls": [
+        "بدون geo-indexing → بطء البحث",
+        "صور بدون optimization → استهلاك بيانات عالي",
+        "ميتاداتا EXIF تكشف موقع الصور"
+      ],
+      "kpis": ["Listings/day", "Lead-to-contact rate", "Avg time on listing", "Conversions"],
+      "recommended_stacks": ["Flutter", "React Native + react-native-maps"]
+    },
+
+    "beauty_salons": {
+      "label_ar": "مشاغل التجميل والصالونات",
+      "label_en": "Beauty / Salons",
+      "examples_ar": ["جلوسي", "بوكسي", "Boksy", "Treatwell"],
+      "typical_sections": [
+        "كتالوج الخدمات + الأسعار",
+        "حجز موعد مع اختيار الاختصاصية",
+        "Calendar للموظفات + التوفّر",
+        "خدمة منزلية + Geo-locked",
+        "Gallery أعمال سابقة + before/after",
+        "Loyalty cards + خصومات",
+        "Reviews + الصور",
+        "إدارة المشغل (للمالك): الموظفات، المخزون، التقارير"
+      ],
+      "compliance_required": [
+        "تصاريح وزارة التجارة + بلدية",
+        "VAT + ZATCA",
+        "صحة العاملات (شهادات صحية)",
+        "Privacy لصور العميلات (مهم جداً في السعودية)"
+      ],
+      "common_integrations": [
+        "Tap / Moyasar للدفع",
+        "WhatsApp Business للتأكيدات",
+        "Google Calendar للموظفات",
+        "Salla / Zid لو فيه منتجات معروضة"
+      ],
+      "security_critical": [
+        "Photo privacy: تشفير الصور + access control صارم",
+        "PII للعميلات (لا تظهر للموظفات بدون موافقة)",
+        "Booking conflicts prevention (locking)"
+      ],
+      "common_pitfalls": [
+        "Double-booking لنفس الموظفة",
+        "نسيان وقت الـ buffer بين المواعيد",
+        "صور العميلات تظهر في Google Image search"
+      ],
+      "kpis": ["Booking rate", "No-show rate", "Customer lifetime value", "Avg ticket"],
+      "recommended_stacks": ["Flutter", "React Native"]
+    },
+
+    "construction": {
+      "label_ar": "البناء والمقاولات",
+      "label_en": "Construction / Contracting",
+      "examples_ar": ["إعمار", "بناء", "Procore"],
+      "typical_sections": [
+        "إدارة المشاريع + Gantt",
+        "BIM viewer (3D models)",
+        "مخزون المواد + Procurement",
+        "Workers attendance + Payroll",
+        "Daily reports + Photos",
+        "Safety incidents + reporting",
+        "Subcontractor management",
+        "Invoicing + Progress payments"
+      ],
+      "compliance_required": [
+        "وزارة الإسكان + البلدية permits",
+        "SBC (Saudi Building Code)",
+        "Saudi Council of Engineers (SCE)",
+        "OSHA safety standards"
+      ],
+      "common_integrations": [
+        "Autodesk / Revit للـ BIM",
+        "Trimble Connect",
+        "Materials suppliers APIs",
+        "GPS للمعدات"
+      ],
+      "security_critical": [
+        "Project blueprints leakage prevention",
+        "Worker biometric data (fingerprints) tightly stored"
+      ],
+      "common_pitfalls": [
+        "Project schedule drift بدون alerts",
+        "Material counting errors في الـ inventory",
+        "Photos بدون geo-tagging"
+      ],
+      "kpis": ["On-time delivery", "Cost overrun %", "Safety incidents/month", "Labor productivity"],
+      "recommended_stacks": ["Flutter", ".NET MAUI (للتكامل مع Autodesk)"]
+    },
+
+    "government_services": {
+      "label_ar": "الخدمات الحكومية",
+      "label_en": "Government Services",
+      "examples_ar": ["أبشر", "توكلنا", "نفاذ", "بلدي"],
+      "typical_sections": [
+        "Login عبر Nafath",
+        "الخدمات بحسب الوزارة",
+        "المستندات الرسمية الإلكترونية",
+        "التنبيهات الحكومية",
+        "الحوالات الحكومية (Mol, Mol)",
+        "تجديد الإقامة + الجوازات + الرخص"
+      ],
+      "compliance_required": [
+        "Yesser (DGA) digital government standards",
+        "NDMO (National Data Management Office) rules",
+        "Cloud computing regulatory framework",
+        "Open APIs framework"
+      ],
+      "common_integrations": [
+        "Nafath",
+        "Yakeen",
+        "Tawakkalna integration",
+        "Absher",
+        "Wasel / SPL للعنوان الوطني"
+      ],
+      "security_critical": [
+        "Highest-tier encryption (AES-256 + HSM)",
+        "Data residency في السعودية (إلزامي قانوناً)",
+        "Audit trail لا يُحذف"
+      ],
+      "common_pitfalls": [
+        "Nafath integration بدون handling timeout",
+        "نسيان language detection (عربي/إنجليزي/فرنسي)"
+      ],
+      "kpis": ["Service completion rate", "Avg time to complete", "Citizen satisfaction"],
+      "recommended_stacks": ["Native (الأكثر شيوعاً في الحكومة)", "Flutter للمشاريع الجديدة"]
+    },
+
+    "logistics_shipping": {
+      "label_ar": "النقل والشحن",
+      "label_en": "Logistics & Shipping",
+      "examples_ar": ["سماسا", "أرامكس", "Naqel", "DHL"],
+      "typical_sections": [
+        "Create shipment + AWB",
+        "Pickup scheduling",
+        "Tracking في الوقت الحقيقي",
+        "Driver app (separate)",
+        "Customs + Duties",
+        "POD (Proof of Delivery) + توقيع",
+        "Returns management",
+        "Bulk import (CSV)"
+      ],
+      "common_integrations": [
+        "ZATCA",
+        "Customs API",
+        "Google Maps Routing",
+        "WhatsApp للإشعارات"
+      ],
+      "kpis": ["On-time delivery %", "First-attempt success", "Cost per delivery"],
+      "recommended_stacks": ["Flutter", "Native للسائق app"]
+    },
+
+    "automotive": {
+      "label_ar": "السيارات والصيانة",
+      "label_en": "Automotive",
+      "examples_ar": ["مورني", "كيا الراجحي", "AutoCare"],
+      "typical_sections": [
+        "حجز خدمة صيانة + الفروع",
+        "تتبّع حالة السيارة",
+        "VIN scanner + history",
+        "متجر قطع الغيار",
+        "Insurance + Tamayouz",
+        "Roadside assistance"
+      ],
+      "common_integrations": [
+        "Mowsoo'a للسيارات",
+        "تأمين شركات (Tawuniya, Walaa)",
+        "Wialon GPS"
+      ],
+      "kpis": ["Service NPS", "Avg repair time", "Parts availability"],
+      "recommended_stacks": ["Flutter", "React Native"]
+    },
+
+    "social_networking": {
+      "label_ar": "التواصل الاجتماعي",
+      "label_en": "Social Networking",
+      "typical_sections": [
+        "Feed + Stories",
+        "Direct messaging + media",
+        "Comments + Reactions",
+        "Live streaming",
+        "Discovery + Trending",
+        "Profile + Verification badges",
+        "Reporting + Moderation"
+      ],
+      "compliance_required": [
+        "Anti-Cyber Crime Law (Saudi)",
+        "Content moderation (CITC rules)",
+        "Age verification for 13+"
+      ],
+      "common_integrations": [
+        "Agora / TwilioVideo للـ live",
+        "AWS Rekognition للـ moderation",
+        "Firebase Cloud Messaging"
+      ],
+      "security_critical": [
+        "E2E encryption للـ DMs (signal protocol)",
+        "Photo EXIF stripping",
+        "Block / Mute / Report flows"
+      ],
+      "kpis": ["DAU/MAU", "Avg session length", "Posts per user", "Retention D1/D7/D30"],
+      "recommended_stacks": ["React Native + native modules للأداء", "Native iOS/Android"]
+    },
+
+    "fitness_wellness": {
+      "label_ar": "اللياقة والصحة",
+      "label_en": "Fitness / Wellness",
+      "examples_ar": ["Fittar", "Strava", "Nike Training Club"],
+      "typical_sections": [
+        "خطط تمارين + Tracking",
+        "Nutrition + Meal logs",
+        "Wearables sync (Apple Watch, Fitbit)",
+        "Community + Challenges",
+        "Live workout classes",
+        "Personal trainer booking"
+      ],
+      "common_integrations": [
+        "Apple HealthKit / Google Fit",
+        "Strava API",
+        "Wearable SDKs"
+      ],
+      "kpis": ["Workout completion", "Streak length", "Calorie deficit accuracy"],
+      "recommended_stacks": ["Flutter", "Native (للـ HealthKit)"]
+    },
+
+    "media_entertainment": {
+      "label_ar": "الميديا والترفيه",
+      "label_en": "Media / Entertainment / Streaming",
+      "examples_ar": ["Shahid", "STC TV", "Netflix"],
+      "typical_sections": [
+        "كتالوج + Categories",
+        "Player (Video / Audio)",
+        "Watchlist + Continue watching",
+        "Subscriptions + Plans",
+        "Cast support (Chromecast, AirPlay)",
+        "Download for offline"
+      ],
+      "security_critical": [
+        "DRM (Widevine L1 للـ HD, FairPlay لـ iOS)",
+        "Stream URL signing",
+        "Account sharing prevention"
+      ],
+      "common_pitfalls": [
+        "Buffer management ضعيف على شبكة بطيئة",
+        "Subtitle sync بطيء"
+      ],
+      "kpis": ["Hours watched", "Subscription retention", "Buffer rate"],
+      "recommended_stacks": ["Native (للأداء)", "React Native + native player"]
+    },
+
+    "travel_tourism": {
+      "label_ar": "السفر والسياحة",
+      "label_en": "Travel & Tourism",
+      "examples_ar": ["Almosafer", "Tajawal", "Booking.com"],
+      "typical_sections": [
+        "بحث طيران + فنادق + باقات",
+        "Filters + Sorting",
+        "Booking + Payment",
+        "Trip itinerary",
+        "Visa support",
+        "Reviews + Photos",
+        "Loyalty miles"
+      ],
+      "common_integrations": [
+        "Amadeus / Sabre GDS",
+        "Visa platforms (Visit Saudi)",
+        "Sayara للنقل البري"
+      ],
+      "kpis": ["Booking conversion", "Look-to-book ratio", "ADR (Average Daily Rate)"],
+      "recommended_stacks": ["Flutter", "React Native"]
+    }
+  }
+}
