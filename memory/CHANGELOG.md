@@ -1872,3 +1872,38 @@ Bug Fixes shipped this session:
 
 ### Push
 - Commit `0a406e7` → main → github.com/zuhair646-debug/zenrex
+
+---
+## 2026-02-28 — App Continuation Chat Wizard (Fixed White Screen)
+
+### Bug Fixed
+- **White screen** on `/freebuild/chat/{id}` for app continuation projects.
+- Root cause: ContinuationOnboarding (site wizard) was rendered for app projects but its URL Inspector step has nothing to inspect — apps don't have public URLs.
+
+### New: `ContinuationAppOnboarding.jsx` (4-step wizard, mirrors site quality)
+1. **Stack** — confirm app tech (Flutter/RN/iOS/Android/MAUI/Tauri/Unity) + target platforms + optional repo hint. "I don't know" → AI auto-detects after sandbox clone.
+2. **Code Source** — picks one of 11 providers: Git (GitHub/GitLab/Bitbucket/Azure/Gitea/other) + Build Services (EAS/Codemagic/Bitrise/GitHub Actions) + ZIP upload. Recommended source highlighted with ⭐ based on stack (Codemagic for Flutter, EAS for RN, GitHub for native).
+3. **Credential capture** — tutorial video + paste-and-encrypt-AES-128 + validity selector (3/6/12 months) + help-modal escalate-to-engineer (reused from site wizard). ZIP upload path replaces password fields with file picker (200MB max).
+4. **Consent** — 5 app-specific clauses (sandbox-first, store-submit needs explicit approval, Keystore/Provisioning encrypted, Track Internal first, ownership).
+
+### Backend Endpoints (Independence Maintained — NO Emergent coupling)
+- `GET  /api/freebuild-chat/continuation/app-providers-catalog` — returns 11 sources + zip_upload synthetic.
+- `POST /api/freebuild-chat/project/{pid}/continuation/setup/save-stack` — records stack + advances to provider state.
+- `GET  /api/freebuild-chat/project/{pid}/continuation/setup` — now returns `project_kind`, `app_kind`, `app_stack`. Heals legacy app rows stuck on `state='url'` → `'stack'`.
+- App-specific consent kickoff message (tailored to app engineer manager).
+
+### Phone Preview Tab (P1 — added in ContinuationPreviewPanel)
+- iOS / Android frame toggle.
+- QR code (api.qrserver.com) for Expo Go / APK / preview URL.
+- Build status card + last build logs (polls every 8s).
+- Default tab for `project_kind === 'app'`.
+
+### Tests
+- Backend pytest at `/app/backend/tests/test_continuation_app_wizard.py` — 9/9 PASSED (catalog, save-stack happy/error/site-rejection, setup state heal, backcompat, full select-provider+save-credential).
+- Frontend Playwright via testing_agent_v3_fork — 12/13 PASSED (E2E: stack → source → keys → consent → wizard disappears → chat unlocked).
+
+### Files Changed
+- NEW: `/app/frontend/src/pages/ContinuationAppOnboarding.jsx`
+- MOD: `/app/frontend/src/pages/FreeBuildChat.js` (conditional render based on `project.project_kind`)
+- MOD: `/app/frontend/src/pages/ContinuationPreviewPanel.jsx` (PhonePreviewTab + projectKind prop)
+- MOD: `/app/backend/modules/freebuild/freebuild_chat.py` (3 new/updated endpoints + app-aware consent kickoff)
