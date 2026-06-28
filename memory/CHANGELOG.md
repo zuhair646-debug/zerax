@@ -1942,3 +1942,74 @@ Bug Fixes shipped this session:
 ### Code Review Pass
 - All flagged items (1 MEDIUM + 3 LOW) fixed.
 - Independence verified — zero Emergent dependencies, AI brain uses platform's own ANTHROPIC_API_KEY.
+
+---
+## 2026-02-28 (E2E Test) — Real Mobile App Diagnostic on `zuhair646-debug/zitex-app`
+
+### Test scenario
+End-to-end test of the App Continuation flow using the user's actual private repository
+(`zitex-app` — React Native / Expo SDK 54 + FastAPI). Goal: discover any production gaps
+the user couldn't see from the UI alone.
+
+### Bugs Discovered & Fixed
+1. **🔴 CRITICAL — Anthropic 400 "Tool names must be unique"** — silently destroying every
+   AI request in continuation mode. Root cause: `restore_snapshot`, `list_snapshots`, and
+   `get_integration_playbook` were defined twice (site-builder + continuation tools)
+   with different semantics. Tools schema sent to Anthropic had 199 entries, 3 duplicates,
+   API rejected the whole request.
+   • Fix: renamed continuation versions to `restore_sandbox_snapshot`,
+     `list_sandbox_snapshots`, `get_saudi_integration_playbook`. Now 199 unique tools.
+2. **🔴 CRITICAL — `project_id: "current"` sentinel** — when AI inserted a placeholder
+   instead of the real project_id, every continuation tool returned
+   `{ok: False, error: "project_not_found"}` even though `ctx.project_id` was available.
+   • Fix: added `_resolve_pid(args, ctx)` helper that recognises `current`, `this`,
+     `self`, `null`, `none`, `$project_id`, `{{project_id}}`, `<project_id>`, and empty
+     as fallback sentinels and uses `ctx.project_id` instead. Replaced 21 occurrences
+     across `continuation_tools.py` (12) + `continuation_app_tools.py` (9).
+
+### Verified working on production (https://zenrex.ai)
+With the fixes in place, the AI on `zitex-app` successfully ran **7 distinct tools across
+13 iterations**, totalling 88 tool calls in a single turn:
+- `clone_remote_repo` (×1) — real `git clone` to `/opt/zerax/sandboxes/<pid>/repo/`
+- `detect_project_stack` (×1) — correctly identified React Native + Expo SDK 54
+- `list_sandbox_files` (×8)
+- `read_sandbox_file` (×28) — read actual zitex-app source
+- `run_sandbox_command` (×48) — npm audit, pip check, file inspection, etc.
+- `get_saudi_integration_playbook` (×4) — pulled Mada/Tabby/ZATCA recipes
+- `lookup_domain_knowledge` (×4)
+
+### Real diagnostic output (excerpt — Arabic)
+```
+المشاكل الحرجة المكتشفة:
+1. أمان — 4 مشاكل حرجة:
+   • API keys مكشوفة في الكود (Cloudinary + Google Maps)
+   • JWT_SECRET عشوائي (يتغير عند restart)
+   • لا rate limiting (عرضة لـ brute-force)
+   • لا expo-secure-store (tokens غير مشفّرة)
+2. امتثال سعودي:
+   ❌ ZATCA Phase 2 غير موجود [إلزامي قانوناً]
+   ❌ لا بوابة دفع (Mada/Moyasar/Tabby)
+   ❓ VAT 15% غير مؤكد
+3. معماري:
+   • Backend ملف واحد 129KB
+   • صعب الصيانة — لا components منفصلة
+   • 0 state management • لا ملفات اختبار
+التقييم: 6/10 — قاعدة جيدة لكن غير جاهز للإنتاج
+```
+
+### Open issues (next session)
+- 🟡 `continuation_audit_logs` collection empty — agent tool calls are NOT being
+  audit-logged. Compliance/security risk; needs hook in `_dispatch_tool` to write entry.
+- 🟡 Sandbox git remote URL contains the GitHub PAT in plaintext on disk
+  (`https://x-access-token:ghp_*@github.com/...`). Industry-standard for HTTPS auth
+  but should be scrubbed from `git config` after clone.
+- 🟡 Right sidebar "Build Stages" labels still say "Site Exploration / Health Report
+  / Fix + Develop + Add" — cosmetic, should be "App Exploration / Build Status / etc."
+  for app projects.
+- 🟡 Tutorial videos in onboarding still placeholders.
+
+### Files Changed
+- MOD: `/app/backend/modules/freebuild/continuation_tools.py` (rename 2 tools + `_resolve_pid`)
+- MOD: `/app/backend/modules/freebuild/continuation_app_tools.py` (rename 1 tool + `_resolve_pid`)
+- MOD: `/app/memory/github_config.md` (`zenrex` → `zerax`)
+- ENV: VPS `GITHUB_TOKEN` + `GITHUB_REPO` updated
