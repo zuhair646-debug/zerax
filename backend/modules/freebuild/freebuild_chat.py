@@ -1775,6 +1775,28 @@ def make_freebuild_chat_router(db, get_current_user):
         logs = await fetch_audit(db, pid, limit=min(max(limit, 1), 500))
         return {"ok": True, "count": len(logs), "logs": logs}
 
+    @router.post("/project/{pid}/continuation/sandbox/approve-and-deploy")
+    async def sandbox_approve_and_deploy(pid: str, payload: dict, user=Depends(get_current_user)):
+        """Approve + push sandbox changes to a review branch on the customer's
+        remote git repo. Returns a Pull Request URL they can review + merge."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"], "mode": "continuation"},
+            {"_id": 0, "id": 1},
+        )
+        if proj is None:
+            raise HTTPException(status_code=404, detail="not found")
+        commit_message = (payload.get("commit_message") or "Zenrex AI proposed changes").strip()[:200]
+        branch_suffix = (payload.get("branch_suffix") or "").strip()[:30]
+        from .continuation_tools import handle_push_to_review_branch
+
+        class _Ctx:
+            user_id = user["user_id"]
+        res = await handle_push_to_review_branch(
+            {"project_id": pid, "commit_message": commit_message, "branch_suffix": branch_suffix},
+            _Ctx(),
+        )
+        return res
+
     @router.get("/continuation/sandbox/preview-auth")
     async def sandbox_preview_auth(request: Request):
         """Nginx auth_request subrequest. Validates that the JWT cookie belongs

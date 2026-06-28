@@ -6,7 +6,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   Folder, FileText, History, ShieldAlert, Loader2,
-  RotateCcw, Eye, X, ChevronRight, CheckCircle2,
+  RotateCcw, Eye, X, ChevronRight, CheckCircle2, Send,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -204,18 +204,66 @@ function AuditTab({ projectId }) {
 export default function ContinuationPreviewPanel({ projectId, onClose }) {
   const [tab, setTab] = useState('files');
   const [reloadSig] = useState(0);
+  const [deploying, setDeploying] = useState(false);
+  const [prResult, setPrResult] = useState(null);
+
+  const approveAndDeploy = async () => {
+    const msg = window.prompt('وصف التغيير اللي تبي يكون في commit message:', 'تحديثات Zenrex AI');
+    if (!msg) return;
+    setDeploying(true);
+    setPrResult(null);
+    try {
+      const r = await authedFetch(`${API}/api/freebuild-chat/project/${projectId}/continuation/sandbox/approve-and-deploy`, {
+        method: 'POST',
+        body: JSON.stringify({ commit_message: msg, branch_suffix: 'review' }),
+      });
+      const d = await r.json();
+      if (!d.ok) { toast.error(d.error || 'فشل النشر'); setPrResult({ error: d.error }); return; }
+      toast.success('✅ تم رفع التعديلات على فرع المراجعة');
+      setPrResult(d);
+    } catch (e) {
+      toast.error('فشل النشر — راجع الشبكة');
+    } finally { setDeploying(false); }
+  };
 
   return (
     <div data-testid="continuation-preview-panel" dir="rtl" className="rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-black via-fuchsia-950/30 to-black backdrop-blur p-4 sm:p-5 mb-4">
       <div className="flex items-center gap-3 mb-3 pb-3 border-b border-white/5">
         <Eye className="w-5 h-5 text-fuchsia-300" />
         <h3 className="text-sm font-black text-fuchsia-100">معاينة Sandbox + السجل</h3>
+        <button
+          onClick={approveAndDeploy}
+          disabled={deploying}
+          data-testid="approve-deploy-btn"
+          className="mr-auto px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-[11px] font-black text-white disabled:opacity-40 flex items-center gap-1.5"
+          title="ارفع التعديلات على فرع مراجعة في GitHub"
+        >
+          {deploying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+          اعتمد ونشر
+        </button>
         {onClose && (
-          <button onClick={onClose} data-testid="preview-close-btn" className="mr-auto text-zinc-400 hover:text-fuchsia-300">
+          <button onClick={onClose} data-testid="preview-close-btn" className="text-zinc-400 hover:text-fuchsia-300">
             <X className="w-4 h-4" />
           </button>
         )}
       </div>
+      {/* PR result banner */}
+      {prResult && prResult.ok && (
+        <div data-testid="pr-result" className="mb-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-bold text-emerald-100 mb-1">تم رفع التعديلات على فرع: <code className="text-emerald-200">{prResult.branch}</code></div>
+              <div className="text-[10px] text-emerald-300/80 mb-2">{prResult.instructions_ar}</div>
+              {prResult.pr_url && (
+                <a href={prResult.pr_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-emerald-500/30 hover:bg-emerald-500/40 text-white">
+                  افتح Pull Request في GitHub →
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex gap-1 mb-3">
         {[
           { id: 'files', label: 'الكود المستنسخ', icon: Folder },

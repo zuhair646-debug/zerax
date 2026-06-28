@@ -268,6 +268,103 @@ async def handle_clone_remote_repo(args: Dict[str, Any], ctx: Any = None) -> Dic
     }
 
 
+async def handle_push_to_review_branch(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """Approve & deploy — push the current sandbox state to a NEW branch
+    on the customer's remote git repo. Never touches `main`. The customer
+    then opens a Pull Request to merge it after reviewing the diff.
+
+    This is the safest production-deploy path:
+      • Original main branch is untouched
+      • Customer reviews via GitHub PR UI before merging
+      • All changes are git-tracked + audit-logged
+      • Rollback = just close the PR
+    """
+    import time
+    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    commit_message = (args.get("commit_message") or "Zenrex AI proposed changes").strip()[:200]
+    branch_suffix = (args.get("branch_suffix") or str(int(time.time()))).strip()[:30]
+    if not pid:
+        return {"ok": False, "error": "project_id required"}
+
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        from server import db as _db  # type: ignore
+        db = _db
+
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
+
+    token = await _load_cred(db, pid, "GITHUB_TOKEN") or await _load_cred(db, pid, "GIT_TOKEN")
+    if not token:
+        return {"ok": False, "error": "no GITHUB_TOKEN saved for this project"}
+
+    sandbox = _ensure_sandbox(pid)
+    repo_dir = sandbox / "repo"
+    if not (repo_dir / ".git").exists():
+        return {"ok": False, "error": "no git repo cloned in sandbox"}
+
+    # Get configured remote
+    res = await _run(["git", "config", "--get", "remote.origin.url"], cwd=repo_dir, timeout=10)
+    if not res["ok"]:
+        return {"ok": False, "error": "no origin remote configured"}
+    original_url = res["stdout"].strip()
+    import urllib.parse
+    parsed = urllib.parse.urlparse(original_url)
+    # Strip any existing auth credentials from netloc (the clone left them in)
+    netloc_host = parsed.netloc.split("@")[-1]
+    safe_token = urllib.parse.quote(token, safe="")
+    auth_url = f"{parsed.scheme}://x-access-token:{safe_token}@{netloc_host}{parsed.path}"
+    clean_url = f"{parsed.scheme}://{netloc_host}{parsed.path}"
+
+    branch_name = f"zenrex-ai/{branch_suffix}"
+    cmds = [
+        ["git", "config", "user.email", "ai@zenrex.ai"],
+        ["git", "config", "user.name", "Zenrex AI Engineer"],
+        ["git", "checkout", "-B", branch_name],
+        ["git", "add", "-A"],
+        ["git", "commit", "-m", commit_message, "--allow-empty"],
+        ["git", "remote", "set-url", "origin", auth_url],
+        ["git", "push", "-u", "origin", branch_name, "--force"],
+        # Restore the scrubbed remote URL so the token isn't sitting in .git/config
+        ["git", "remote", "set-url", "origin", clean_url],
+    ]
+    log = []
+    for cmd in cmds:
+        r = await _run(cmd, cwd=repo_dir, timeout=60)
+        log.append({"cmd": cmd[1] if len(cmd) > 1 else cmd[0], "ok": r["ok"]})
+        if not r["ok"]:
+            err_msg = (r.get("stderr") or "").replace(token, "***REDACTED***")[:300]
+            await _audit(ctx, db, pid, "push_to_review_branch",
+                         tool_name="push_to_review_branch", success=False,
+                         details={"branch": branch_name, "failed_cmd": cmd[1] if len(cmd) > 1 else cmd[0],
+                                  "error": err_msg})
+            return {"ok": False, "error": f"git {cmd[1] if len(cmd) > 1 else cmd[0]} failed",
+                    "stderr": err_msg, "log": log}
+
+    # Build a PR URL for GitHub
+    pr_url = None
+    if "github.com" in netloc_host:
+        repo_path = parsed.path.replace(".git", "").strip("/")
+        pr_url = f"https://github.com/{repo_path}/compare/main...{branch_name}?expand=1"
+
+    await _audit(ctx, db, pid, "push_to_review_branch",
+                 tool_name="push_to_review_branch", success=True,
+                 details={"branch": branch_name, "commit_message": commit_message,
+                          "pr_url": pr_url})
+
+    return {
+        "ok": True,
+        "branch": branch_name,
+        "commit_message": commit_message,
+        "pr_url": pr_url,
+        "instructions_ar": (
+            "✅ التعديلات منشورة على فرع جديد. افتح رابط PR في GitHub، "
+            "راجع الـ diff، وادمج لما تكون جاهز."
+        ),
+    }
+
+
 async def _audit(ctx, db, pid, action, **kw):
     """Best-effort audit log writer used by tool handlers."""
     try:
@@ -538,6 +635,19 @@ CONTINUATION_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             "required": ["path", "new_content"],
         },
     },
+    {
+        "name": "push_to_review_branch",
+        "description": "Push current sandbox state to a NEW review branch (zenrex-ai/<timestamp>) on the customer's remote git repo. Never touches main. Returns a Pull Request URL the customer can review + merge.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "commit_message": {"type": "string", "description": "what the AI changed in plain language"},
+                "branch_suffix": {"type": "string", "description": "optional friendly tag e.g. 'image-swap'"},
+            },
+            "required": ["commit_message"],
+        },
+    },
 ]
 
 CONTINUATION_TOOL_HANDLERS: Dict[str, Any] = {
@@ -549,4 +659,5 @@ CONTINUATION_TOOL_HANDLERS: Dict[str, Any] = {
     "list_sandbox_files": handle_list_sandbox_files,
     "read_sandbox_file": handle_read_sandbox_file,
     "propose_sandbox_change": handle_propose_sandbox_change,
+    "push_to_review_branch": handle_push_to_review_branch,
 }
