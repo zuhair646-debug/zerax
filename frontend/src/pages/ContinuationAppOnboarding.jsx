@@ -47,6 +47,19 @@ async function authedFetch(url, opts = {}) {
   });
 }
 
+// Static color classes per kind so Tailwind's JIT can find them at build time.
+const KIND_COLOR_CLASSES = {
+  sky:     { border: 'border-sky-400',     bg: 'bg-sky-500/15',     shadow: 'shadow-sky-500/10',     text: 'text-sky-300' },
+  cyan:    { border: 'border-cyan-400',    bg: 'bg-cyan-500/15',    shadow: 'shadow-cyan-500/10',    text: 'text-cyan-300' },
+  indigo:  { border: 'border-indigo-400',  bg: 'bg-indigo-500/15',  shadow: 'shadow-indigo-500/10',  text: 'text-indigo-300' },
+  emerald: { border: 'border-emerald-400', bg: 'bg-emerald-500/15', shadow: 'shadow-emerald-500/10', text: 'text-emerald-300' },
+  zinc:    { border: 'border-zinc-300',    bg: 'bg-zinc-500/15',    shadow: 'shadow-zinc-500/10',    text: 'text-zinc-300' },
+  violet:  { border: 'border-violet-400',  bg: 'bg-violet-500/15',  shadow: 'shadow-violet-500/10',  text: 'text-violet-300' },
+  amber:   { border: 'border-amber-400',   bg: 'bg-amber-500/15',   shadow: 'shadow-amber-500/10',   text: 'text-amber-300' },
+  rose:    { border: 'border-rose-400',    bg: 'bg-rose-500/15',    shadow: 'shadow-rose-500/10',    text: 'text-rose-300' },
+  fuchsia: { border: 'border-fuchsia-400', bg: 'bg-fuchsia-500/15', shadow: 'shadow-fuchsia-500/10', text: 'text-fuchsia-300' },
+};
+
 // Picker catalog mirrors the landing page so the user sees a familiar UI.
 const APP_KIND_OPTIONS = [
   { id: 'flutter', label: 'Flutter', desc: 'iOS + Android بكود واحد', icon: Layers, color: 'sky', platforms: ['ios', 'android'] },
@@ -71,17 +84,23 @@ const PLATFORM_LABELS = {
 function AppStackCard({ projectId, initialAppKind, onDone }) {
   const [selected, setSelected] = useState(initialAppKind || '');
   const [platforms, setPlatforms] = useState([]);
+  const [autoFilledFor, setAutoFilledFor] = useState(null);
   const [repoHint, setRepoHint] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Pre-fill recommended target platforms when stack picked.
+  // Pre-fill recommended target platforms ONCE when the user picks a new stack.
+  // We track `autoFilledFor` so that once the user has explicitly toggled
+  // platforms off, we don't snap them back when their array becomes empty.
   useEffect(() => {
+    if (!selected || selected === autoFilledFor) return;
     const k = APP_KIND_OPTIONS.find((x) => x.id === selected);
-    if (k && k.platforms.length && platforms.length === 0) {
+    if (k && k.platforms.length) {
       setPlatforms(k.platforms);
+    } else {
+      setPlatforms([]);
     }
-  // platforms intentionally omitted to avoid resetting when user toggles
-  }, [selected, platforms.length]);
+    setAutoFilledFor(selected);
+  }, [selected, autoFilledFor]);
 
   const togglePlatform = (p) => {
     setPlatforms((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]));
@@ -126,6 +145,7 @@ function AppStackCard({ projectId, initialAppKind, onDone }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-5" data-testid="app-kind-grid">
         {APP_KIND_OPTIONS.map((k) => {
           const isSel = selected === k.id;
+          const colors = KIND_COLOR_CLASSES[k.color] || KIND_COLOR_CLASSES.cyan;
           return (
             <button
               key={k.id}
@@ -133,10 +153,12 @@ function AppStackCard({ projectId, initialAppKind, onDone }) {
               data-testid={`stack-option-${k.id}`}
               className={cls(
                 'text-right px-3 py-2.5 rounded-lg border transition flex items-start gap-2',
-                isSel ? `border-${k.color}-400 bg-${k.color}-500/15 shadow-lg shadow-${k.color}-500/10` : 'border-white/10 bg-black/30 hover:bg-white/5',
+                isSel
+                  ? `${colors.border} ${colors.bg} shadow-lg ${colors.shadow}`
+                  : 'border-white/10 bg-black/30 hover:bg-white/5',
               )}
             >
-              <k.icon className={cls('w-4 h-4 mt-0.5 flex-shrink-0', isSel ? `text-${k.color}-300` : 'text-zinc-400')} />
+              <k.icon className={cls('w-4 h-4 mt-0.5 flex-shrink-0', isSel ? colors.text : 'text-zinc-400')} />
               <div className="flex-1 min-w-0">
                 <div className={cls('text-[11px] font-bold', isSel ? 'text-white' : 'text-zinc-300')}>{k.label}</div>
                 <div className="text-[9px] text-zinc-500 mt-0.5 truncate">{k.desc}</div>

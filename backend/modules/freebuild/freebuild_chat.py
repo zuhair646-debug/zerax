@@ -1631,12 +1631,17 @@ def make_freebuild_chat_router(db, get_current_user):
         electron_tauri, unity_game, unknown) or any custom string."""
         proj = await db.freebuild_projects.find_one(
             {"id": pid, "user_id": user["user_id"]},
-            {"_id": 0, "mode": 1, "project_kind": 1},
+            {"_id": 0, "mode": 1, "project_kind": 1, "continuation_setup": 1},
         )
         if not proj or proj.get("mode") != "continuation":
             raise HTTPException(status_code=400, detail="not a continuation project")
         if (proj.get("project_kind") or "site").strip().lower() != "app":
             raise HTTPException(status_code=400, detail="save-stack is for app projects only")
+        # Idempotency guard — a completed wizard must NEVER be silently rolled
+        # back to the stack step (would force re-signing consent and erase the
+        # 'ready' gate). Reject so the caller surfaces the conflict.
+        if (proj.get("continuation_setup") or {}).get("completed"):
+            raise HTTPException(status_code=409, detail="setup already completed — refusing to reset")
         app_kind = (payload.get("app_kind") or "").strip().lower()
         target_platforms = payload.get("target_platforms") or []  # ['ios','android','desktop','web']
         repo_url_hint = (payload.get("repo_url_hint") or "").strip()
@@ -1858,12 +1863,15 @@ def make_freebuild_chat_router(db, get_current_user):
 
     @router.delete("/project/{pid}/continuation/credentials/{key_name}")
     async def delete_continuation_credential(pid: str, key_name: str, user=Depends(get_current_user)):
-        """Revoke a saved credential (deletes ciphertext + meta)."""
+        """Revoke a saved credential (deletes ciphertext + meta).
+        Returns `revoked: True` only when the key actually existed."""
         proj = await db.freebuild_projects.find_one(
-            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1},
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "mode": 1, f"continuation_credentials_meta.{key_name}": 1},
         )
         if not proj or proj.get("mode") != "continuation":
             raise HTTPException(status_code=400, detail="not a continuation project")
+        existed = bool((proj.get("continuation_credentials_meta") or {}).get(key_name))
         await db.freebuild_projects.update_one(
             {"id": pid},
             {"$unset": {
@@ -1871,7 +1879,7 @@ def make_freebuild_chat_router(db, get_current_user):
                 f"continuation_credentials_meta.{key_name}": "",
             }, "$set": {"updated_at": _now()}},
         )
-        return {"ok": True, "key_name": key_name, "revoked": True}
+        return {"ok": True, "key_name": key_name, "revoked": existed}
 
     @router.post("/project/{pid}/continuation/setup/consent")
     async def sign_continuation_consent(pid: str, payload: dict, request: Request, user=Depends(get_current_user)):

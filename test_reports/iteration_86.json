@@ -1,0 +1,51 @@
+{
+  "summary": "Iter86 final integration audit — Backend regression suite 12/12 PASS on PRODUCTION (https://zenrex.ai) and baseline 9/9 PASS on PREVIEW. All security/idempotency fixes verified live: save-stack 409 on completed setup, save-extra 400 when wizard incomplete, DELETE returns revoked:true ONLY when key existed (false otherwise), cross-tenant 404, site backcompat preserved, /freebuild/continue-app and /freebuild/continue/app aliases both 200. Store providers catalog returns store + signing providers. URL backward-compat fully verified. Frontend wizard, however, did NOT render on PRODUCTION for a freshly created app project — selector data-testid='continuation-app-onboarding' returned 0 and screenshot shows site-workflow stages (Site Exploration / Full Diagnosis / 'Complete the site first') instead of the 4-step app wizard. iter85 confirmed the SAME wizard works end-to-end on PREVIEW with the same code. Most likely root cause: production frontend bundle is older than the backend (the new conditional render in FreeBuildChat.js line ~6204 + ContinuationAppOnboarding.jsx not yet shipped to zenrex.ai), OR a runtime error during the conditional dispatch on the production build.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "FreeBuildChat → app continuation render",
+        "issue": "On PRODUCTION (https://zenrex.ai), visiting /freebuild/chat/{pid} of a freshly-created app-kind project (metadata.project_kind='app', metadata.app_kind='flutter') does NOT render the new 4-step app wizard. Instead the page renders the SITE workflow (Site Exploration / Full Diagnosis / Maintenance Plan stages with 'Complete the site first' button). Backend GET /continuation/setup correctly returns project_kind='app' and state='stack' (verified by 12/12 backend tests), so the conditional render in FreeBuildChat.js is the suspect. Confirmed working on PREVIEW with same backend (iter85).",
+        "selector": "[data-testid='continuation-app-onboarding']",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "App wizard render on production",
+        "issue": "Possible bundle drift — production build at zenrex.ai may not include latest ContinuationAppOnboarding.jsx + FreeBuildChat.js changes. Backend is fully up-to-date (new endpoints all live and behave correctly).",
+        "affected_selectors": ["[data-testid='continuation-app-onboarding']", "[data-testid='app-stack-card']", "[data-testid='code-source-selector']", "[data-testid='open-store-credentials-btn']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_continuation_app_regressions_iter86.py",
+    "/app/test_reports/pytest/iter86_regressions.xml",
+    "/app/test_reports/pytest/iter86_baseline_on_preview.xml"
+  ],
+  "action_items": [
+    "Rebuild + redeploy the production frontend (zenrex.ai) so it bundles the new ContinuationAppOnboarding.jsx, StoreCredentialsModal.jsx, and the updated FreeBuildChat.js conditional render at line ~6204. Backend on prod is already correct.",
+    "After redeploy, re-run iter86 UI script — the backend regressions don't need a re-run; only the wizard render path on prod needs verification.",
+    "Optionally extend wait-for-wizard timeout in any UI test scripts to 12-15s (production cold-start on the first chat-page load is ~7-9s on zenrex.ai vs ~3s on preview)."
+  ],
+  "critical_code_review_comments": [
+    "Idempotency guard (save-stack 409 on completed setup) is correctly placed BEFORE the body parsing — verified live on production.",
+    "DELETE credentials/{key_name} now correctly returns revoked:false when the key never existed (regression test live-confirmed).",
+    "Cross-tenant isolation correctly returns 401/403 for unauthenticated and bogus-token requests — no project data leakage observed.",
+    "Site backcompat: site projects still default state='url' and save-stack on a site project correctly returns 400 — the new app flow does NOT break the existing site continuation flow."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_continuation_app_regressions_iter86.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 new regressions on prod + 9/9 iter85 baseline on preview)",
+    "frontend": "Partial — URL routing 100% (2/2 aliases return 200), wizard render UNVERIFIED on production (selectors not found; screenshot shows site workflow). Same wizard verified 12/13 on PREVIEW in iter85."
+  },
+  "test_credentials": "Production: admin@zenrex.ai / Zenrex@2026 (verified working — returns token). Preview: owner@zerax.com / owner123.",
+  "seed_data_creation": "Backend regression suite creates and cleans up TEST_iter86_app_* and TEST_iter86_site_* continuation projects per test (best-effort DELETE in finally blocks).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is GREEN on production. The ONLY remaining concern is the production frontend bundle. Once main agent confirms the frontend on zenrex.ai is rebuilt with the latest ContinuationAppOnboarding.jsx + FreeBuildChat.js, the UI flow should match preview's 12/13 result from iter85. Re-use /app/backend/tests/test_continuation_app_regressions_iter86.py with TEST_BASE_URL=https://zenrex.ai TEST_EMAIL=admin@zenrex.ai TEST_PASSWORD='Zenrex@2026' as the regression baseline for future iterations. The selector list to validate on production after redeploy: continuation-app-onboarding, app-stack-card, stack-option-flutter, platform-ios, platform-android, stack-confirm-btn, code-source-selector, source-card-{github,gitlab,bitbucket,azure_devops,gitea,other_git,expo_eas,codemagic,bitrise,github_actions,zip_upload}, source-confirm-btn, app-credential-capture, credential-input-GITHUB_TOKEN, validity-6m, credential-save-btn, app-consent-step, consent-clause-0..4, signature-name-input, consent-sign-btn, open-store-credentials-btn, store-credentials-modal, store-tab-stores, store-tab-signing.",
+  "rca of the issue": "Production backend has all new endpoints deployed and behaving correctly (verified by 12 fresh integration tests against https://zenrex.ai/api/freebuild-chat/*). The production FRONTEND, however, appears to be running an older bundle that still renders the site continuation workflow for app projects. Recommended fix: trigger a fresh production frontend build/deploy. Verify by browsing to /freebuild/chat/{any-app-pid} and checking for data-testid='continuation-app-onboarding' in the DOM — if present, the bundle is correct; if absent (as observed), the bundle is stale."
+}
