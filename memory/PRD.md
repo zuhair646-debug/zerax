@@ -1095,3 +1095,43 @@ A 5-step in-chat onboarding for `mode=continuation` projects that gates the Engi
 - (P2) Replace placeholder tutorial videos at `zenrex.ai/videos/...` with real recordings.
 - (P2) Triple-backup orchestrator (S3 snapshot + git branch + encrypted Mongo blob).
 - (P2) Nginx subdomain `sandbox.zenrex.ai/p/{pid}`.
+
+---
+
+## 🎯 Session: Continuation Tools + Preview Panel + Audit + Subdomain Prep
+**Date:** 2026-06-28 (late session)
+**Status:** ✅ SHIPPED to zenrex.ai
+
+### What was built
+1. **8 new continuation tools** registered in cortex_tools (total 39):
+   - `clone_remote_repo` (git clone with encrypted token, auto-snapshot first)
+   - `ftp_sync_pull` (lftp mirror with encrypted credentials)
+   - `create_snapshot` / `list_snapshots` / `restore_snapshot` (tar.gz + SHA-256)
+   - `list_sandbox_files` / `read_sandbox_file` / `propose_sandbox_change`
+   - Path-traversal protection on all file ops; token never logged.
+
+2. **Audit Log** (`continuation_audit.py` + `continuation_audit_logs` Mongo coll):
+   - Tamper-evident hash per entry. Auto-logged on clone/propose/restore.
+   - `GET /api/freebuild-chat/project/{pid}/continuation/audit` for legal review.
+
+3. **Preview endpoints**:
+   - `GET .../sandbox/files` + `GET .../sandbox/file?path=...`
+   - `GET .../snapshots` + `POST .../snapshots/restore`
+
+4. **Visual Preview Panel UI** — `ContinuationPreviewPanel.jsx` with 3 tabs (Files / Snapshots / Audit) toggled from the chat header.
+
+5. **Sandbox subdomain config** — `/app/deploy/nginx-sandbox-zenrex.conf` deployed to `/etc/nginx/sites-available/sandbox.zenrex.ai`. Auth via `auth_request` subrequest to `/api/freebuild-chat/continuation/sandbox/preview-auth`. **NOT activated yet** — needs DNS A-record + TLS cert.
+
+6. **Infrastructure**:
+   - `/opt/zerax/sandboxes/` created on prod + mounted into Docker container.
+   - `git` + `lftp` added to container's apt-get install command.
+
+### Production verified
+- `https://zenrex.ai/api/health` = healthy
+- `clone_remote_repo` E2E test with octocat/Hello-World public repo → SUCCESS
+- All new preview/audit/snapshot endpoints respond correctly on prod.
+
+### Still missing (P1, deferred to next session)
+- 🔘 OAuth flows (GitHub + Vercel) — needs OAuth Apps registered by owner
+- 🌐 `sandbox.zenrex.ai` DNS A-record + Let's Encrypt cert — owner step
+- 🎬 Real tutorial videos for providers

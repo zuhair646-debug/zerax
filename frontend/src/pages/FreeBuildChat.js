@@ -7,6 +7,7 @@ import ZenrexBrand from '../components/ZenrexBrand';
 import ConnectionHelpModal from '../components/ConnectionHelpModal';
 import StorageIndicator from '../components/StorageIndicator';
 import ContinuationOnboarding from './ContinuationOnboarding';
+import ContinuationPreviewPanel from './ContinuationPreviewPanel';
 import { EngineerAuditModal } from '../components/EngineerAuditModal';
 import { ConciergeWizardPanel } from '../components/ConciergeWizard';
 // UsageIndicator removed — duplicate of the credits pill, was confusing users.
@@ -4746,6 +4747,8 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   const handleContinuationSetupCompleted = useCallback(() => {
     setContinuationSetupDone(true);
   }, []);
+  // Preview panel toggle (only available after setup is done in continuation mode)
+  const [showContinuationPreview, setShowContinuationPreview] = useState(false);
   // Website-from-scratch mode — هذا اللي المستخدم طلب فيه:
   // إلغاء تبويبات "المعاينة الحية" و "المعتمدات" بالكامل، وخلي بس المحادثة + المراحل.
   // الـ studios والـ app modes تحافظ على تبويباتها (تحتاج المعاينة المرئية).
@@ -6195,6 +6198,24 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                 <ContinuationPaymentBanner
                   projectId={projectId}
                   onUnlocked={() => setProject((p) => p ? { ...p, continuation_unlocked: true } : p)}
+                />
+              )}
+              {/* 👁️ Sandbox preview / audit panel toggle */}
+              {isContinuationMode && continuationSetupDone === true && (
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <button
+                    onClick={() => setShowContinuationPreview((v) => !v)}
+                    data-testid="continuation-preview-toggle"
+                    className="px-3 py-1.5 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/30 text-[11px] font-bold text-fuchsia-200 hover:bg-fuchsia-500/20 flex items-center gap-1.5"
+                  >
+                    👁️ {showContinuationPreview ? 'إخفاء المعاينة' : 'معاينة الـ Sandbox + السجل'}
+                  </button>
+                </div>
+              )}
+              {isContinuationMode && continuationSetupDone === true && showContinuationPreview && (
+                <ContinuationPreviewPanel
+                  projectId={projectId}
+                  onClose={() => setShowContinuationPreview(false)}
                 />
               )}
               {/* Independence banner removed by UX request — actions surface

@@ -1775,6 +1775,60 @@ def make_freebuild_chat_router(db, get_current_user):
         logs = await fetch_audit(db, pid, limit=min(max(limit, 1), 500))
         return {"ok": True, "count": len(logs), "logs": logs}
 
+    @router.get("/continuation/sandbox/preview-auth")
+    async def sandbox_preview_auth(request: Request):
+        """Nginx auth_request subrequest. Validates that the JWT cookie belongs
+        to the owner of the project ID encoded in the original URL
+        (`/p/{pid}/...`). Returns 200 to allow, 401/403 to deny."""
+        import re
+        original = request.headers.get("X-Original-URI", "")
+        m = re.match(r"/p/([a-f0-9\-]{8,})/", original)
+        if not m:
+            raise HTTPException(status_code=400, detail="bad preview path")
+        pid = m.group(1)
+        # Extract JWT from cookie
+        cookie = request.cookies.get("zenrex_preview_token") or request.cookies.get("token") or ""
+        if not cookie:
+            raise HTTPException(status_code=401, detail="no auth cookie")
+        try:
+            import jwt
+            secret = os.environ.get("JWT_SECRET")
+            payload = jwt.decode(cookie, secret, algorithms=["HS256"])
+            uid = payload.get("user_id")
+        except Exception:
+            raise HTTPException(status_code=401, detail="bad token")
+        if not uid:
+            raise HTTPException(status_code=401, detail="no user_id in token")
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": uid, "mode": "continuation"},
+            {"_id": 0, "continuation_setup": 1},
+        )
+        if proj is None:
+            raise HTTPException(status_code=403, detail="not your project")
+        if not (proj.get("continuation_setup") or {}).get("completed"):
+            raise HTTPException(status_code=403, detail="setup incomplete")
+        return Response(status_code=200, headers={"X-User-Id": uid})
+
+    @router.post("/project/{pid}/continuation/sandbox/preview-link")
+    async def sandbox_create_preview_link(pid: str, user=Depends(get_current_user)):
+        """Issue a short-lived signed cookie URL the customer can click to
+        open `https://sandbox.zenrex.ai/p/{pid}/...` in a new tab."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"], "mode": "continuation"},
+            {"_id": 0, "continuation_setup": 1},
+        )
+        if proj is None:
+            raise HTTPException(status_code=404, detail="not found")
+        # Reuse the existing JWT — frontend will set it as cookie before redirect
+        sandbox_host = os.environ.get("SANDBOX_PREVIEW_HOST", "sandbox.zenrex.ai")
+        return {
+            "ok": True,
+            "preview_url": f"https://{sandbox_host}/p/{pid}/",
+            "host": sandbox_host,
+            "cookie_name": "zenrex_preview_token",
+            "instructions_ar": "افتح الرابط في تبويب جديد بعد ضبط الكوكي للنطاق الفرعي",
+        }
+
     @router.post("/projects/continuation/create")
     async def create_continuation_project(
         payload: ContinuationCreatePayload, user=Depends(get_current_user),
