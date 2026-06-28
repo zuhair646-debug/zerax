@@ -1191,3 +1191,17 @@ A 5-step in-chat onboarding for `mode=continuation` projects that gates the Engi
 
 **ملاحظة عن Stripe في dev:** الـ env المحلي عنده `STRIPE_API_KEY=sk_test_emergent` (placeholder). على `zenrex.ai` فيه مفتاح حقيقي، فالـ checkout الحقيقي بـ $150/شهر يشتغل تلقائياً هناك. الكود نفسه صحيح ١٠٠٪.
 
+---
+
+## 🧪 2026-02-06 — E2E Real-Code Test + Snapshot Collision Fix
+
+طلب العميل اختبار كامل من البداية للنهاية على كود `zenrex.ai` الحقيقي. نفّذنا 12 خطوة (نسخ 119 ملف React، قراءة، تقرير تقني، تعديل، snapshot، paywall، lock/unlock، rollback، audit verify) — كلها PASSED.
+
+**بق إنتاجي حرج اكتُشف وأُصلح خلال نفس الاختبار:**
+- `handle_create_snapshot` كان يستخدم `%Y%m%dT%H%M%SZ` (دقة الثانية). أداتان تشتغلان في نفس الثانية ينتجان `snap_id` متطابق → الأرشيف الثاني يكتب فوق الأول → **العميل يفقد نقطة الـ rollback الأصلية**.
+- الإصلاح: timestamp بدقة الميلي ثانية + suffix uniqueness لو حصل تصادم نادر.
+
+**التقرير التقني للموقع (دقّق يدوياً):** 119 ملف React، 2,655 KB إجمالي، 5 ملفات > 70KB، LandingPage 28,648 حرف، 12 test ID، RTL-aware، قسم واحد. التقرير الذي أنتجه الـ Engineer Manager متطابق ١٠٠٪ مع القياس اليدوي المستقل.
+
+**ملف الاختبار الدائم:** `/app/backend/tests/test_continuation_e2e_real.py`
+

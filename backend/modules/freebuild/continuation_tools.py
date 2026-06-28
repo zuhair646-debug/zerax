@@ -118,9 +118,20 @@ async def handle_create_snapshot(args: Dict[str, Any], ctx: Any = None) -> Dict[
         return {"ok": False, "error": "project_id required"}
     sandbox = _ensure_sandbox(pid)
     snap_dir = sandbox / SNAPSHOT_DIR_NAME
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    snap_id = f"{ts}_{label}"
+    # Use millisecond precision + a uniqueness suffix to guarantee no two
+    # snapshots collide if they happen in the same second (which is common
+    # when the AI fires multiple writes back-to-back). Loops up to 1000x
+    # in the absurd case that even millisecond-level collisions happen.
+    now = datetime.now(timezone.utc)
+    base_ts = now.strftime("%Y%m%dT%H%M%S")
+    ms = f"{now.microsecond // 1000:03d}"
+    snap_id = f"{base_ts}_{ms}_{label}"
     archive_path = snap_dir / f"{snap_id}.tar.gz"
+    collision = 0
+    while archive_path.exists() and collision < 1000:
+        collision += 1
+        snap_id = f"{base_ts}_{ms}_{label}_{collision}"
+        archive_path = snap_dir / f"{snap_id}.tar.gz"
     # Build tarball
     with tarfile.open(archive_path, "w:gz") as tar:
         for entry in sandbox.iterdir():
