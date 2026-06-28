@@ -202,6 +202,11 @@ async def handle_clone_remote_repo(args: Dict[str, Any], ctx: Any = None) -> Dic
         from server import db as _db  # type: ignore
         db = _db
 
+    # Guard: tool refuses to run outside continuation-mode projects
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
+
     token = await _load_cred(db, pid, "GITHUB_TOKEN") or await _load_cred(db, pid, "GIT_TOKEN")
     if not token:
         return {"ok": False, "error": "no GITHUB_TOKEN saved for this project"}
@@ -272,6 +277,21 @@ async def _audit(ctx, db, pid, action, **kw):
         logger.exception("[continuation_tools] audit failed (non-fatal)")
 
 
+async def _guard_continuation_mode(db, pid: str) -> Optional[str]:
+    """Defensive check — return error string if pid isn't a continuation
+    project, None otherwise. Tools refuse to run on regular website/app
+    projects so the AI engineer can't accidentally clone code into a
+    project that wasn't set up via the onboarding wizard."""
+    if not pid:
+        return "project_id required"
+    proj = await db.freebuild_projects.find_one({"id": pid}, {"_id": 0, "mode": 1})
+    if proj is None:
+        return "project not found"
+    if proj.get("mode") != "continuation":
+        return "this tool only works on continuation-mode projects"
+    return None
+
+
 # ────────────── FTP sync ──────────────
 async def handle_ftp_sync_pull(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     """Mirror files from an FTP/SFTP host into the sandbox using lftp.
@@ -285,6 +305,10 @@ async def handle_ftp_sync_pull(args: Dict[str, Any], ctx: Any = None) -> Dict[st
     if db is None:
         from server import db as _db  # type: ignore
         db = _db
+
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
 
     host = await _load_cred(db, pid, "FTP_HOST")
     user = await _load_cred(db, pid, "FTP_USERNAME")
@@ -386,6 +410,18 @@ async def handle_propose_sandbox_change(args: Dict[str, Any], ctx: Any = None) -
     new_content = args.get("new_content")
     if not pid or not rel or new_content is None:
         return {"ok": False, "error": "project_id, path, new_content required"}
+    # Guard: only allowed inside continuation mode
+    db_check = getattr(ctx, "db", None) if ctx else None
+    if db_check is None:
+        try:
+            from server import db as _db  # type: ignore
+            db_check = _db
+        except Exception:
+            db_check = None
+    if db_check is not None:
+        err = await _guard_continuation_mode(db_check, pid)
+        if err:
+            return {"ok": False, "error": err}
     sandbox = _ensure_sandbox(pid)
     try:
         p = _safe_path(sandbox, rel)
