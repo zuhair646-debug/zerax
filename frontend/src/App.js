@@ -224,6 +224,8 @@ function App() {
           <Route path="/freebuild/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/freebuild/continue" element={<ProtectedRoute><FreeBuildContinue /></ProtectedRoute>} />
           <Route path="/freebuild/continue-app" element={<ProtectedRoute><FreeBuildContinueApp /></ProtectedRoute>} />
+          {/* Backward-compat alias — older links with slash instead of hyphen */}
+          <Route path="/freebuild/continue/app" element={<ProtectedRoute><FreeBuildContinueApp /></ProtectedRoute>} />
           <Route path="/native/new" element={<ProtectedRoute><TermsGate section="apps"><NativeAppNew /></TermsGate></ProtectedRoute>} />
           <Route path="/native/convert" element={<ProtectedRoute><SiteToAppWizard /></ProtectedRoute>} />
           <Route path="/native/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />

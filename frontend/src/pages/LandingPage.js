@@ -270,7 +270,7 @@ const LandingPage = ({ user }) => {
           accent: '#3b82f6',
           bgImage: 'https://images.unsplash.com/photo-1542831371-29b0f74f9713?auto=format&fit=crop&w=800&q=70',
           badge: 'جديد',
-          action: () => goOrRegister('/app-builder?mode=continue'),
+          action: () => goOrRegister('/freebuild/continue-app'),
         },
         {
           type: 'web-to-app',
