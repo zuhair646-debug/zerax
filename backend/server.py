@@ -3858,6 +3858,13 @@ try:
         logging.getLogger(__name__).info("Owner Engineer Portal registered")
     except Exception as _oe_e:
         logging.getLogger(__name__).warning(f"Owner Engineer registration failed: {_oe_e}", exc_info=True)
+    # 🆕 Continuation Help — provider-specific FAQ + escalate-to-engineer endpoint
+    try:
+        from modules.freebuild.continuation_help import router as _help_router
+        _fbc_router.include_router(_help_router)
+        logging.getLogger(__name__).info("Continuation Help module registered")
+    except Exception as _ch_e:
+        logging.getLogger(__name__).warning(f"Continuation Help registration failed: {_ch_e}", exc_info=True)
     api_router.include_router(_fbc_router)
     logging.getLogger(__name__).info("FreeBuild Chat module registered")
 except Exception as _fbce:

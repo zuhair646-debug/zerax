@@ -4749,6 +4749,20 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   }, []);
   // Preview panel toggle (only available after setup is done in continuation mode)
   const [showContinuationPreview, setShowContinuationPreview] = useState(false);
+  // Help-session state — when active, the chat input is unlocked even though
+  // the wizard isn't complete, so the customer can converse with the AI about
+  // key extraction before resuming the wizard.
+  const [continuationHelpActive, setContinuationHelpActive] = useState(false);
+  useEffect(() => {
+    const start = () => setContinuationHelpActive(true);
+    const end = () => setContinuationHelpActive(false);
+    window.addEventListener('zenrex:help-session-started', start);
+    window.addEventListener('zenrex:help-session-ended', end);
+    return () => {
+      window.removeEventListener('zenrex:help-session-started', start);
+      window.removeEventListener('zenrex:help-session-ended', end);
+    };
+  }, []);
   // Website-from-scratch mode — هذا اللي المستخدم طلب فيه:
   // إلغاء تبويبات "المعاينة الحية" و "المعتمدات" بالكامل، وخلي بس المحادثة + المراحل.
   // الـ studios والـ app modes تحافظ على تبويباتها (تحتاج المعاينة المرئية).
@@ -6264,7 +6278,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                 </div>
               )}
 
-              {!(isContinuationMode && continuationSetupDone === false) && messages.map((m, i) => (
+              {!(isContinuationMode && continuationSetupDone === false && !continuationHelpActive) && messages.map((m, i) => (
                 m.role === 'engineer_offer' ? (
                   <div key={`offer-${i}-${m.timestamp}`} className="flex justify-start" data-testid={`engineer-offer-${i}`}>
                     <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-gradient-to-br from-purple-500/15 to-fuchsia-500/10 border border-purple-400/40 text-purple-100 shadow-lg shadow-purple-500/10">
@@ -7506,7 +7520,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
             <div className="flex gap-2">
               {/* When out of credits, the entire input bar is replaced by the
                   Recharge banner — typing is fully disabled across the chat. */}
-              {(isContinuationMode && continuationSetupDone === false) ? (
+              {(isContinuationMode && continuationSetupDone === false && !continuationHelpActive) ? (
                 <div className="flex-1 px-4 py-3 rounded-xl bg-fuchsia-500/10 border border-fuchsia-500/30 text-center text-xs text-fuchsia-200" data-testid="continuation-input-locked">
                   🔐 أكمل خطوات الإعداد الآمن في الأعلى قبل ما تتكلم مع المهندس
                 </div>

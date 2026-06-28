@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import {
   Globe, Loader2, ShieldCheck, Sparkles, CheckCircle2,
   AlertTriangle, KeyRound, PlayCircle, ArrowRight, Lock,
-  Scan, FileSignature, ExternalLink,
+  Scan, FileSignature, ExternalLink, LifeBuoy, MessageCircle, X,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -287,6 +287,7 @@ function CredentialCapture({ projectId, provider, onDone, onBack }) {
   const [validity, setValidity] = useState(6);
   const [busy, setBusy] = useState(false);
   const [savedMasks, setSavedMasks] = useState({});
+  const [showHelp, setShowHelp] = useState(false);
 
   const saveAll = async () => {
     for (const k of keys) {
@@ -369,6 +370,25 @@ function CredentialCapture({ projectId, provider, onDone, onBack }) {
         </div>
       </div>
 
+      {/* 🆘 Help button — opens FAQ + escalate-to-engineer modal */}
+      <div className="mb-3 -mt-1">
+        <button
+          onClick={() => setShowHelp(true)}
+          data-testid="open-help-btn"
+          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-[12px] font-bold text-amber-100 flex items-center justify-center gap-2"
+        >
+          <LifeBuoy className="w-4 h-4" />
+          أواجه مشكلة في الحصول على المفتاح — ساعدني
+        </button>
+      </div>
+      {showHelp && (
+        <HelpModal
+          projectId={projectId}
+          provider={provider}
+          onClose={() => setShowHelp(false)}
+        />
+      )}
+
       {/* Paste fields */}
       <div className="space-y-2.5 mb-4">
         {keys.map((k) => (
@@ -423,6 +443,119 @@ function CredentialCapture({ projectId, provider, onDone, onBack }) {
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
         احفظ بتشفير AES-128
       </button>
+    </div>
+  );
+}
+
+// ─── Help modal (provider-specific FAQ + escalate-to-engineer) ────────
+function HelpModal({ projectId, provider, onClose }) {
+  const [help, setHelp] = useState(null);
+  const [issue, setIssue] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${API}/api/freebuild-chat/continuation/help/${provider.id}`);
+        const d = await r.json();
+        setHelp(d);
+      } catch { setHelp({ faq: [] }); }
+    })();
+  }, [provider.id]);
+
+  const escalate = async () => {
+    setBusy(true);
+    try {
+      const r = await authedFetch(`${API}/api/freebuild-chat/continuation/help/escalate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          project_id: projectId,
+          provider_id: provider.id,
+          issue: issue.trim(),
+        }),
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error();
+      toast.success('✅ المهندس مستعد — اكتب رسالتك في الشات تحت');
+      onClose();
+      // Tell the parent wizard the chat is now unlocked for help
+      window.dispatchEvent(new CustomEvent('zenrex:help-session-started', {
+        detail: { projectId, providerId: provider.id },
+      }));
+    } catch {
+      toast.error('فشل فتح الجلسة');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div data-testid="help-modal" className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} dir="rtl" className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl bg-gradient-to-br from-fuchsia-950 via-rose-950 to-black border border-fuchsia-500/40 p-5">
+        <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/10">
+          <LifeBuoy className="w-6 h-6 text-amber-300" />
+          <div className="flex-1">
+            <h3 className="text-base font-black text-fuchsia-100">{help?.title_ar || 'مساعدة سريعة'}</h3>
+            <p className="text-[10px] text-fuchsia-300/70">{provider.label_ar}</p>
+          </div>
+          <button onClick={onClose} data-testid="help-modal-close" className="text-zinc-400 hover:text-fuchsia-300">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {help?.direct_url && (
+          <a
+            href={help.direct_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="help-direct-url"
+            className="block mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 group"
+          >
+            <div className="flex items-center gap-2">
+              <ExternalLink className="w-4 h-4 text-emerald-300 group-hover:rotate-12 transition" />
+              <span className="text-xs font-bold text-emerald-100">افتح صفحة المفتاح مباشرة</span>
+            </div>
+            <div className="text-[10px] text-emerald-300/70 font-mono mt-1 truncate">{help.direct_url}</div>
+          </a>
+        )}
+
+        {help?.faq?.length > 0 && (
+          <div className="space-y-2 mb-4">
+            <div className="text-[10px] font-black text-amber-200 mb-1">❓ مشاكل شائعة وحلولها</div>
+            {help.faq.map((f, i) => (
+              <details key={i} className="rounded-lg bg-black/30 border border-white/5 px-3 py-2 group">
+                <summary className="text-[11px] font-bold text-fuchsia-100 cursor-pointer hover:text-fuchsia-200 list-none flex items-start gap-2">
+                  <span className="text-amber-300 shrink-0 mt-0.5">›</span>
+                  <span>{f.q}</span>
+                </summary>
+                <div className="mt-2 pt-2 border-t border-white/5 text-[11px] text-zinc-300 leading-relaxed pr-4">{f.a}</div>
+              </details>
+            ))}
+          </div>
+        )}
+
+        <div className="rounded-xl bg-indigo-500/10 border border-indigo-500/30 p-3 mb-3">
+          <div className="text-[11px] font-bold text-indigo-100 mb-2 flex items-center gap-1.5">
+            <MessageCircle className="w-3.5 h-3.5" /> ولا حصلت إجابة؟ كلّم المهندس مباشرة
+          </div>
+          <textarea
+            placeholder="اكتب وصف مشكلتك (مثلاً: 'لما ضغطت Generate ما طلع لي شي' أو 'مش لاقي الـ Scopes')"
+            value={issue}
+            onChange={(e) => setIssue(e.target.value)}
+            rows={3}
+            data-testid="help-issue-input"
+            className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/10 text-xs focus:border-indigo-400/50 focus:outline-none resize-none"
+          />
+        </div>
+
+        <button
+          onClick={escalate}
+          disabled={busy}
+          data-testid="help-escalate-btn"
+          className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 font-black text-sm text-white disabled:opacity-40 flex items-center justify-center gap-2"
+        >
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+          افتح جلسة مساعدة مع المهندس
+        </button>
+      </div>
     </div>
   );
 }
