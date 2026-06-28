@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>GitLab — Zenrex Tutorial</title>
+<style>
+:root {
+  --brand: #FC6D26;
+  --accent: #E24329;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body {
+  font-family: -apple-system, "Segoe UI", "Cairo", "Tajawal", sans-serif;
+  background: radial-gradient(circle at 30% 20%, #1a0b1a, #06030a);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+/* Watermark — top-left, non-intrusive */
+.wm {
+  position: absolute; top: 12px; left: 14px;
+  font-size: 11px; font-weight: 800; color: rgba(255,255,255,0.5);
+  letter-spacing: 1px; user-select: none; pointer-events: none;
+  z-index: 50;
+}
+.wm::before {
+  content: '⚡'; margin-inline-end: 4px;
+  color: #f0abfc;
+}
+/* Brand badge — top-right */
+.brand-badge {
+  position: absolute; top: 10px; right: 14px;
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 999px; padding: 4px 12px;
+  font-size: 11px; font-weight: 700;
+  backdrop-filter: blur(8px);
+}
+.brand-badge .ico { font-size: 16px; }
+/* Stage */
+.stage {
+  width: 92%; max-width: 720px;
+  aspect-ratio: 16 / 9;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.slide {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  opacity: 0;
+  animation: cycle 18s infinite;
+}
+.slide:nth-child(1) { animation-delay: 0s; }
+.slide:nth-child(2) { animation-delay: 6s; }
+.slide:nth-child(3) { animation-delay: 12s; }
+@keyframes cycle {
+  0%, 1%   { opacity: 0; transform: translateY(12px) scale(0.98); }
+  4%, 30%  { opacity: 1; transform: translateY(0) scale(1); }
+  33%, 100%{ opacity: 0; transform: translateY(-12px) scale(1.02); }
+}
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--brand);
+  color: var(--accent);
+  font-size: 28px; font-weight: 900;
+  border: 3px solid rgba(255,255,255,0.2);
+  margin-bottom: 18px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.step-ar {
+  font-size: 24px; font-weight: 900; color: #fff;
+  margin-bottom: 8px; padding: 0 16px;
+  line-height: 1.4;
+}
+.step-en {
+  font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.65);
+  direction: ltr; font-family: -apple-system, "Segoe UI", sans-serif;
+  margin-bottom: 16px; padding: 0 16px;
+}
+.step-detail {
+  display: inline-block;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 8px 18px; border-radius: 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px; color: #f0abfc;
+  direction: ltr;
+}
+/* Progress dots */
+.dots {
+  position: absolute; bottom: 14px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; gap: 8px;
+  z-index: 30;
+}
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  transition: background 0.3s;
+}
+.dot.active { background: #f0abfc; }
+.dot:nth-child(1) { animation: dot1 18s infinite; }
+.dot:nth-child(2) { animation: dot2 18s infinite; }
+.dot:nth-child(3) { animation: dot3 18s infinite; }
+@keyframes dot1 { 0%, 33% { background: #f0abfc; } 34%, 100% { background: rgba(255,255,255,0.2); } }
+@keyframes dot2 { 0%, 33% { background: rgba(255,255,255,0.2); } 34%, 66% { background: #f0abfc; } 67%, 100% { background: rgba(255,255,255,0.2); } }
+@keyframes dot3 { 0%, 66% { background: rgba(255,255,255,0.2); } 67%, 100% { background: #f0abfc; } }
+/* Animated browser-window mockup behind each slide */
+.browser {
+  position: absolute; top: 12%; left: 8%; right: 8%; bottom: 30%;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 1;
+}
+.browser::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 22px;
+  background: rgba(255,255,255,0.04);
+  border-top-left-radius: 12px; border-top-right-radius: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.browser::after {
+  content: '○ ○ ○';
+  position: absolute; top: 4px; left: 8px;
+  font-size: 9px; color: rgba(255,255,255,0.3); letter-spacing: 4px;
+}
+.url-bar {
+  position: absolute; top: 4px; left: 60px; right: 12px;
+  height: 14px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 7px;
+  font-size: 9px; color: rgba(255,255,255,0.5);
+  font-family: ui-monospace, monospace;
+  display: flex; align-items: center; padding: 0 8px;
+  direction: ltr;
+}
+.slide > * { position: relative; z-index: 2; }
+</style>
+</head>
+<body>
+<div class="wm">ZENREX</div>
+<div class="brand-badge">
+  <span class="ico">🦊</span>
+  <span>GitLab</span>
+</div>
+
+<div class="stage">
+  <div class="browser">
+    <div class="url-bar">gitlab.com/-/profile/personal_access_tokens</div>
+  </div>
+
+  <div class="slide">
+    <div class="step-num">1</div>
+    <div class="step-ar">سجّل الدخول لـ GitLab</div>
+    <div class="step-en">Sign in to GitLab</div>
+    <div class="step-detail">gitlab.com → Sign in</div>
+  </div>
+
+  <div class="slide">
+    <div class="step-num">2</div>
+    <div class="step-ar">Avatar → Edit profile → Access Tokens</div>
+    <div class="step-en">Avatar → Edit profile → Access Tokens</div>
+    <div class="step-detail">Top-right avatar menu</div>
+  </div>
+
+  <div class="slide">
+    <div class="step-num">3</div>
+    <div class="step-ar">Add new token + اختر api, read_repository, write_repository</div>
+    <div class="step-en">Add token + select api, read_repository, write_repository</div>
+    <div class="step-detail">Set expiry: 6 months</div>
+  </div>
+
+  <div class="dots">
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+  </div>
+</div>
+</body>
+</html>

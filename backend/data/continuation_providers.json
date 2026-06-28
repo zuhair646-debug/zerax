@@ -6,9 +6,11 @@
       "label_en": "GitHub",
       "logo_emoji": "🐙",
       "category": "git",
-      "credential_keys": ["GITHUB_TOKEN"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/github-token-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/github-token-en.mp4",
+      "credential_keys": [
+        "GITHUB_TOKEN"
+      ],
+      "tutorial_video_ar": "/static/tutorials/github.html",
+      "tutorial_video_en": "/static/tutorials/github.html",
       "instructions_ar": "1) ادخل github.com/settings/tokens\n2) اضغط 'Generate new token (classic)'\n3) اختر صلاحية 'repo' كاملة\n4) انسخ التوكن (يبدأ بـ ghp_)",
       "instructions_en": "1) Visit github.com/settings/tokens\n2) Click 'Generate new token (classic)'\n3) Select 'repo' scope\n4) Copy the token (starts with ghp_)",
       "where_to_get_url": "https://github.com/settings/tokens"
@@ -19,9 +21,11 @@
       "label_en": "GitLab",
       "logo_emoji": "🦊",
       "category": "git",
-      "credential_keys": ["GITLAB_TOKEN"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/gitlab-token-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/gitlab-token-en.mp4",
+      "credential_keys": [
+        "GITLAB_TOKEN"
+      ],
+      "tutorial_video_ar": "/static/tutorials/gitlab.html",
+      "tutorial_video_en": "/static/tutorials/gitlab.html",
       "instructions_ar": "1) ادخل gitlab.com/-/user_settings/personal_access_tokens\n2) اعطه اسم + اختر صلاحية 'read_repository, write_repository'\n3) اضغط 'Create personal access token'\n4) انسخ التوكن",
       "instructions_en": "1) Visit gitlab.com/-/user_settings/personal_access_tokens\n2) Name it + select 'read_repository, write_repository'\n3) Click 'Create personal access token'\n4) Copy the token",
       "where_to_get_url": "https://gitlab.com/-/user_settings/personal_access_tokens"
@@ -32,9 +36,12 @@
       "label_en": "Bitbucket",
       "logo_emoji": "🪣",
       "category": "git",
-      "credential_keys": ["BITBUCKET_USERNAME", "BITBUCKET_APP_PASSWORD"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/bitbucket-token-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/bitbucket-token-en.mp4",
+      "credential_keys": [
+        "BITBUCKET_USERNAME",
+        "BITBUCKET_APP_PASSWORD"
+      ],
+      "tutorial_video_ar": "/static/tutorials/bitbucket.html",
+      "tutorial_video_en": "/static/tutorials/bitbucket.html",
       "instructions_ar": "1) ادخل bitbucket.org/account/settings/app-passwords/\n2) اضغط 'Create app password'\n3) اختر صلاحيات 'Repositories: Read + Write'\n4) انسخ الباسورد فوراً (ما يظهر مرة ثانية)",
       "instructions_en": "1) Visit bitbucket.org/account/settings/app-passwords/\n2) Click 'Create app password'\n3) Select 'Repositories: Read + Write'\n4) Copy immediately (won't show again)",
       "where_to_get_url": "https://bitbucket.org/account/settings/app-passwords/"
@@ -45,9 +52,11 @@
       "label_en": "Azure DevOps",
       "logo_emoji": "☁️",
       "category": "git",
-      "credential_keys": ["AZURE_PAT"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/azure-pat-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/azure-pat-en.mp4",
+      "credential_keys": [
+        "AZURE_PAT"
+      ],
+      "tutorial_video_ar": "/static/tutorials/azure_devops.html",
+      "tutorial_video_en": "/static/tutorials/azure_devops.html",
       "instructions_ar": "1) ادخل dev.azure.com → User Settings → Personal Access Tokens\n2) اضغط 'New Token' مع صلاحية Code (Full)\n3) انسخ التوكن",
       "instructions_en": "1) Visit dev.azure.com → User Settings → Personal Access Tokens\n2) Click 'New Token' with Code (Full) scope\n3) Copy the token",
       "where_to_get_url": "https://dev.azure.com"
@@ -58,9 +67,12 @@
       "label_en": "Gitea / Codeberg",
       "logo_emoji": "🍵",
       "category": "git",
-      "credential_keys": ["GITEA_TOKEN", "GITEA_HOST"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/gitea-token-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/gitea-token-en.mp4",
+      "credential_keys": [
+        "GITEA_TOKEN",
+        "GITEA_HOST"
+      ],
+      "tutorial_video_ar": "/static/tutorials/gitea.html",
+      "tutorial_video_en": "/static/tutorials/gitea.html",
       "instructions_ar": "1) ادخل user/settings/applications على سيرفر Gitea\n2) Generate New Token مع صلاحية write:repository\n3) انسخ التوكن + شارك URL السيرفر",
       "instructions_en": "1) Visit user/settings/applications on your Gitea server\n2) Generate New Token with write:repository scope\n3) Copy token + share server URL",
       "where_to_get_url": "https://codeberg.org/user/settings/applications"
@@ -71,10 +83,15 @@
       "label_en": "Other Git provider / Self-hosted",
       "logo_emoji": "🔗",
       "category": "git",
-      "credential_keys": ["CUSTOM_GIT_URL", "CUSTOM_GIT_TOKEN"],
+      "credential_keys": [
+        "CUSTOM_GIT_URL",
+        "CUSTOM_GIT_TOKEN"
+      ],
       "instructions_ar": "شارك رابط المستودع — الذكاء يدرسه ويقترح طريقة الوصول الصحيحة.",
       "instructions_en": "Share your repo URL — the AI will research it and suggest the right access method.",
-      "is_custom": true
+      "is_custom": true,
+      "tutorial_video_ar": "/static/tutorials/other_git.html",
+      "tutorial_video_en": "/static/tutorials/other_git.html"
     }
   ],
   "hosting_providers": [
@@ -84,9 +101,11 @@
       "label_en": "Vercel",
       "logo_emoji": "▲",
       "category": "modern",
-      "credential_keys": ["VERCEL_TOKEN"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/vercel-token-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/vercel-token-en.mp4",
+      "credential_keys": [
+        "VERCEL_TOKEN"
+      ],
+      "tutorial_video_ar": "/static/tutorials/vercel.html",
+      "tutorial_video_en": "/static/tutorials/vercel.html",
       "instructions_ar": "1) ادخل vercel.com/account/tokens\n2) Create Token → اعطه اسم + Scope = Full Account\n3) انسخ التوكن",
       "instructions_en": "1) Visit vercel.com/account/tokens\n2) Create Token → name it + Scope = Full Account\n3) Copy the token",
       "where_to_get_url": "https://vercel.com/account/tokens"
@@ -97,9 +116,11 @@
       "label_en": "Netlify",
       "logo_emoji": "🌐",
       "category": "modern",
-      "credential_keys": ["NETLIFY_TOKEN"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/netlify-token-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/netlify-token-en.mp4",
+      "credential_keys": [
+        "NETLIFY_TOKEN"
+      ],
+      "tutorial_video_ar": "/static/tutorials/netlify.html",
+      "tutorial_video_en": "/static/tutorials/netlify.html",
       "instructions_ar": "1) ادخل app.netlify.com/user/applications\n2) New access token → انسخ التوكن",
       "instructions_en": "1) Visit app.netlify.com/user/applications\n2) New access token → copy it",
       "where_to_get_url": "https://app.netlify.com/user/applications"
@@ -110,9 +131,12 @@
       "label_en": "Cloudflare Pages",
       "logo_emoji": "🟧",
       "category": "modern",
-      "credential_keys": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/cloudflare-token-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/cloudflare-token-en.mp4",
+      "credential_keys": [
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_ACCOUNT_ID"
+      ],
+      "tutorial_video_ar": "/static/tutorials/cloudflare_pages.html",
+      "tutorial_video_en": "/static/tutorials/cloudflare_pages.html",
       "instructions_ar": "1) ادخل dash.cloudflare.com/profile/api-tokens\n2) Create Token → استخدم template 'Edit Cloudflare Workers'\n3) انسخ التوكن + Account ID من overview",
       "instructions_en": "1) Visit dash.cloudflare.com/profile/api-tokens\n2) Create Token → use 'Edit Cloudflare Workers' template\n3) Copy token + Account ID from overview",
       "where_to_get_url": "https://dash.cloudflare.com/profile/api-tokens"
@@ -123,9 +147,13 @@
       "label_en": "Hetzner (VPS)",
       "logo_emoji": "🟥",
       "category": "vps",
-      "credential_keys": ["SSH_HOST", "SSH_USERNAME", "SSH_PRIVATE_KEY"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/hetzner-ssh-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/hetzner-ssh-en.mp4",
+      "credential_keys": [
+        "SSH_HOST",
+        "SSH_USERNAME",
+        "SSH_PRIVATE_KEY"
+      ],
+      "tutorial_video_ar": "/static/tutorials/hetzner.html",
+      "tutorial_video_en": "/static/tutorials/hetzner.html",
       "instructions_ar": "1) من Hetzner Cloud Console → Servers → اختر السيرفر → ستجد IP\n2) المستخدم عادة 'root'\n3) شارك Private SSH Key اللي أضفته عند الإنشاء",
       "instructions_en": "1) From Hetzner Cloud Console → Servers → pick server → find IP\n2) User usually 'root'\n3) Share the Private SSH Key you added at creation",
       "where_to_get_url": "https://console.hetzner.cloud"
@@ -136,9 +164,13 @@
       "label_en": "DigitalOcean",
       "logo_emoji": "🌊",
       "category": "vps",
-      "credential_keys": ["SSH_HOST", "SSH_USERNAME", "SSH_PRIVATE_KEY"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/digitalocean-ssh-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/digitalocean-ssh-en.mp4",
+      "credential_keys": [
+        "SSH_HOST",
+        "SSH_USERNAME",
+        "SSH_PRIVATE_KEY"
+      ],
+      "tutorial_video_ar": "/static/tutorials/digitalocean.html",
+      "tutorial_video_en": "/static/tutorials/digitalocean.html",
       "instructions_ar": "1) ادخل cloud.digitalocean.com/droplets → اختر droplet\n2) انسخ IPv4 + المستخدم 'root'\n3) Private key اللي اخترته وقت الإنشاء",
       "instructions_en": "1) Visit cloud.digitalocean.com/droplets → pick droplet\n2) Copy IPv4 + user 'root'\n3) Private key chosen at creation time",
       "where_to_get_url": "https://cloud.digitalocean.com"
@@ -149,9 +181,13 @@
       "label_en": "AWS EC2",
       "logo_emoji": "🟠",
       "category": "vps",
-      "credential_keys": ["SSH_HOST", "SSH_USERNAME", "SSH_PRIVATE_KEY"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/aws-ec2-ssh-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/aws-ec2-ssh-en.mp4",
+      "credential_keys": [
+        "SSH_HOST",
+        "SSH_USERNAME",
+        "SSH_PRIVATE_KEY"
+      ],
+      "tutorial_video_ar": "/static/tutorials/aws_ec2.html",
+      "tutorial_video_en": "/static/tutorials/aws_ec2.html",
       "instructions_ar": "1) AWS Console → EC2 → اختر Instance → Public IPv4 + User (ubuntu/ec2-user)\n2) شارك .pem file اللي حمّلته وقت الإنشاء",
       "instructions_en": "1) AWS Console → EC2 → pick Instance → Public IPv4 + User (ubuntu/ec2-user)\n2) Share the .pem file downloaded at creation",
       "where_to_get_url": "https://console.aws.amazon.com/ec2"
@@ -162,9 +198,14 @@
       "label_en": "Hostinger (Shared/cPanel)",
       "logo_emoji": "🟪",
       "category": "shared",
-      "credential_keys": ["FTP_HOST", "FTP_USERNAME", "FTP_PASSWORD", "FTP_PORT"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/hostinger-ftp-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/hostinger-ftp-en.mp4",
+      "credential_keys": [
+        "FTP_HOST",
+        "FTP_USERNAME",
+        "FTP_PASSWORD",
+        "FTP_PORT"
+      ],
+      "tutorial_video_ar": "/static/tutorials/hostinger.html",
+      "tutorial_video_en": "/static/tutorials/hostinger.html",
       "instructions_ar": "1) Hostinger Panel → Files → FTP Accounts\n2) أنشئ حساب FTP جديد + احفظ Host/User/Password\n3) Port عادة 21 (FTP) أو 22 (SFTP)",
       "instructions_en": "1) Hostinger Panel → Files → FTP Accounts\n2) Create new FTP account + save Host/User/Password\n3) Port usually 21 (FTP) or 22 (SFTP)",
       "where_to_get_url": "https://hpanel.hostinger.com"
@@ -175,9 +216,13 @@
       "label_en": "GoDaddy",
       "logo_emoji": "🟢",
       "category": "shared",
-      "credential_keys": ["FTP_HOST", "FTP_USERNAME", "FTP_PASSWORD"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/godaddy-ftp-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/godaddy-ftp-en.mp4",
+      "credential_keys": [
+        "FTP_HOST",
+        "FTP_USERNAME",
+        "FTP_PASSWORD"
+      ],
+      "tutorial_video_ar": "/static/tutorials/godaddy.html",
+      "tutorial_video_en": "/static/tutorials/godaddy.html",
       "instructions_ar": "1) GoDaddy → My Products → Hosting → cPanel Admin\n2) FTP Accounts → أنشئ حساب أو استخدم الموجود\n3) Host: ftp.yourdomain.com",
       "instructions_en": "1) GoDaddy → My Products → Hosting → cPanel Admin\n2) FTP Accounts → create or use existing\n3) Host: ftp.yourdomain.com",
       "where_to_get_url": "https://account.godaddy.com/products"
@@ -188,9 +233,13 @@
       "label_en": "Bluehost",
       "logo_emoji": "🔵",
       "category": "shared",
-      "credential_keys": ["CPANEL_URL", "CPANEL_USERNAME", "CPANEL_TOKEN"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/bluehost-cpanel-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/bluehost-cpanel-en.mp4",
+      "credential_keys": [
+        "CPANEL_URL",
+        "CPANEL_USERNAME",
+        "CPANEL_TOKEN"
+      ],
+      "tutorial_video_ar": "/static/tutorials/bluehost.html",
+      "tutorial_video_en": "/static/tutorials/bluehost.html",
       "instructions_ar": "1) Bluehost → Advanced → cPanel\n2) Security → Manage API Tokens → Create\n3) انسخ التوكن + URL الـ cPanel",
       "instructions_en": "1) Bluehost → Advanced → cPanel\n2) Security → Manage API Tokens → Create\n3) Copy token + cPanel URL",
       "where_to_get_url": "https://my.bluehost.com"
@@ -201,9 +250,13 @@
       "label_en": "WordPress.com",
       "logo_emoji": "📝",
       "category": "wp",
-      "credential_keys": ["WORDPRESS_APP_PASSWORD", "WORDPRESS_SITE_URL", "WORDPRESS_USERNAME"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/wordpress-app-password-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/wordpress-app-password-en.mp4",
+      "credential_keys": [
+        "WORDPRESS_APP_PASSWORD",
+        "WORDPRESS_SITE_URL",
+        "WORDPRESS_USERNAME"
+      ],
+      "tutorial_video_ar": "/static/tutorials/wordpress_com.html",
+      "tutorial_video_en": "/static/tutorials/wordpress_com.html",
       "instructions_ar": "1) WP Admin → Users → Profile\n2) انزل لـ 'Application Passwords'\n3) New Application Password → انسخ كلمة السر",
       "instructions_en": "1) WP Admin → Users → Profile\n2) Scroll to 'Application Passwords'\n3) New Application Password → copy",
       "where_to_get_url": "https://wordpress.com/me/security"
@@ -214,9 +267,11 @@
       "label_en": "Render",
       "logo_emoji": "🟢",
       "category": "modern",
-      "credential_keys": ["RENDER_API_KEY"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/render-token-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/render-token-en.mp4",
+      "credential_keys": [
+        "RENDER_API_KEY"
+      ],
+      "tutorial_video_ar": "/static/tutorials/render.html",
+      "tutorial_video_en": "/static/tutorials/render.html",
       "instructions_ar": "1) dashboard.render.com → Account Settings → API Keys\n2) Create API Key → انسخه",
       "instructions_en": "1) dashboard.render.com → Account Settings → API Keys\n2) Create API Key → copy",
       "where_to_get_url": "https://dashboard.render.com/u/settings#api-keys"
@@ -227,9 +282,11 @@
       "label_en": "Railway",
       "logo_emoji": "🚂",
       "category": "modern",
-      "credential_keys": ["RAILWAY_TOKEN"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/railway-token-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/railway-token-en.mp4",
+      "credential_keys": [
+        "RAILWAY_TOKEN"
+      ],
+      "tutorial_video_ar": "/static/tutorials/railway.html",
+      "tutorial_video_en": "/static/tutorials/railway.html",
       "instructions_ar": "1) railway.app → Account Settings → Tokens\n2) Create Token → انسخه",
       "instructions_en": "1) railway.app → Account Settings → Tokens\n2) Create Token → copy",
       "where_to_get_url": "https://railway.app/account/tokens"
@@ -240,9 +297,12 @@
       "label_en": "Firebase Hosting",
       "logo_emoji": "🔥",
       "category": "modern",
-      "credential_keys": ["FIREBASE_TOKEN", "FIREBASE_PROJECT_ID"],
-      "tutorial_video_ar": "https://zenrex.ai/videos/tutorials/firebase-token-ar.mp4",
-      "tutorial_video_en": "https://zenrex.ai/videos/tutorials/firebase-token-en.mp4",
+      "credential_keys": [
+        "FIREBASE_TOKEN",
+        "FIREBASE_PROJECT_ID"
+      ],
+      "tutorial_video_ar": "/static/tutorials/firebase.html",
+      "tutorial_video_en": "/static/tutorials/firebase.html",
       "instructions_ar": "1) ثبّت Firebase CLI: npm i -g firebase-tools\n2) شغّل: firebase login:ci\n3) انسخ التوكن + Project ID من console.firebase.google.com",
       "instructions_en": "1) Install Firebase CLI: npm i -g firebase-tools\n2) Run: firebase login:ci\n3) Copy token + Project ID from console.firebase.google.com",
       "where_to_get_url": "https://console.firebase.google.com"
@@ -253,10 +313,15 @@
       "label_en": "Other hosting / Self-hosted",
       "logo_emoji": "🔗",
       "category": "custom",
-      "credential_keys": ["CUSTOM_HOSTING_URL", "CUSTOM_HOSTING_DETAILS"],
+      "credential_keys": [
+        "CUSTOM_HOSTING_URL",
+        "CUSTOM_HOSTING_DETAILS"
+      ],
       "instructions_ar": "شارك اسم/رابط الاستضافة — الذكاء يدرسها ويقترح أنسب طريقة وصول.",
       "instructions_en": "Share the hosting name/URL — the AI will research it and propose the best access path.",
-      "is_custom": true
+      "is_custom": true,
+      "tutorial_video_ar": "/static/tutorials/other_hosting.html",
+      "tutorial_video_en": "/static/tutorials/other_hosting.html"
     }
   ]
 }

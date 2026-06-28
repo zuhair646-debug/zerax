@@ -16,6 +16,10 @@ cd /app/frontend
 echo "📦 Building React (REACT_APP_BACKEND_URL=https://$DOMAIN)..."
 REACT_APP_BACKEND_URL="https://$DOMAIN" yarn build > /tmp/zenrex_build.log 2>&1
 find build -name "*.map" -delete
+# Bundle the static tutorial HTMLs alongside the React build so they ship
+# with every deploy. nginx serves them from /opt/zerax/frontend/build/static/
+mkdir -p build/static/tutorials
+cp -r /app/static/tutorials/*.html build/static/tutorials/ 2>/dev/null || true
 echo "✓ Build done ($(du -sh build | cut -f1))"
 
 # 2) Sync build + backend code to VPS

@@ -334,14 +334,13 @@ function CredentialCapture({ projectId, provider, onDone, onBack }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         <div className="aspect-video rounded-xl bg-black/60 border border-white/10 overflow-hidden flex items-center justify-center relative">
           {provider.tutorial_video_ar ? (
-            <video
-              src={provider.tutorial_video_ar}
-              controls
-              loop
-              playsInline
+            <iframe
+              src={`${API}${provider.tutorial_video_ar}`}
+              title={`${provider.label_ar} tutorial`}
               data-testid="tutorial-video"
-              className="w-full h-full object-cover"
-              onError={(e) => { e.target.parentElement.classList.add('video-fail'); }}
+              className="w-full h-full border-0"
+              sandbox="allow-scripts allow-same-origin"
+              loading="lazy"
             />
           ) : (
             <div className="flex flex-col items-center gap-2 text-zinc-500 text-xs">
