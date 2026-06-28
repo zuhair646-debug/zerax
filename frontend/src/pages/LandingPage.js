@@ -258,7 +258,7 @@ const LandingPage = ({ user }) => {
           desc: 'ارفع كودك ونكمل معك',
           gradient: 'from-blue-500/20 to-indigo-500/10',
           accent: '#3b82f6',
-          bgImage: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=800&q=70',
+          bgImage: 'https://images.unsplash.com/photo-1542831371-29b0f74f9713?auto=format&fit=crop&w=800&q=70',
           badge: 'جديد',
           action: () => goOrRegister('/app-builder?mode=continue'),
         },
