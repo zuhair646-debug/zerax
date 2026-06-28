@@ -7,6 +7,7 @@ import ZenrexBrand from '../components/ZenrexBrand';
 import ConnectionHelpModal from '../components/ConnectionHelpModal';
 import StorageIndicator from '../components/StorageIndicator';
 import ContinuationOnboarding from './ContinuationOnboarding';
+import ContinuationAppOnboarding from './ContinuationAppOnboarding';
 import ContinuationPreviewPanel from './ContinuationPreviewPanel';
 import { EngineerAuditModal } from '../components/EngineerAuditModal';
 import { ConciergeWizardPanel } from '../components/ConciergeWizard';
@@ -6200,12 +6201,21 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
           {activeTab === 'chat' && (
             <div ref={chatScrollRef} onScroll={onChatScroll} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" data-testid="chat-messages">
               {/* 🔐 Continuation onboarding wizard — Inspector → Provider → Keys → Consent.
-                  Renders at the top of the chat in continuation mode until setup is complete. */}
+                  Renders at the top of the chat in continuation mode until setup is complete.
+                  App projects (project_kind === 'app') get the app-flavored wizard:
+                  Stack → CodeSource → Keys → Consent. */}
               {isContinuationMode && continuationSetupDone === false && (
-                <ContinuationOnboarding
-                  projectId={projectId}
-                  onCompleted={handleContinuationSetupCompleted}
-                />
+                project?.project_kind === 'app' ? (
+                  <ContinuationAppOnboarding
+                    projectId={projectId}
+                    onCompleted={handleContinuationSetupCompleted}
+                  />
+                ) : (
+                  <ContinuationOnboarding
+                    projectId={projectId}
+                    onCompleted={handleContinuationSetupCompleted}
+                  />
+                )
               )}
               {/* 💳 Continuation payment banner — only after setup is done + first update delivered */}
               {isContinuationMode && continuationSetupDone === true && (
@@ -6229,6 +6239,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               {isContinuationMode && continuationSetupDone === true && showContinuationPreview && (
                 <ContinuationPreviewPanel
                   projectId={projectId}
+                  projectKind={project?.project_kind || 'site'}
                   onClose={() => setShowContinuationPreview(false)}
                 />
               )}

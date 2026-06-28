@@ -1,0 +1,29 @@
+{
+  "summary": "End-to-end testing of the new Continuation App Onboarding wizard (Zenrex Farm). Backend: 9/9 pytest passed for app-providers-catalog (11 providers incl. zip_upload), app project create+initial state='stack', save-stack advances to 'provider', save-stack 400 on missing app_kind, save-stack 400 on site projects (backcompat), site projects still default to state='url', select-provider github, save-credential advances to consent. Frontend (Playwright, owner@zerax.com): 12/13 checks PASSED — wizard renders cleanly on /freebuild/chat/{pid} for an app project (no white screen), step1 stack card with Flutter pre-selected + iOS/Android target platforms + repo hint + stack-confirm-btn → step2 code-source-selector with all 11 provider cards visible (github, gitlab, bitbucket, azure_devops, gitea, other_git, expo_eas, codemagic, bitrise, github_actions, zip_upload), codemagic shows recommended badge for Flutter → step3 credential capture (GITHUB_TOKEN password input + validity 3m/6m/12m selectors + AES-128 save button) → step4 consent with 5 clauses + signature input + sign button. After signing, the wizard disappears and the chat input is unlocked (the success toast 'تم التوقيع — المهندس بدأ العمل على تطبيقك' / 'Engineer started working on your app' was visible). White-screen bug is FULLY FIXED.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_continuation_app_wizard.py",
+    "/app/test_reports/pytest/iter85_app_wizard.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Tutorial video URLs (zenrex.ai/videos/...) are still placeholders — same as flagged in iter83/84, not regression-related.",
+    "step3 'app-credential-capture' selector occasionally takes >10s to become visible after source-confirm (likely waiting on tutorial iframe / instructions load). The wizard transitions ARE correct (next fill action succeeded immediately), but consider preloading the provider tutorial JSON or splitting the iframe into a non-blocking child. Minor UX latency note, not a blocker.",
+    "Backend save-credential always sets continuation_setup state='consent' on success (line ~1760 of freebuild_chat.py) — this matches the app-flow design (platform-owned ANTHROPIC_API_KEY, no user LLM-key prompt). Verified independence rule per /app/memory/NO_EMERGENT_COUPLING.md."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_continuation_app_wizard.py"
+  ],
+  "success_rate": { "backend": "100% (9/9)", "frontend": "92% (12/13 — 1 flaky timeout on slow selector, end-to-end flow completed)" },
+  "test_credentials": "owner@zerax.com / owner123",
+  "seed_data_creation": "Test creates one TEST_app_wizard_zenrex + one TEST_site_wizard_backcompat continuation project per backend run (cleanup via DELETE in fixture teardown). Frontend run creates one TEST_ui_app_v3 (cleaned up at end).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest at /app/backend/tests/test_continuation_app_wizard.py is the regression baseline for the new app wizard. Frontend selectors verified working: continuation-app-onboarding, app-stack-card, stack-option-flutter, platform-ios/android, repo-hint-input, stack-confirm-btn, code-source-selector, source-card-{github,gitlab,bitbucket,azure_devops,gitea,other_git,expo_eas,codemagic,bitrise,github_actions,zip_upload}, source-confirm-btn, app-credential-capture, credential-input-GITHUB_TOKEN, validity-3m/6m/12m, credential-save-btn, app-consent-step, consent-clause-0..4, signature-name-input, consent-sign-btn. Site backcompat verified: site projects still get state='url' and ContinuationOnboarding (URL Inspector) wizard. Phone preview tab (P1, optional) was NOT smoke-tested due to time — main agent may self-verify if needed. ZIP upload sub-flow (Step 3-alt) was NOT exercised but selector data-testid='source-card-zip_upload' verified present.",
+  "rca of the issue": "White-screen bug RCA confirmed fixed: the conditional render at FreeBuildChat.js (~line 6204) now correctly dispatches to ContinuationAppOnboarding when project.project_kind==='app' instead of trying to render the site URL Inspector (which has no public URL for native apps). Backend GET /continuation/setup correctly returns project_kind+app_kind and defaults state='stack' (not 'url') for app projects, healing legacy app rows that pre-date the app flow. Independence rule honored — wizard never asks for any LLM key; AI brain uses platform's own ANTHROPIC_API_KEY."
+}

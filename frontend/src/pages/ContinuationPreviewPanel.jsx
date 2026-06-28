@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import {
   Folder, FileText, History, ShieldAlert, Loader2,
   RotateCcw, Eye, X, ChevronRight, CheckCircle2, Send, Rocket, AlertTriangle,
+  Smartphone, Apple, QrCode, Hammer,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -200,9 +201,176 @@ function AuditTab({ projectId }) {
   );
 }
 
+// ─── Phone Preview tab (apps only) ────────────────────────────────────
+function PhonePreviewTab({ projectId }) {
+  const [frame, setFrame] = useState('ios'); // 'ios' | 'android'
+  const [buildInfo, setBuildInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const r = await authedFetch(`${API}/api/freebuild-chat/project/${projectId}`);
+        const d = await r.json();
+        if (cancelled) return;
+        setBuildInfo({
+          last_build: d.continuation_last_build || null,
+          preview_url: d.preview_url || null,
+          expo_url: d.continuation_expo_url || null,
+          artifact_url: d.continuation_artifact_url || null,
+          app_kind: d.app_kind,
+        });
+      } catch { /* ignore */ }
+      finally { if (!cancelled) setLoading(false); }
+    };
+    load();
+    // Poll every 8s so live build progress shows up without manual refresh.
+    const id = setInterval(load, 8000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [projectId]);
+
+  if (loading) {
+    return <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-cyan-300" /></div>;
+  }
+
+  const hasPreview = buildInfo?.preview_url || buildInfo?.expo_url;
+  const qrTarget = buildInfo?.expo_url || buildInfo?.artifact_url || buildInfo?.preview_url;
+  const qrSrc = qrTarget
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=10&data=${encodeURIComponent(qrTarget)}`
+    : null;
+
+  return (
+    <div data-testid="phone-preview-tab" className="space-y-4">
+      {/* Frame toggle */}
+      <div className="flex items-center justify-center gap-2">
+        <button
+          onClick={() => setFrame('ios')}
+          data-testid="frame-ios-btn"
+          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 transition ${frame === 'ios' ? 'bg-zinc-500/30 border-zinc-300 text-white' : 'bg-black/30 border-white/10 text-zinc-400 hover:bg-white/5'}`}
+        >
+          <Apple className="w-3.5 h-3.5" /> iOS
+        </button>
+        <button
+          onClick={() => setFrame('android')}
+          data-testid="frame-android-btn"
+          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 transition ${frame === 'android' ? 'bg-emerald-500/30 border-emerald-400 text-white' : 'bg-black/30 border-white/10 text-zinc-400 hover:bg-white/5'}`}
+        >
+          <Smartphone className="w-3.5 h-3.5" /> Android
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-4">
+        {/* Phone frame */}
+        <div className="flex justify-center">
+          <div
+            data-testid="phone-frame"
+            className={`relative ${frame === 'ios' ? 'rounded-[2.5rem]' : 'rounded-[1.5rem]'} bg-zinc-950 border-4 ${frame === 'ios' ? 'border-zinc-800' : 'border-zinc-700'} shadow-2xl shadow-cyan-500/10 overflow-hidden`}
+            style={{ width: 280, height: 580 }}
+          >
+            {/* Notch / Status bar */}
+            {frame === 'ios' && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-32 h-6 rounded-full bg-zinc-900 z-10" />
+            )}
+            {frame === 'android' && (
+              <div className="absolute top-0 left-0 right-0 h-5 bg-zinc-900 z-10 flex items-center justify-end px-3">
+                <span className="text-[8px] text-zinc-500 font-mono">100%</span>
+              </div>
+            )}
+            {/* Screen */}
+            <div className="absolute inset-0 mt-7 mb-2 mx-1 rounded-lg overflow-hidden bg-zinc-950">
+              {hasPreview ? (
+                <iframe
+                  src={buildInfo.preview_url || buildInfo.expo_url}
+                  title="App Preview"
+                  data-testid="phone-preview-iframe"
+                  className="w-full h-full border-0"
+                  sandbox="allow-scripts allow-same-origin allow-popups"
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-center px-4 text-zinc-500">
+                  <Smartphone className="w-12 h-12 mb-3 opacity-40" />
+                  <div className="text-[11px] font-bold text-zinc-400 mb-2">لا توجد نسخة بناء بعد</div>
+                  <div className="text-[10px] text-zinc-600 leading-relaxed">
+                    اطلب من المهندس في الشات:<br/>
+                    <code className="text-cyan-400 font-mono">&quot;ابني التطبيق وارفعه على Expo Go&quot;</code>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* QR + Build Status */}
+        <div className="space-y-3">
+          <div data-testid="qr-card" className="rounded-xl bg-black/40 border border-cyan-500/20 p-4 flex flex-col items-center">
+            <div className="text-[10px] font-black text-cyan-300 mb-2 flex items-center gap-1.5">
+              <QrCode className="w-3.5 h-3.5" /> امسح للاختبار على جوالك
+            </div>
+            {qrSrc ? (
+              <>
+                <img src={qrSrc} alt="QR" data-testid="qr-image" className="w-44 h-44 rounded-lg bg-white p-2" />
+                <div className="text-[10px] text-cyan-200 mt-2 font-mono truncate w-full text-center">{qrTarget}</div>
+              </>
+            ) : (
+              <div className="w-44 h-44 rounded-lg bg-zinc-900 border border-dashed border-white/10 flex items-center justify-center text-[10px] text-zinc-500 text-center p-4">
+                ينتظر أول بناء ناجح
+              </div>
+            )}
+          </div>
+
+          <div data-testid="build-status-card" className="rounded-xl bg-black/40 border border-fuchsia-500/20 p-4">
+            <div className="text-[10px] font-black text-fuchsia-300 mb-2 flex items-center gap-1.5">
+              <Hammer className="w-3.5 h-3.5" /> آخر بناء
+            </div>
+            {buildInfo?.last_build ? (
+              <div className="space-y-2 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">الحالة:</span>
+                  <span className={`font-bold ${
+                    buildInfo.last_build.status === 'success' ? 'text-emerald-300'
+                    : buildInfo.last_build.status === 'failed' ? 'text-rose-300'
+                    : 'text-amber-300'
+                  }`}>
+                    {buildInfo.last_build.status || 'pending'}
+                  </span>
+                </div>
+                {buildInfo.last_build.platform && (
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">المنصة:</span>
+                    <span className="text-zinc-200">{buildInfo.last_build.platform}</span>
+                  </div>
+                )}
+                {buildInfo.last_build.started_at && (
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">بدأ:</span>
+                    <span className="text-zinc-400 text-[10px]">{new Date(buildInfo.last_build.started_at).toLocaleString('ar-SA')}</span>
+                  </div>
+                )}
+                {buildInfo.last_build.logs_tail && (
+                  <details className="mt-2">
+                    <summary className="text-[10px] text-zinc-400 cursor-pointer hover:text-fuchsia-300">سجل البناء</summary>
+                    <pre data-testid="build-logs" className="mt-2 text-[9px] text-zinc-300 bg-black/60 rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap font-mono">
+                      {buildInfo.last_build.logs_tail}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            ) : (
+              <div className="text-[10px] text-zinc-500 leading-relaxed">
+                ما في بناء حتى الآن. أطلب من المهندس في الشات يستخدم أداة <code className="text-fuchsia-300 font-mono">build_app</code>.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main panel ───────────────────────────────────────────────────────
-export default function ContinuationPreviewPanel({ projectId, onClose }) {
-  const [tab, setTab] = useState('files');
+export default function ContinuationPreviewPanel({ projectId, onClose, projectKind }) {
+  const [tab, setTab] = useState(projectKind === 'app' ? 'phone' : 'files');
   const [reloadSig] = useState(0);
   const [deploying, setDeploying] = useState(false);
   const [prResult, setPrResult] = useState(null);
@@ -487,6 +655,7 @@ export default function ContinuationPreviewPanel({ projectId, onClose }) {
       )}
       <div className="flex gap-1 mb-3">
         {[
+          ...(projectKind === 'app' ? [{ id: 'phone', label: 'معاينة الجوال', icon: Smartphone }] : []),
           { id: 'files', label: 'الكود المستنسخ', icon: Folder },
           { id: 'snapshots', label: 'النسخ الاحتياطية', icon: History },
           { id: 'audit', label: 'السجل القانوني', icon: ShieldAlert },
@@ -502,6 +671,7 @@ export default function ContinuationPreviewPanel({ projectId, onClose }) {
           </button>
         ))}
       </div>
+      {tab === 'phone' && projectKind === 'app' && <PhonePreviewTab projectId={projectId} />}
       {tab === 'files' && <FilesTab projectId={projectId} />}
       {tab === 'snapshots' && <SnapshotsTab projectId={projectId} reloadSig={reloadSig} />}
       {tab === 'audit' && <AuditTab projectId={projectId} />}

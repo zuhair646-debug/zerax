@@ -1541,22 +1541,39 @@ def make_freebuild_chat_router(db, get_current_user):
 
     @router.get("/project/{pid}/continuation/setup")
     async def get_continuation_setup(pid: str, user=Depends(get_current_user)):
-        """Current setup-wizard state for the chat-embedded onboarding."""
+        """Current setup-wizard state for the chat-embedded onboarding.
+
+        For SITE projects the flow is: url → provider → provider_key → consent.
+        For APP projects the flow is:  stack → provider → provider_key → consent.
+        The frontend picks the right wizard based on `project_kind`.
+        """
         proj = await db.freebuild_projects.find_one(
             {"id": pid, "user_id": user["user_id"]},
-            {"_id": 0, "mode": 1, "continuation_setup": 1,
-             "continuation_site_url": 1, "continuation_inspection": 1,
-             "continuation_provider_id": 1, "continuation_credentials_meta": 1,
-             "continuation_llm_provider": 1, "continuation_consent": 1},
+            {"_id": 0, "mode": 1, "project_kind": 1, "app_kind": 1,
+             "continuation_setup": 1, "continuation_site_url": 1,
+             "continuation_inspection": 1, "continuation_provider_id": 1,
+             "continuation_credentials_meta": 1, "continuation_llm_provider": 1,
+             "continuation_consent": 1, "continuation_app_stack": 1},
         )
         if not proj:
             raise HTTPException(status_code=404, detail="project not found")
         if proj.get("mode") != "continuation":
             raise HTTPException(status_code=400, detail="not a continuation project")
-        setup = proj.get("continuation_setup") or {"state": "url", "completed": False}
+        project_kind = (proj.get("project_kind") or "site").strip().lower()
+        is_app = project_kind == "app"
+        default_initial_state = "stack" if is_app else "url"
+        setup = proj.get("continuation_setup") or {"state": default_initial_state, "completed": False}
+        # Heal legacy app projects that were created before the app flow existed —
+        # they would have state='url' from the site default. Move them to 'stack'.
+        state = setup.get("state", default_initial_state)
+        if is_app and state == "url":
+            state = "stack"
         return {
-            "state": setup.get("state", "url"),
+            "state": state,
             "completed": bool(setup.get("completed")),
+            "project_kind": project_kind,
+            "app_kind": proj.get("app_kind"),
+            "app_stack": proj.get("continuation_app_stack"),
             "site_url": proj.get("continuation_site_url"),
             "inspection": proj.get("continuation_inspection"),
             "provider_id": proj.get("continuation_provider_id"),
@@ -1564,6 +1581,82 @@ def make_freebuild_chat_router(db, get_current_user):
             "llm_provider": proj.get("continuation_llm_provider"),
             "consent": proj.get("continuation_consent"),
         }
+
+    @router.get("/continuation/app-providers-catalog")
+    async def get_continuation_app_providers_catalog():
+        """App-specific provider catalog. Returns Git providers (where source
+        code lives) + a synthetic 'zip_upload' source + build-service providers
+        (EAS/Codemagic/Bitrise that also store source). App-store + signing
+        credentials are asked later in the chat — NOT during the wizard."""
+        import json as _json
+        from pathlib import Path
+        path = Path(__file__).parent.parent.parent / "data" / "continuation_providers.json"
+        if not path.exists():
+            return {"code_source_providers": []}
+        with open(path, "r", encoding="utf-8") as f:
+            full = _json.load(f)
+        # Synthetic ZIP-upload "provider" so users with no Git can still onboard.
+        zip_provider = {
+            "id": "zip_upload",
+            "label_ar": "رفع ملف ZIP",
+            "label_en": "ZIP Upload",
+            "logo_emoji": "📦",
+            "group": "upload",
+            "credential_keys": ["ZIP_UPLOAD_TOKEN"],
+            "instructions_ar": (
+                "بدّل المفتاح بعملية رفع مباشرة من جهازك:\n"
+                "1) اضغط الزر تحت لاختيار ملف ZIP يحتوي على مشروعك.\n"
+                "2) سيتم رفعه بتشفير ثم استنساخه في sandbox معزول.\n"
+                "3) لا حاجة لأي مفتاح خارجي — الخصوصية كاملة."
+            ),
+            "where_to_get_url": None,
+            "tutorial_video_ar": None,
+        }
+        return {
+            "code_source_providers": [
+                *(full.get("git_providers") or []),
+                *(full.get("build_service_providers") or []),
+                zip_provider,
+            ],
+            "git_providers": full.get("git_providers") or [],
+            "build_service_providers": full.get("build_service_providers") or [],
+            "zip_upload": zip_provider,
+        }
+
+    @router.post("/project/{pid}/continuation/setup/save-stack")
+    async def save_continuation_stack(pid: str, payload: dict, user=Depends(get_current_user)):
+        """Step 1 (apps only) — record the confirmed app stack and advance to
+        provider selection. `app_kind` may be one of the picker IDs (flutter,
+        react_native, capacitor, ios_native, android_native, dotnet_maui,
+        electron_tauri, unity_game, unknown) or any custom string."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "mode": 1, "project_kind": 1},
+        )
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        if (proj.get("project_kind") or "site").strip().lower() != "app":
+            raise HTTPException(status_code=400, detail="save-stack is for app projects only")
+        app_kind = (payload.get("app_kind") or "").strip().lower()
+        target_platforms = payload.get("target_platforms") or []  # ['ios','android','desktop','web']
+        repo_url_hint = (payload.get("repo_url_hint") or "").strip()
+        if not app_kind:
+            raise HTTPException(status_code=400, detail="app_kind is required")
+        stack_record = {
+            "app_kind": app_kind,
+            "target_platforms": [p for p in target_platforms if isinstance(p, str)][:6],
+            "repo_url_hint": repo_url_hint or None,
+            "confirmed_at": _now(),
+        }
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {
+                "app_kind": app_kind,
+                "continuation_app_stack": stack_record,
+                "continuation_setup": {"state": "provider", "completed": False},
+                "updated_at": _now(),
+            }},
+        )
+        return {"ok": True, "next_state": "provider", "app_stack": stack_record}
 
     @router.post("/project/{pid}/continuation/setup/save-url")
     async def save_continuation_url(pid: str, payload: dict, user=Depends(get_current_user)):
@@ -1675,7 +1768,12 @@ def make_freebuild_chat_router(db, get_current_user):
     async def sign_continuation_consent(pid: str, payload: dict, request: Request, user=Depends(get_current_user)):
         """Step 5 — record the electronic signature unlocking AI work.
         Audit trail: ip, timestamp, clauses-accepted."""
-        proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1})
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "mode": 1, "project_kind": 1, "app_kind": 1,
+             "website_type": 1, "continuation_site_url": 1,
+             "continuation_app_stack": 1},
+        )
         if not proj or proj.get("mode") != "continuation":
             raise HTTPException(status_code=400, detail="not a continuation project")
         clauses = payload.get("clauses_accepted") or []
@@ -1699,14 +1797,32 @@ def make_freebuild_chat_router(db, get_current_user):
                 "updated_at": _now(),
             }},
         )
-        # Inject a system kickoff message so the engineer manager starts work
-        kickoff = (
-            "✅ **اكتمل الإعداد الآمن** — العميل وقّع الموافقة الإلكترونية وزوّدنا بمفاتيح الوصول المشفّرة.\n\n"
-            f"🌐 الموقع: {proj.get('continuation_site_url', '—')}\n"
-            "🔐 المفاتيح: محفوظة بتشفير AES-128 ومتاحة عبر أدوات الاستنساخ الآمن.\n\n"
-            "🎯 **مهمتك الآن (كمدير هندسي):** ابدأ بـ Read-Only، استنسخ الكود إلى Sandbox معزول، "
-            "وقدّم تقرير تشخيص شامل قبل أي اقتراح تعديل. لا تلمس الإنتاج إطلاقاً قبل موافقة العميل الصريحة."
-        )
+        # Inject a system kickoff message so the engineer manager starts work.
+        # App projects get an app-tailored kickoff; sites get the original one.
+        is_app = (proj.get("project_kind") or proj.get("website_type") or "") in ("app", "continuation_app")
+        if is_app:
+            stack = proj.get("continuation_app_stack") or {}
+            app_kind = (proj.get("app_kind") or stack.get("app_kind") or "غير محدد")
+            targets = ", ".join(stack.get("target_platforms") or []) or "غير محدد"
+            kickoff = (
+                "✅ **اكتمل الإعداد الآمن للتطبيق** — العميل وقّع الموافقة وزوّدنا بمفاتيح الوصول المشفّرة.\n\n"
+                f"📱 نوع التقنية: {app_kind}\n"
+                f"🎯 المنصات المستهدفة: {targets}\n"
+                "🔐 المفاتيح: محفوظة بتشفير AES-128 ومتاحة عبر أدوات الاستنساخ الآمن للتطبيق.\n\n"
+                "🎯 **مهمتك الآن (كمدير هندسي للتطبيقات):**\n"
+                "1) استنسخ الكود إلى sandbox معزول.\n"
+                "2) استدعِ `detect_project_stack` لتأكيد التقنية + أوامر البناء + المتطلبات.\n"
+                "3) قدّم تقرير تشخيص شامل (التقنية، التبعيات القديمة، أمان/أداء، مشاكل البناء المتوقعة).\n"
+                "لا تلمس الإنتاج إطلاقاً ولا ترسل للمتاجر قبل موافقة العميل الصريحة."
+            )
+        else:
+            kickoff = (
+                "✅ **اكتمل الإعداد الآمن** — العميل وقّع الموافقة الإلكترونية وزوّدنا بمفاتيح الوصول المشفّرة.\n\n"
+                f"🌐 الموقع: {proj.get('continuation_site_url', '—')}\n"
+                "🔐 المفاتيح: محفوظة بتشفير AES-128 ومتاحة عبر أدوات الاستنساخ الآمن.\n\n"
+                "🎯 **مهمتك الآن (كمدير هندسي):** ابدأ بـ Read-Only، استنسخ الكود إلى Sandbox معزول، "
+                "وقدّم تقرير تشخيص شامل قبل أي اقتراح تعديل. لا تلمس الإنتاج إطلاقاً قبل موافقة العميل الصريحة."
+            )
         await db.freebuild_projects.update_one(
             {"id": pid},
             {"$push": {"messages": {"role": "user", "content": kickoff, "created_at": _now()}}},
