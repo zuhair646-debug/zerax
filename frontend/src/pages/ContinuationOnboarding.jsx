@@ -6,8 +6,9 @@
 //  1) "الفاحص" card asks for the site URL and runs an external scan.
 //  2) Visual provider cards (logos) + tutorial video appear underneath.
 //  3) User pastes the key directly below the video and picks a 6-month validity.
-//  4) Second card asks for the AI brain (Anthropic key or Emergent Universal).
-//  5) Electronic-signature consent before the engineer wakes up.
+//  4) Electronic-signature consent before the engineer wakes up.
+//  (The AI brain runs on the platform's OWN ANTHROPIC_API_KEY on its own
+//   server — fully independent. The user is never asked about LLM keys.)
 //
 // All credentials are encrypted server-side (Fernet) before being persisted.
 
@@ -16,7 +17,7 @@ import { toast } from 'sonner';
 import {
   Globe, Loader2, ShieldCheck, Sparkles, CheckCircle2,
   AlertTriangle, KeyRound, PlayCircle, ArrowRight, Lock,
-  Brain, Scan, FileSignature, ExternalLink,
+  Scan, FileSignature, ExternalLink,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -427,122 +428,6 @@ function CredentialCapture({ projectId, provider, onDone, onBack }) {
   );
 }
 
-// ─── LLM key step (Anthropic vs Emergent Universal) ────────────────────
-function LlmKeyStep({ projectId, onDone }) {
-  const [provider, setProvider] = useState('emergent');
-  const [value, setValue] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const save = async () => {
-    if (provider === 'anthropic' && !value.startsWith('sk-ant-')) {
-      toast.error('مفتاح Anthropic يبدأ بـ sk-ant-');
-      return;
-    }
-    setBusy(true);
-    try {
-      const r = await authedFetch(`${API}/api/freebuild-chat/project/${projectId}/continuation/setup/save-llm-key`, {
-        method: 'POST',
-        body: JSON.stringify({ provider, value: provider === 'anthropic' ? value : '' }),
-      });
-      const d = await r.json();
-      if (!d.ok) throw new Error();
-      toast.success('🧠 تم اختيار عقل الذكاء الاصطناعي');
-      onDone();
-    } catch {
-      toast.error('فشل الحفظ');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div data-testid="llm-key-step" className="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-900/30 via-violet-900/20 to-fuchsia-900/10 backdrop-blur p-5 sm:p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center">
-          <Brain className="w-6 h-6 text-indigo-200" />
-        </div>
-        <div>
-          <h3 className="text-base sm:text-lg font-black text-indigo-100">عقل المهندس</h3>
-          <p className="text-[11px] text-indigo-300/80">اختر من يفكّر للذكاء الاصطناعي: حسابك الخاص أو عقل Zenrex الجاهز</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-        <button
-          onClick={() => setProvider('emergent')}
-          data-testid="llm-option-emergent"
-          className={cls(
-            'rounded-xl p-4 text-right transition border',
-            provider === 'emergent'
-              ? 'border-emerald-400 bg-emerald-500/15 shadow-lg shadow-emerald-500/10'
-              : 'border-white/10 bg-black/30 hover:bg-white/5',
-          )}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-2xl">⚡</span>
-            <span className="text-sm font-black text-emerald-100">Zenrex Universal</span>
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-100 mr-auto">الأسرع</span>
-          </div>
-          <div className="text-[11px] text-emerald-200/80 leading-relaxed">
-            عقل جاهز (Claude Sonnet 4.5). يُحتسب من نقاطك حسب الاستخدام. مايحتاج مفتاح.
-          </div>
-        </button>
-        <button
-          onClick={() => setProvider('anthropic')}
-          data-testid="llm-option-anthropic"
-          className={cls(
-            'rounded-xl p-4 text-right transition border',
-            provider === 'anthropic'
-              ? 'border-indigo-400 bg-indigo-500/15 shadow-lg shadow-indigo-500/10'
-              : 'border-white/10 bg-black/30 hover:bg-white/5',
-          )}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-2xl">🤖</span>
-            <span className="text-sm font-black text-indigo-100">Anthropic الخاص بك</span>
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-100 mr-auto">للمحترفين</span>
-          </div>
-          <div className="text-[11px] text-indigo-200/80 leading-relaxed">
-            استخدم مفتاحك من console.anthropic.com. تتحكم في الميزانية مباشرة.
-          </div>
-        </button>
-      </div>
-
-      {provider === 'anthropic' && (
-        <div className="mb-4">
-          <label className="block text-[11px] font-bold text-zinc-400 mb-1">ANTHROPIC_API_KEY</label>
-          <input
-            type="password"
-            placeholder="sk-ant-api03-..."
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            data-testid="anthropic-key-input"
-            className="w-full px-3 py-2.5 rounded-lg bg-black/50 border border-white/10 text-sm font-mono focus:border-indigo-400/50 focus:outline-none"
-          />
-          <a
-            href="https://console.anthropic.com/settings/keys"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-indigo-300 hover:text-indigo-100"
-          >
-            <ExternalLink className="w-3 h-3" /> افتح صفحة إنشاء المفتاح
-          </a>
-        </div>
-      )}
-
-      <button
-        onClick={save}
-        disabled={busy}
-        data-testid="llm-key-save-btn"
-        className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 font-black text-sm text-white disabled:opacity-40 flex items-center justify-center gap-2"
-      >
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-        تأكيد العقل واستكمل
-      </button>
-    </div>
-  );
-}
-
 // ─── Electronic-signature consent ──────────────────────────────────────
 function ConsentStep({ projectId, onDone }) {
   const CLAUSES = [
@@ -660,7 +545,10 @@ export default function ContinuationOnboarding({ projectId, onCompleted }) {
           setState('ready');
           onCompleted && onCompleted();
         } else {
-          setState(setupData.state || 'url');
+          // Legacy state from earlier in this session — collapse the
+          // (now-removed) LLM step into consent for any stale projects.
+          const s = setupData.state === 'llm' ? 'consent' : (setupData.state || 'url');
+          setState(s);
         }
       } catch (e) {
         setState('url');
@@ -668,8 +556,10 @@ export default function ContinuationOnboarding({ projectId, onCompleted }) {
     })();
   }, [projectId, onCompleted]);
 
-  // Track progress
-  const STEPS = ['url', 'provider', 'provider_key', 'llm', 'consent'];
+  // Track progress — 4 steps: Inspector → Provider → Credential → Consent.
+  // The AI brain runs entirely on this server's own ANTHROPIC_API_KEY; the
+  // user is NEVER asked to supply or choose an LLM provider.
+  const STEPS = ['url', 'provider', 'provider_key', 'consent'];
   const stepIdx = STEPS.indexOf(state);
 
   if (state === 'ready' || state === 'loading') return null;
@@ -714,15 +604,8 @@ export default function ContinuationOnboarding({ projectId, onCompleted }) {
         <CredentialCapture
           projectId={projectId}
           provider={selectedProvider}
-          onDone={() => setState('llm')}
-          onBack={() => setState('provider')}
-        />
-      )}
-
-      {state === 'llm' && (
-        <LlmKeyStep
-          projectId={projectId}
           onDone={() => setState('consent')}
+          onBack={() => setState('provider')}
         />
       )}
 

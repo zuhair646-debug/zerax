@@ -1623,7 +1623,10 @@ def make_freebuild_chat_router(db, get_current_user):
     @router.post("/project/{pid}/continuation/setup/save-credential")
     async def save_continuation_credential(pid: str, payload: dict, user=Depends(get_current_user)):
         """Step 3 — encrypt + persist a single credential value. Body:
-        { key_name: 'GITHUB_TOKEN', value: '...', validity_months: 6 }."""
+        { key_name: 'GITHUB_TOKEN', value: '...', validity_months: 6 }.
+        After saving, the wizard advances straight to consent (no LLM-key
+        step — the AI brain is the platform's own ANTHROPIC_API_KEY on its
+        own server, fully independent of any external provider)."""
         from .secure_credentials import encrypt_secret, fingerprint_secret, mask_secret
         proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1})
         if not proj or proj.get("mode") != "continuation":
@@ -1635,7 +1638,6 @@ def make_freebuild_chat_router(db, get_current_user):
             raise HTTPException(status_code=400, detail="key_name and value are required")
         if validity_months < 3:
             raise HTTPException(status_code=400, detail="validity_months must be >= 3")
-        # Encrypt + fingerprint
         try:
             ciphertext = encrypt_secret(value)
         except Exception as e:
@@ -1643,7 +1645,6 @@ def make_freebuild_chat_router(db, get_current_user):
             raise HTTPException(status_code=500, detail="encryption_unavailable")
         fp = fingerprint_secret(value)
         masked = mask_secret(value)
-        # Persist encrypted blob + metadata. Plaintext NEVER touches DB.
         from datetime import datetime, timedelta, timezone
         expires_at = datetime.now(timezone.utc) + timedelta(days=validity_months * 30)
         await db.freebuild_projects.update_one(
@@ -1662,43 +1663,17 @@ def make_freebuild_chat_router(db, get_current_user):
                     "expires_at": expires_at.isoformat(),
                     "saved_at": _now(),
                 },
-                "continuation_setup": {"state": "llm", "completed": False},
+                "continuation_setup": {"state": "consent", "completed": False},
                 "updated_at": _now(),
             }},
         )
         return {"ok": True, "key_name": key_name, "mask": masked,
                 "expires_at": expires_at.isoformat()}
 
-    @router.post("/project/{pid}/continuation/setup/save-llm-key")
-    async def save_continuation_llm_key(pid: str, payload: dict, user=Depends(get_current_user)):
-        """Step 4 — second key for the AI brain. Either:
-        - provider='anthropic' + value=sk-ant-...  (uses user's own Claude budget)
-        - provider='emergent'  (uses Zenrex's Universal Key, billed as credits)
-        """
-        from .secure_credentials import encrypt_secret, fingerprint_secret, mask_secret
-        proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1})
-        if not proj or proj.get("mode") != "continuation":
-            raise HTTPException(status_code=400, detail="not a continuation project")
-        provider = (payload.get("provider") or "emergent").strip().lower()
-        if provider not in {"anthropic", "emergent"}:
-            raise HTTPException(status_code=400, detail="provider must be 'anthropic' or 'emergent'")
-        update = {"continuation_llm_provider": provider, "updated_at": _now(),
-                  "continuation_setup": {"state": "consent", "completed": False}}
-        if provider == "anthropic":
-            value = (payload.get("value") or "").strip()
-            if not value.startswith("sk-ant-"):
-                raise HTTPException(status_code=400, detail="Anthropic key must start with sk-ant-")
-            ciphertext = encrypt_secret(value)
-            update["continuation_credentials.ANTHROPIC_API_KEY"] = {
-                "ciphertext": ciphertext,
-                "fingerprint": fingerprint_secret(value),
-                "saved_at": _now(),
-            }
-            update["continuation_credentials_meta.ANTHROPIC_API_KEY"] = {
-                "mask": mask_secret(value), "saved_at": _now(),
-            }
-        await db.freebuild_projects.update_one({"id": pid}, {"$set": update})
-        return {"ok": True, "provider": provider, "next_state": "consent"}
+    # NOTE: The previously-existing save-llm-key endpoint has been REMOVED.
+    # The platform's AI brain runs on the platform's OWN keys
+    # (ANTHROPIC_API_KEY on this server) — fully independent of any external
+    # provider. The user is never asked to choose or supply an LLM key.
 
     @router.post("/project/{pid}/continuation/setup/consent")
     async def sign_continuation_consent(pid: str, payload: dict, request: Request, user=Depends(get_current_user)):
