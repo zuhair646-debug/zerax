@@ -323,5 +323,265 @@
       "tutorial_video_ar": "/static/tutorials/other_hosting.html",
       "tutorial_video_en": "/static/tutorials/other_hosting.html"
     }
+  ],
+  "build_service_providers": [
+    {
+      "id": "expo_eas",
+      "label_ar": "Expo EAS Build",
+      "label_en": "Expo EAS",
+      "logo_emoji": "⚡",
+      "category": "build_service",
+      "credential_keys": [
+        "EXPO_TOKEN"
+      ],
+      "instructions_ar": "1) ادخل expo.dev/accounts/[username]/settings/access-tokens\n2) Create token (full access)\n3) انسخ الـ token (يبدأ بـ ...)",
+      "instructions_en": "Generate Personal Access Token at expo.dev settings",
+      "where_to_get_url": "https://expo.dev/accounts/[username]/settings/access-tokens",
+      "supports": [
+        "react_native",
+        "expo"
+      ]
+    },
+    {
+      "id": "codemagic",
+      "label_ar": "Codemagic",
+      "label_en": "Codemagic",
+      "logo_emoji": "🪄",
+      "category": "build_service",
+      "credential_keys": [
+        "CODEMAGIC_API_TOKEN"
+      ],
+      "instructions_ar": "1) ادخل codemagic.io → Teams → Personal Account → Integrations\n2) Create API token مع صلاحية كاملة\n3) انسخ الـ token",
+      "where_to_get_url": "https://codemagic.io/teams",
+      "supports": [
+        "flutter",
+        "react_native",
+        "ios_native",
+        "android_native"
+      ]
+    },
+    {
+      "id": "bitrise",
+      "label_ar": "Bitrise",
+      "label_en": "Bitrise",
+      "logo_emoji": "🚀",
+      "category": "build_service",
+      "credential_keys": [
+        "BITRISE_API_TOKEN"
+      ],
+      "instructions_ar": "1) Bitrise → Account Settings → Security → Personal Access Tokens\n2) Create new token\n3) انسخ الـ token",
+      "where_to_get_url": "https://app.bitrise.io/me/account/security",
+      "supports": [
+        "react_native",
+        "flutter",
+        "ios_native",
+        "android_native"
+      ]
+    },
+    {
+      "id": "github_actions",
+      "label_ar": "GitHub Actions",
+      "label_en": "GitHub Actions",
+      "logo_emoji": "🐙",
+      "category": "build_service",
+      "credential_keys": [
+        "GITHUB_TOKEN"
+      ],
+      "instructions_ar": "نفس الـ GITHUB_TOKEN المستخدم في git clone — لازم يكون عنده صلاحية actions:write",
+      "where_to_get_url": "https://github.com/settings/tokens",
+      "supports": [
+        "any"
+      ]
+    }
+  ],
+  "app_store_providers": [
+    {
+      "id": "google_play",
+      "label_ar": "Google Play Console",
+      "label_en": "Google Play Console",
+      "logo_emoji": "🤖",
+      "category": "store",
+      "credential_keys": [
+        "GOOGLE_SERVICE_ACCOUNT_JSON",
+        "GOOGLE_PLAY_PACKAGE_NAME"
+      ],
+      "instructions_ar": "1) Google Cloud Console → IAM → Service Accounts → Create\n2) Grant 'Service Account User' role\n3) Create Key → JSON → نزّل الملف\n4) في Play Console → API access → Link service account → Grant access",
+      "where_to_get_url": "https://console.cloud.google.com/iam-admin/serviceaccounts",
+      "supports": [
+        "android"
+      ]
+    },
+    {
+      "id": "app_store_connect",
+      "label_ar": "Apple App Store Connect",
+      "label_en": "App Store Connect",
+      "logo_emoji": "🍎",
+      "category": "store",
+      "credential_keys": [
+        "APP_STORE_CONNECT_API_KEY",
+        "APP_STORE_CONNECT_KEY_ID",
+        "APP_STORE_CONNECT_ISSUER_ID"
+      ],
+      "instructions_ar": "1) App Store Connect → Users and Access → Keys (App Store Connect API)\n2) Generate API Key (Admin role)\n3) نزّل الملف .p8\n4) انسخ Key ID + Issuer ID",
+      "where_to_get_url": "https://appstoreconnect.apple.com/access/api",
+      "supports": [
+        "ios"
+      ]
+    },
+    {
+      "id": "firebase_distribution",
+      "label_ar": "Firebase App Distribution",
+      "label_en": "Firebase App Distribution",
+      "logo_emoji": "🔥",
+      "category": "store",
+      "credential_keys": [
+        "FIREBASE_TOKEN",
+        "FIREBASE_APP_ID"
+      ],
+      "instructions_ar": "1) ثبّت firebase-tools: npm install -g firebase-tools\n2) firebase login:ci → انسخ الـ token الناتج\n3) Firebase Console → Project Settings → General → App ID",
+      "where_to_get_url": "https://console.firebase.google.com/",
+      "supports": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "id": "testflight",
+      "label_ar": "TestFlight (Apple)",
+      "label_en": "TestFlight",
+      "logo_emoji": "✈️",
+      "category": "store",
+      "credential_keys": [
+        "APP_STORE_CONNECT_API_KEY",
+        "APP_STORE_CONNECT_KEY_ID",
+        "APP_STORE_CONNECT_ISSUER_ID"
+      ],
+      "instructions_ar": "نفس بيانات App Store Connect — الـ TestFlight جزء منه",
+      "supports": [
+        "ios"
+      ]
+    },
+    {
+      "id": "microsoft_store",
+      "label_ar": "Microsoft Store",
+      "label_en": "Microsoft Store",
+      "logo_emoji": "🪟",
+      "category": "store",
+      "credential_keys": [
+        "MICROSOFT_PARTNER_TENANT_ID",
+        "MICROSOFT_PARTNER_CLIENT_ID",
+        "MICROSOFT_PARTNER_CLIENT_SECRET"
+      ],
+      "instructions_ar": "Partner Center → Account settings → Users → Add Azure AD application",
+      "where_to_get_url": "https://partner.microsoft.com/dashboard",
+      "supports": [
+        "windows"
+      ]
+    },
+    {
+      "id": "steam",
+      "label_ar": "Steam (Valve)",
+      "label_en": "Steam",
+      "logo_emoji": "🎮",
+      "category": "store",
+      "credential_keys": [
+        "STEAM_USERNAME",
+        "STEAM_PASSWORD",
+        "STEAM_APP_ID"
+      ],
+      "instructions_ar": "Steamworks → Steam Build SDK + Build account credentials (لا تستخدم حسابك الشخصي)",
+      "where_to_get_url": "https://partner.steamgames.com/",
+      "supports": [
+        "windows",
+        "mac",
+        "linux"
+      ]
+    },
+    {
+      "id": "itch_io",
+      "label_ar": "itch.io",
+      "label_en": "itch.io",
+      "logo_emoji": "🎲",
+      "category": "store",
+      "credential_keys": [
+        "ITCH_API_KEY",
+        "ITCH_USERNAME"
+      ],
+      "instructions_ar": "itch.io → User settings → API keys → Generate new API key",
+      "where_to_get_url": "https://itch.io/user/settings/api-keys",
+      "supports": [
+        "windows",
+        "mac",
+        "linux",
+        "web"
+      ]
+    },
+    {
+      "id": "amazon_appstore",
+      "label_ar": "Amazon Appstore",
+      "label_en": "Amazon Appstore",
+      "logo_emoji": "📦",
+      "category": "store",
+      "credential_keys": [
+        "AMAZON_CLIENT_ID",
+        "AMAZON_CLIENT_SECRET"
+      ],
+      "instructions_ar": "Amazon Developer Console → API access → Generate credentials",
+      "where_to_get_url": "https://developer.amazon.com/dashboard",
+      "supports": [
+        "android"
+      ]
+    },
+    {
+      "id": "huawei_appgallery",
+      "label_ar": "Huawei AppGallery",
+      "label_en": "Huawei AppGallery",
+      "logo_emoji": "🌐",
+      "category": "store",
+      "credential_keys": [
+        "HUAWEI_CLIENT_ID",
+        "HUAWEI_CLIENT_SECRET"
+      ],
+      "instructions_ar": "AppGallery Connect → Users and permissions → API keys",
+      "where_to_get_url": "https://developer.huawei.com/consumer/en/console",
+      "supports": [
+        "android"
+      ]
+    }
+  ],
+  "signing_providers": [
+    {
+      "id": "android_keystore",
+      "label_ar": "Android Keystore",
+      "label_en": "Android Keystore",
+      "logo_emoji": "🔐",
+      "category": "signing",
+      "credential_keys": [
+        "ANDROID_KEYSTORE_BASE64",
+        "ANDROID_KEY_ALIAS",
+        "ANDROID_KEYSTORE_PASSWORD",
+        "ANDROID_KEY_PASSWORD"
+      ],
+      "instructions_ar": "1) keytool -genkey -v -keystore my-release-key.jks -alias my-app -keyalg RSA -keysize 2048 -validity 10000\n2) base64 -i my-release-key.jks → انسخ الناتج\n3) احفظ الـ alias + كلمتي السر",
+      "supports": [
+        "android"
+      ]
+    },
+    {
+      "id": "ios_provisioning",
+      "label_ar": "iOS Provisioning Profile",
+      "label_en": "iOS Provisioning",
+      "logo_emoji": "📝",
+      "category": "signing",
+      "credential_keys": [
+        "IOS_CERTIFICATE_P12_BASE64",
+        "IOS_CERTIFICATE_PASSWORD",
+        "IOS_PROVISIONING_PROFILE_BASE64"
+      ],
+      "instructions_ar": "1) Apple Developer → Certificates → Create iOS Distribution\n2) Export .p12 من Keychain\n3) base64 -i Distribution.p12 → انسخ\n4) نزّل provisioning profile → base64 -i profile.mobileprovision",
+      "supports": [
+        "ios"
+      ]
+    }
   ]
 }

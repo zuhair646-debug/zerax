@@ -811,6 +811,18 @@ try:
 except Exception as _e:
     logger.exception(f"[cortex_tools] failed to register continuation tools: {_e}")
 
+# ───── Continuation-mode APP tools (stack detection, generic runner, store submit) ─────
+try:
+    from .continuation_app_tools import (
+        CONTINUATION_APP_TOOL_DEFINITIONS,
+        CONTINUATION_APP_TOOL_HANDLERS,
+    )
+    TOOL_DEFINITIONS.extend(CONTINUATION_APP_TOOL_DEFINITIONS)
+    TOOL_HANDLERS.update(CONTINUATION_APP_TOOL_HANDLERS)
+    logger.info(f"[cortex_tools] +{len(CONTINUATION_APP_TOOL_DEFINITIONS)} continuation-app tools registered")
+except Exception as _e:
+    logger.exception(f"[cortex_tools] failed to register continuation-app tools: {_e}")
+
 
 def get_tool_names() -> List[str]:
     return [t["name"] for t in TOOL_DEFINITIONS]

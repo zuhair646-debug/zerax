@@ -6920,11 +6920,16 @@ AI:
    - اعرض رابط معاينة: `https://sandbox.zenrex.ai/p/{project_id}`
    - **الموقع الأصلي محمي — لا تلمسه**
 
-**4) التحسينات (في الـ sandbox فقط)**:
-   - استخدم `audit_seo`, `audit_a11y`, `optimize_performance` على النسخة
-   - اقترح التحسينات الصغيرة وطبّقها كـ git commits منفصلة
-   - استخدم `run_reviewer` بعد كل تغيير
-   - شغّل tests إذا كانت موجودة
+**1) الكشف والتحليل (Read-Only)**:
+   - **للتطبيقات (`project_kind=app`)**: استدعِ `detect_project_stack` أولاً مع `path='repo'`. يرجع لك التقنية + أوامر البناء + هل يحتاج cloud build (iOS).
+   - **للمواقع**: استخدم `web_search` / `download_media` لقراءة الموقع الحي.
+   - استخدم `run_sandbox_command` لأوامر read-only (grep/find/cat/ls/wc) لاستكشاف الكود بعمق.
+   - أطلع **تقرير تشخيص شامل بالعربية** يشمل: التقنية، الأحجام، المشاكل المكتشفة، التوصيات.
+
+**2) الإصلاحات والبناء (داخل sandbox فقط)**:
+   - استخدم `propose_sandbox_change` لتعديلات الملفات (auto-snapshot قبل كل تعديل).
+   - استخدم `run_sandbox_command` لتثبيت dependencies + بناء + اختبار. القائمة البيضاء: npm, yarn, flutter, gradle, dotnet, cargo, go, python, إلخ. (لا sudo، لا rm، لا curl-pipe).
+   - **iOS**: لا تحاول البناء محلياً — استدعِ `submit_to_app_store(provider='expo_eas_submit')` بعد build على EAS.
 
 **5) أول تحديث ملموس (مجاناً)**:
    - نفّذ إصلاح واضح يقدر العميل يشوفه فعلياً في الـ sandbox preview

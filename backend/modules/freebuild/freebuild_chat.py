@@ -1093,6 +1093,7 @@ class ContinuationCreatePayload(BaseModel):
     url: Optional[str] = None
     description: Optional[str] = None
     access_note: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None  # { project_kind: 'app'|'site', app_kind: 'flutter'|... }
 
 
 class ContinuationUnlockPayload(BaseModel):
@@ -1962,31 +1963,54 @@ def make_freebuild_chat_router(db, get_current_user):
         pid = str(uuid.uuid4())
         # Seed message that primes the AI for analysis
         url_clean = (payload.url or "").strip()
+        meta = payload.metadata or {}
+        project_kind = (meta.get("project_kind") or "site").strip().lower()
+        app_kind = (meta.get("app_kind") or "").strip().lower()
+        is_app = project_kind == "app"
+
         desc_clean = (payload.description or "").strip()
         access_clean = (payload.access_note or "").strip()
-        seed_parts = ["📌 **مشروع تكملة** — موقع موجود يحتاج صيانة/تطوير.\n"]
+        if is_app:
+            kind_label = app_kind or "غير محدد"
+            seed_parts = [f"📱 **مشروع تكملة تطبيق** — تطبيق موجود يحتاج صيانة/تطوير. نوع التقنية: {kind_label}.\n"]
+        else:
+            seed_parts = ["📌 **مشروع تكملة** — موقع موجود يحتاج صيانة/تطوير.\n"]
         if url_clean:
-            seed_parts.append(f"🔗 **الرابط**: {url_clean}")
+            seed_parts.append(f"🔗 **الرابط/المستودع**: {url_clean}")
         if desc_clean:
             seed_parts.append(f"📝 **وصف العميل**: {desc_clean}")
         if access_clean:
             seed_parts.append(f"🔐 **ملاحظات الوصول**: {access_clean}")
-        seed_parts.append(
-            "\n🎯 **مهمتك (المرحلة 1):** اقرأ الموقع (لو في رابط، استخدم web_search أو download_media)، "
-            "حلّل البنية + التصميم + الأداء، ثم اطلع تقرير تشخيص شامل بالعربية."
-        )
+        if is_app:
+            seed_parts.append(
+                "\n🎯 **مهمتك (المرحلة 1):** بعد ما يستنسخ العميل المستودع للـ sandbox، "
+                "استدعِ `detect_project_stack` فوراً لتحديد التقنية + أوامر البناء. "
+                "ثم استخدم `run_sandbox_command` (read-only فقط) لقراءة الملفات الحساسة "
+                "وأطلع تقرير تشخيص شامل بالعربية يشمل: التقنية المكتشفة، عدد الملفات، "
+                "تبعيات قديمة محتملة، توصيات أمان + أداء، خطة الإصلاحات المقترحة."
+            )
+        else:
+            seed_parts.append(
+                "\n🎯 **مهمتك (المرحلة 1):** اقرأ الموقع (لو في رابط، استخدم web_search أو download_media)، "
+                "حلّل البنية + التصميم + الأداء، ثم اطلع تقرير تشخيص شامل بالعربية."
+            )
         seed_message = "\n\n".join(seed_parts)
 
-        project_name = (
-            f"تكملة: {url_clean.replace('https://','').replace('http://','').split('/')[0][:50]}"
-            if url_clean else f"تكملة: {desc_clean[:50]}"
-        )
+        if is_app:
+            project_name = f"تكملة تطبيق: {desc_clean[:40] or app_kind or 'بدون اسم'}"
+        else:
+            project_name = (
+                f"تكملة: {url_clean.replace('https://','').replace('http://','').split('/')[0][:50]}"
+                if url_clean else f"تكملة: {desc_clean[:50]}"
+            )
 
         await db.freebuild_projects.insert_one({
             "id": pid,
             "user_id": user["user_id"],
             "mode": "continuation",
-            "website_type": "continuation",
+            "website_type": "continuation_app" if is_app else "continuation",
+            "project_kind": "app" if is_app else "site",
+            "app_kind": app_kind or None,
             "name": project_name,
             "description": desc_clean[:1500],
             "continuation_source": {

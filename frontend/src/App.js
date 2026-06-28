@@ -27,6 +27,7 @@ import ShareHistory from '@/pages/ShareHistory';
 import Profile from '@/pages/Profile';
 import FreeBuildChat from '@/pages/FreeBuildChat';
 import FreeBuildContinue from '@/pages/FreeBuildContinue';
+import FreeBuildContinueApp from '@/pages/FreeBuildContinueApp';
 import OwnerEngineer from '@/pages/OwnerEngineer';
 import NativeAppNew from '@/pages/NativeAppNew';
 import MyProjects from '@/pages/MyProjects';
@@ -222,6 +223,7 @@ function App() {
           <Route path="/freebuild/chat" element={<ProtectedRoute><TermsGate section="websites"><FreeBuildChat user={user} setUser={setUser} /></TermsGate></ProtectedRoute>} />
           <Route path="/freebuild/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/freebuild/continue" element={<ProtectedRoute><FreeBuildContinue /></ProtectedRoute>} />
+          <Route path="/freebuild/continue-app" element={<ProtectedRoute><FreeBuildContinueApp /></ProtectedRoute>} />
           <Route path="/native/new" element={<ProtectedRoute><TermsGate section="apps"><NativeAppNew /></TermsGate></ProtectedRoute>} />
           <Route path="/native/convert" element={<ProtectedRoute><SiteToAppWizard /></ProtectedRoute>} />
           <Route path="/native/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />

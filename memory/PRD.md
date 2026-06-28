@@ -1205,3 +1205,53 @@ A 5-step in-chat onboarding for `mode=continuation` projects that gates the Engi
 
 **ملف الاختبار الدائم:** `/app/backend/tests/test_continuation_e2e_real.py`
 
+---
+
+## 📱 2026-02-06 — Universal App Continuation Mode — جاهز
+
+طلب العميل دعم شامل لكل أنواع التطبيقات. النهج: **إطار عالمي** بدل أداة لكل تقنية.
+
+**3 أدوات AI جديدة + كاشف ستاك عالمي + 11 مزوّد جديد:**
+
+### 1. كاشف ستاك عالمي (`continuation_stack_detector.py`)
+- يقرأ manifest files بدون subprocess: package.json, pubspec.yaml, build.gradle, Cargo.toml, go.mod, requirements.txt, pyproject.toml, composer.json, Gemfile, Podfile, *.csproj, project.godot, *.uproject، …
+- يكتشف ٢٥+ تقنية: Flutter، React Native/Expo، Capacitor، Ionic، Cordova، NativeScript، .NET MAUI، Android Native، iOS Native، Electron، Tauri، Next.js، Vue/Nuxt، React/Vite، Express/Fastify/NestJS، FastAPI/Django/Flask، Go، Rust، Java Spring، .NET، PHP Laravel، Ruby Rails، Unity، Unreal، Godot، WordPress
+- يدعم monorepos (يكتشف أكثر من ستاك في نفس المشروع)
+- لكل ستاك: install/build/test/lint/dev commands + artifact paths + needs_cloud_build flag
+
+### 2. أداة `detect_project_stack`
+- READ-ONLY، الذكاء يستدعيها أولاً لاكتشاف التقنية.
+- يرجع primary_stack + all_stacks + monorepo flag + needs_sdks list
+
+### 3. أداة `run_sandbox_command`
+- منفّذ أوامر عالمي داخل sandbox مع قائمة بيضاء صارمة (~50 binary مسموح)
+- يمنع: sudo، rm، curl|bash، fork bomb، /etc/passwd، dd، mkfs، …
+- read-only commands (grep/find/cat/ls) لا تحتاج paywall + لا snapshot
+- write commands (npm install / flutter build) محصورة بالـ paywall + auto-snapshot
+
+### 4. أداة `submit_to_app_store`
+- 9 مزوّدين مدعومين تنظيمياً: Play Console، App Store Connect، Firebase Distribution، TestFlight، EAS Submit، Microsoft Store، Amazon Appstore، Huawei AppGallery، Steam، itch.io
+- منفّذ تنفيذياً MVP: Firebase App Distribution، Expo EAS Submit، test_only (dry-run)
+- الباقي يرجع manual_steps_ar (خطوات بالعربية) — جاهز للتفعيل لاحقاً
+
+### 5. مزوّدون جدد في `continuation_providers.json` (35 إجمالاً الآن):
+- 4 build services (EAS، Codemagic، Bitrise، GitHub Actions)
+- 9 app stores
+- 2 signing (Android Keystore، iOS Provisioning Profile)
+
+### 6. Frontend `/freebuild/continue-app`:
+- صفحة hero مع 9 app kinds + 25 supported tech badges + نفس الـ flow (4 phases + safety + pricing + form + consent)
+- يرسل metadata.project_kind=app + metadata.app_kind للـ backend
+- الـ backend يحفظهم في `project_kind` و `app_kind` على المشروع
+- system prompt الـ AI engineer مدعّم: للتطبيقات يبدأ بـ `detect_project_stack` قبل أي شي
+
+### 7. Testing:
+- **20 unit tests للكاشف** (Flutter، RN Expo، RN bare، Capacitor، Android، iOS، Next.js، Go، Rust، FastAPI، MAUI، Electron، Unity، WordPress، monorepo، …) — كلها PASSED
+- **10 unit tests للـ whitelist** — كلها PASSED
+- **5 unit tests للأدوات** — كلها PASSED
+- **E2E test (11 خطوة) على monorepo حقيقي (Flutter + Go)** — PASSED
+- backend cortex tools count صار 46 (كان 42)
+
+**Total tools across system:** 46 cortex tools (15 منهم continuation-specific).
+**Total tests passing:** 45 unit + 2 E2E (websites 12-step + apps 11-step).
+
