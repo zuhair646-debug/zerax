@@ -1777,25 +1777,102 @@ def make_freebuild_chat_router(db, get_current_user):
 
     @router.post("/project/{pid}/continuation/sandbox/approve-and-deploy")
     async def sandbox_approve_and_deploy(pid: str, payload: dict, user=Depends(get_current_user)):
-        """Approve + push sandbox changes to a review branch on the customer's
-        remote git repo. Returns a Pull Request URL they can review + merge."""
+        """Approve sandbox changes & deploy. Two modes:
+          • mode='github_pr' (default) → push to a new review branch + PR URL
+          • mode='direct_live'         → rsync/FTP DIRECTLY to live VPS/host
+                                          (requires saved deploy_target config)
+
+        For 'direct_live', a `transport` hint can be 'ssh' (default) or 'ftp'.
+        We auto-detect from saved credentials if not specified.
+        """
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"], "mode": "continuation"},
+            {"_id": 0, "id": 1, "continuation_credentials": 1},
+        )
+        if proj is None:
+            raise HTTPException(status_code=404, detail="not found")
+
+        mode = (payload.get("mode") or "github_pr").strip()
+
+        class _Ctx:
+            user_id = user["user_id"]
+            project_id = pid
+
+        if mode == "direct_live":
+            transport = (payload.get("transport") or "").strip()
+            creds = (proj.get("continuation_credentials") or {})
+            has_ssh = bool(creds.get("SSH_HOST") and creds.get("SSH_USERNAME") and creds.get("SSH_PRIVATE_KEY"))
+            has_ftp = bool(creds.get("FTP_HOST") and creds.get("FTP_USERNAME") and creds.get("FTP_PASSWORD"))
+            if not transport:
+                transport = "ssh" if has_ssh else ("ftp" if has_ftp else "")
+            if transport == "ssh":
+                from .continuation_tools import handle_deploy_to_live_vps
+                return await handle_deploy_to_live_vps({"project_id": pid}, _Ctx())
+            if transport == "ftp":
+                from .continuation_tools import handle_deploy_to_live_ftp
+                return await handle_deploy_to_live_ftp({"project_id": pid}, _Ctx())
+            return {
+                "ok": False,
+                "error": "no_deploy_credentials",
+                "hint": "احفظ بيانات SSH (SSH_HOST/SSH_USERNAME/SSH_PRIVATE_KEY) أو FTP (FTP_HOST/FTP_USERNAME/FTP_PASSWORD) أولاً.",
+            }
+
+        # Default: github PR flow (existing behaviour)
+        commit_message = (payload.get("commit_message") or "Zenrex AI proposed changes").strip()[:200]
+        branch_suffix = (payload.get("branch_suffix") or "").strip()[:30]
+        from .continuation_tools import handle_push_to_review_branch
+        return await handle_push_to_review_branch(
+            {"project_id": pid, "commit_message": commit_message, "branch_suffix": branch_suffix},
+            _Ctx(),
+        )
+
+    @router.get("/project/{pid}/continuation/deploy-target")
+    async def get_deploy_target(pid: str, user=Depends(get_current_user)):
+        """Return the saved live-deploy target config (target_dir, source_subdir,
+        post_deploy_command) so the UI can pre-fill the confirmation modal."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"], "mode": "continuation"},
+            {"_id": 0, "continuation_deploy_target": 1, "continuation_credentials": 1},
+        )
+        if proj is None:
+            raise HTTPException(status_code=404, detail="not found")
+        creds = (proj.get("continuation_credentials") or {})
+        return {
+            "ok": True,
+            "deploy_target": proj.get("continuation_deploy_target") or None,
+            "has_ssh": bool(creds.get("SSH_HOST") and creds.get("SSH_USERNAME") and creds.get("SSH_PRIVATE_KEY")),
+            "has_ftp": bool(creds.get("FTP_HOST") and creds.get("FTP_USERNAME") and creds.get("FTP_PASSWORD")),
+        }
+
+    @router.post("/project/{pid}/continuation/deploy-target")
+    async def save_deploy_target(pid: str, payload: dict, user=Depends(get_current_user)):
+        """Persist the live-deploy target config the customer set in the
+        Direct Deploy confirmation modal. Validates that target_dir is an
+        absolute path, source_subdir doesn't escape, and post_deploy_command
+        is non-empty if provided."""
         proj = await db.freebuild_projects.find_one(
             {"id": pid, "user_id": user["user_id"], "mode": "continuation"},
             {"_id": 0, "id": 1},
         )
         if proj is None:
             raise HTTPException(status_code=404, detail="not found")
-        commit_message = (payload.get("commit_message") or "Zenrex AI proposed changes").strip()[:200]
-        branch_suffix = (payload.get("branch_suffix") or "").strip()[:30]
-        from .continuation_tools import handle_push_to_review_branch
-
-        class _Ctx:
-            user_id = user["user_id"]
-        res = await handle_push_to_review_branch(
-            {"project_id": pid, "commit_message": commit_message, "branch_suffix": branch_suffix},
-            _Ctx(),
+        target_dir = (payload.get("target_dir") or "").strip()
+        source_subdir = (payload.get("source_subdir") or "repo").strip().strip("/")
+        post_deploy_command = (payload.get("post_deploy_command") or "").strip()[:500]
+        if not target_dir or not target_dir.startswith("/"):
+            raise HTTPException(status_code=400, detail="target_dir must be absolute (/...)")
+        if ".." in source_subdir:
+            raise HTTPException(status_code=400, detail="source_subdir invalid")
+        cfg = {
+            "target_dir": target_dir,
+            "source_subdir": source_subdir or "repo",
+            "post_deploy_command": post_deploy_command,
+            "updated_at": _now(),
+        }
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {"continuation_deploy_target": cfg}},
         )
-        return res
+        return {"ok": True, "deploy_target": cfg}
 
     @router.get("/continuation/sandbox/preview-auth")
     async def sandbox_preview_auth(request: Request):

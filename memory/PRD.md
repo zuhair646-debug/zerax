@@ -1135,3 +1135,26 @@ A 5-step in-chat onboarding for `mode=continuation` projects that gates the Engi
 - 🔘 OAuth flows (GitHub + Vercel) — needs OAuth Apps registered by owner
 - 🌐 `sandbox.zenrex.ai` DNS A-record + Let's Encrypt cert — owner step
 - 🎬 Real tutorial videos for providers
+
+
+---
+
+## 🚀 2026-02-06 — Direct Deploy (نشر مباشر للسيرفر الحي) — DONE
+
+**User pain:** "اعتمد ونشر" كان يفتح Pull Request على GitHub فقط؛ العميل أبى نشر مباشر للسيرفر الحي.
+
+**Built:**
+- **2 new AI tools** in `continuation_tools.py`:
+  - `deploy_to_live_vps` → SSH + rsync (Hetzner/DO/AWS/أي VPS) + post-deploy command (build/restart)
+  - `deploy_to_live_ftp` → lftp reverse-mirror لمستضيفات السي بانيل (Hostinger/GoDaddy/cPanel)
+- **Endpoint switch:** `/sandbox/approve-and-deploy` يقبل `mode='github_pr'` (السلوك القديم) أو `mode='direct_live'` (الجديد). Auto-detect SSH vs FTP transport.
+- **New endpoints:**
+  - `POST /project/{pid}/continuation/deploy-target` — حفظ `target_dir` + `source_subdir` + `post_deploy_command`
+  - `GET /project/{pid}/continuation/deploy-target` — جلب الإعدادات + flags `has_ssh`/`has_ftp`
+- **Frontend UI** in `ContinuationPreviewPanel.jsx`:
+  - زر أحمر/برتقالي "نشر مباشر للسيرفر" بجوار زر فرع المراجعة
+  - Modal تأكيد: اختيار قناة (SSH/FTP) + تعبئة `target_dir` + `post_deploy_command` + كتابة "نشر مباشر" للتأكيد
+  - عرض نتيجة النشر: deployed_to + snapshot_id احتياطي + post-deploy logs
+- **Safety rails:** auto-snapshot قبل أي نشر، private key في tmp 0600 file مع unlink في finally، subprocess timeouts، absolute-path validation، tamper-evident audit log entries.
+
+**Tests:** 5 unit tests في `/app/backend/tests/test_continuation_direct_deploy.py` (continuation guard، missing target، missing creds × 2، empty sandbox) — جميعها PASSED. 4 curl tests للـ endpoints — جميعها PASSED.

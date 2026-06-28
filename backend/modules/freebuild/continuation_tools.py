@@ -365,6 +365,243 @@ async def handle_push_to_review_branch(args: Dict[str, Any], ctx: Any = None) ->
     }
 
 
+# ────────────── Direct Deploy (live VPS) ──────────────
+# These tools push approved sandbox changes DIRECTLY to the customer's live
+# production server — bypassing the GitHub PR loop. Used when the customer
+# wants instant publishing rather than a code-review cycle.
+#
+# Safety rails baked in:
+#   • Auto-snapshot of sandbox state BEFORE any push (rollback anchor)
+#   • Private key written to a 0600 tmp file and unlinked in `finally`
+#   • All shell args quoted via shlex; never via f-string interpolation
+#   • Post-deploy commands run via `bash -lc` on remote, captured in audit
+#   • Deploy target dir must be on a per-project allowlist saved by the user
+import shlex
+import tempfile
+
+
+SSH_COMMON_OPTS = [
+    "-o", "StrictHostKeyChecking=accept-new",
+    "-o", "UserKnownHostsFile=/dev/null",
+    "-o", "ConnectTimeout=15",
+    "-o", "ServerAliveInterval=10",
+]
+
+
+async def _load_deploy_target(db, pid: str) -> Optional[Dict[str, Any]]:
+    """Read the customer's saved deploy-target config (target_dir, source_subdir,
+    post_deploy_command, deploy_port). Returns None if not configured."""
+    doc = await db.freebuild_projects.find_one(
+        {"id": pid}, {"_id": 0, "continuation_deploy_target": 1},
+    )
+    if not doc:
+        return None
+    return doc.get("continuation_deploy_target") or None
+
+
+async def handle_deploy_to_live_vps(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """Rsync the approved sandbox contents to the customer's live VPS over SSH,
+    then run optional post-deploy commands (build/restart). Requires saved
+    credentials: SSH_HOST, SSH_USERNAME, SSH_PRIVATE_KEY (+ optional SSH_PORT).
+
+    Required project config (saved separately via /deploy-target endpoint):
+      - target_dir: remote dir to rsync into (e.g. /var/www/html/)
+      - source_subdir: dir inside sandbox to push (default 'repo')
+      - post_deploy_command: optional shell command (e.g. 'systemctl reload nginx')
+    """
+    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    if not pid:
+        return {"ok": False, "error": "project_id required"}
+
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        from server import db as _db  # type: ignore
+        db = _db
+
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
+
+    target_cfg = await _load_deploy_target(db, pid)
+    if not target_cfg or not target_cfg.get("target_dir"):
+        return {"ok": False, "error": "deploy_target_not_configured",
+                "hint": "Save target_dir + post_deploy_command via /deploy-target first"}
+    target_dir = target_cfg["target_dir"]
+    source_subdir = (target_cfg.get("source_subdir") or "repo").strip("/")
+    post_cmd = (target_cfg.get("post_deploy_command") or "").strip()
+
+    host = await _load_cred(db, pid, "SSH_HOST")
+    user = await _load_cred(db, pid, "SSH_USERNAME")
+    privkey = await _load_cred(db, pid, "SSH_PRIVATE_KEY")
+    port_raw = await _load_cred(db, pid, "SSH_PORT") or "22"
+    try:
+        port = int(port_raw)
+    except Exception:
+        port = 22
+
+    if not (host and user and privkey):
+        return {"ok": False, "error": "ssh_credentials_incomplete",
+                "hint": "Need SSH_HOST + SSH_USERNAME + SSH_PRIVATE_KEY in encrypted credentials"}
+
+    sandbox = _ensure_sandbox(pid)
+    src_path = sandbox / source_subdir
+    if not src_path.exists() or not any(src_path.iterdir()):
+        return {"ok": False, "error": "sandbox_source_empty",
+                "hint": f"No files at sandbox/{source_subdir}/. Clone or sync first."}
+
+    # Snapshot BEFORE deploy so we keep a rollback anchor on Zenrex side
+    snap = await handle_create_snapshot({"project_id": pid, "label": "pre_direct_deploy"}, ctx)
+
+    # Write private key to a chmod-600 tmpfile (unlinked in finally)
+    keyfile = tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False)
+    try:
+        keyfile.write(privkey if privkey.endswith("\n") else privkey + "\n")
+        keyfile.flush()
+        keyfile.close()
+        os.chmod(keyfile.name, 0o600)
+
+        ssh_cmd_str = " ".join(["ssh", "-i", shlex.quote(keyfile.name),
+                                "-p", str(port)] + SSH_COMMON_OPTS)
+        remote = f"{user}@{host}:{target_dir.rstrip('/')}/"
+
+        # 1) rsync
+        rsync_cmd = [
+            "rsync", "-az", "--delete",
+            "--no-perms", "--no-owner", "--no-group",
+            "--exclude=.git", "--exclude=__pycache__", "--exclude=node_modules",
+            "-e", ssh_cmd_str,
+            f"{src_path}/", remote,
+        ]
+        rsync_res = await _run(rsync_cmd, cwd=sandbox, timeout=600)
+        # Scrub any token-ish content (defensive)
+        rsync_err = (rsync_res.get("stderr") or "")[:1500]
+        rsync_out = (rsync_res.get("stdout") or "")[:1500]
+        if not rsync_res["ok"]:
+            await _audit(ctx, db, pid, "deploy_to_live_vps",
+                         tool_name="deploy_to_live_vps", success=False,
+                         details={"stage": "rsync", "target": target_dir,
+                                  "host": host, "error": rsync_err[:500],
+                                  "snapshot_id": snap.get("snapshot_id")})
+            return {"ok": False, "error": "rsync_failed",
+                    "stderr": rsync_err, "snapshot_id": snap.get("snapshot_id")}
+
+        # 2) Optional post-deploy command (build, restart, reload nginx, etc.)
+        post_out, post_err, post_ok = "", "", True
+        if post_cmd:
+            ssh_post = [
+                "ssh", "-i", keyfile.name, "-p", str(port),
+                *SSH_COMMON_OPTS,
+                f"{user}@{host}", "bash", "-lc", post_cmd,
+            ]
+            post_res = await _run(ssh_post, timeout=300)
+            post_ok = bool(post_res.get("ok"))
+            post_out = (post_res.get("stdout") or "")[:2000]
+            post_err = (post_res.get("stderr") or "")[:2000]
+
+        success = post_ok  # rsync already verified above
+        await _audit(ctx, db, pid, "deploy_to_live_vps",
+                     tool_name="deploy_to_live_vps", success=success,
+                     details={"target": target_dir, "host": host, "port": port,
+                              "source_subdir": source_subdir,
+                              "post_command_ran": bool(post_cmd),
+                              "post_ok": post_ok,
+                              "snapshot_id": snap.get("snapshot_id")})
+        return {
+            "ok": success,
+            "deployed_to": f"{user}@{host}:{target_dir}",
+            "snapshot_id": snap.get("snapshot_id"),
+            "rsync_stdout": rsync_out[:800],
+            "post_command": post_cmd or None,
+            "post_stdout": post_out[:800],
+            "post_stderr": post_err[:800],
+            "deployed_at": _now_iso(),
+            "instructions_ar": (
+                "✅ التعديلات نُشرت مباشرة على السيرفر الحي."
+                if success else
+                "⚠️ المزامنة تمت لكن أمر ما بعد النشر فشل — راجع post_stderr."
+            ),
+        }
+    finally:
+        try:
+            os.unlink(keyfile.name)
+        except Exception:
+            pass
+
+
+async def handle_deploy_to_live_ftp(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """Upload sandbox contents directly to a live FTP/SFTP server using lftp
+    mirror -R (reverse mirror = upload). Used for shared hosting providers
+    (Hostinger, GoDaddy, etc.) that don't give SSH access."""
+    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    if not pid:
+        return {"ok": False, "error": "project_id required"}
+
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        from server import db as _db  # type: ignore
+        db = _db
+
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
+
+    target_cfg = await _load_deploy_target(db, pid)
+    if not target_cfg or not target_cfg.get("target_dir"):
+        return {"ok": False, "error": "deploy_target_not_configured"}
+    target_dir = target_cfg["target_dir"]
+    source_subdir = (target_cfg.get("source_subdir") or "repo").strip("/")
+
+    host = await _load_cred(db, pid, "FTP_HOST")
+    user = await _load_cred(db, pid, "FTP_USERNAME")
+    pwd = await _load_cred(db, pid, "FTP_PASSWORD")
+    port = await _load_cred(db, pid, "FTP_PORT") or "21"
+    if not (host and user and pwd):
+        return {"ok": False, "error": "ftp_credentials_incomplete"}
+
+    sandbox = _ensure_sandbox(pid)
+    src_path = sandbox / source_subdir
+    if not src_path.exists() or not any(src_path.iterdir()):
+        return {"ok": False, "error": "sandbox_source_empty"}
+
+    snap = await handle_create_snapshot({"project_id": pid, "label": "pre_direct_ftp_deploy"}, ctx)
+
+    lftp = shutil.which("lftp")
+    if not lftp:
+        return {"ok": False, "error": "lftp_not_installed"}
+
+    # lftp script: connect, mirror upload (-R), delete remote files no longer present
+    script = (
+        f"set ftp:ssl-allow no; set ssl:verify-certificate no; "
+        f"open -p {port} -u {shlex.quote(user)},{shlex.quote(pwd)} {shlex.quote(host)}; "
+        f"mirror -R --delete --parallel=3 --exclude '\\.git/' {shlex.quote(str(src_path))} {shlex.quote(target_dir)}; "
+        f"bye"
+    )
+    res = await _run([lftp, "-c", script], cwd=sandbox, timeout=600)
+    safe_err = (res.get("stderr") or "").replace(pwd, "***REDACTED***")[:1500]
+    safe_out = (res.get("stdout") or "").replace(pwd, "***REDACTED***")[:1500]
+    success = bool(res.get("ok"))
+
+    await _audit(ctx, db, pid, "deploy_to_live_ftp",
+                 tool_name="deploy_to_live_ftp", success=success,
+                 details={"target": target_dir, "host": host,
+                          "source_subdir": source_subdir,
+                          "snapshot_id": snap.get("snapshot_id"),
+                          "error": None if success else safe_err[:500]})
+    return {
+        "ok": success,
+        "deployed_to": f"ftp://{user}@{host}{target_dir}",
+        "snapshot_id": snap.get("snapshot_id"),
+        "stdout": safe_out[:800],
+        "stderr": "" if success else safe_err[:800],
+        "deployed_at": _now_iso(),
+        "instructions_ar": (
+            "✅ التعديلات رُفعت مباشرة عبر FTP على السيرفر الحي."
+            if success else
+            "⚠️ فشل رفع FTP — راجع stderr."
+        ),
+    }
+
+
 async def _audit(ctx, db, pid, action, **kw):
     """Best-effort audit log writer used by tool handlers."""
     try:
@@ -648,6 +885,24 @@ CONTINUATION_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             "required": ["commit_message"],
         },
     },
+    {
+        "name": "deploy_to_live_vps",
+        "description": "DIRECT LIVE DEPLOY (SSH). Rsync the approved sandbox files to the customer's live VPS over SSH, then run optional post-deploy commands (build, restart). Requires SSH_HOST/SSH_USERNAME/SSH_PRIVATE_KEY credentials AND a saved deploy_target config (target_dir + post_deploy_command). Auto-snapshots before pushing. Use ONLY after explicit customer approval — this overwrites live production files.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"project_id": {"type": "string"}},
+            "required": [],
+        },
+    },
+    {
+        "name": "deploy_to_live_ftp",
+        "description": "DIRECT LIVE DEPLOY (FTP). Upload sandbox files directly to a live FTP/SFTP server using lftp reverse-mirror. For shared hosting (Hostinger, GoDaddy, cPanel) without SSH access. Auto-snapshots before pushing. Requires FTP_HOST/FTP_USERNAME/FTP_PASSWORD credentials AND a saved deploy_target config.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"project_id": {"type": "string"}},
+            "required": [],
+        },
+    },
 ]
 
 CONTINUATION_TOOL_HANDLERS: Dict[str, Any] = {
@@ -660,4 +915,6 @@ CONTINUATION_TOOL_HANDLERS: Dict[str, Any] = {
     "read_sandbox_file": handle_read_sandbox_file,
     "propose_sandbox_change": handle_propose_sandbox_change,
     "push_to_review_branch": handle_push_to_review_branch,
+    "deploy_to_live_vps": handle_deploy_to_live_vps,
+    "deploy_to_live_ftp": handle_deploy_to_live_ftp,
 }

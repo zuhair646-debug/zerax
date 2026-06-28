@@ -6,7 +6,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   Folder, FileText, History, ShieldAlert, Loader2,
-  RotateCcw, Eye, X, ChevronRight, CheckCircle2, Send,
+  RotateCcw, Eye, X, ChevronRight, CheckCircle2, Send, Rocket, AlertTriangle,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -207,6 +207,39 @@ export default function ContinuationPreviewPanel({ projectId, onClose }) {
   const [deploying, setDeploying] = useState(false);
   const [prResult, setPrResult] = useState(null);
 
+  // ─── Direct Deploy state ────────────────────────────────────────────
+  const [showDirect, setShowDirect] = useState(false);
+  const [directLoading, setDirectLoading] = useState(false);
+  const [directResult, setDirectResult] = useState(null);
+  const [deployTarget, setDeployTarget] = useState({
+    target_dir: '', source_subdir: 'repo', post_deploy_command: '',
+  });
+  const [transport, setTransport] = useState('ssh'); // 'ssh' | 'ftp'
+  const [hasSsh, setHasSsh] = useState(false);
+  const [hasFtp, setHasFtp] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+
+  // Pre-fill the modal with any previously saved config
+  useEffect(() => {
+    if (!showDirect) return;
+    (async () => {
+      try {
+        const r = await authedFetch(`${API}/api/freebuild-chat/project/${projectId}/continuation/deploy-target`);
+        const d = await r.json();
+        if (d.ok) {
+          if (d.deploy_target) setDeployTarget({
+            target_dir: d.deploy_target.target_dir || '',
+            source_subdir: d.deploy_target.source_subdir || 'repo',
+            post_deploy_command: d.deploy_target.post_deploy_command || '',
+          });
+          setHasSsh(!!d.has_ssh);
+          setHasFtp(!!d.has_ftp);
+          setTransport(d.has_ssh ? 'ssh' : (d.has_ftp ? 'ftp' : 'ssh'));
+        }
+      } catch (_) { /* ignore */ }
+    })();
+  }, [showDirect, projectId]);
+
   const approveAndDeploy = async () => {
     const msg = window.prompt('وصف التغيير اللي تبي يكون في commit message:', 'تحديثات Zenrex AI');
     if (!msg) return;
@@ -215,7 +248,7 @@ export default function ContinuationPreviewPanel({ projectId, onClose }) {
     try {
       const r = await authedFetch(`${API}/api/freebuild-chat/project/${projectId}/continuation/sandbox/approve-and-deploy`, {
         method: 'POST',
-        body: JSON.stringify({ commit_message: msg, branch_suffix: 'review' }),
+        body: JSON.stringify({ mode: 'github_pr', commit_message: msg, branch_suffix: 'review' }),
       });
       const d = await r.json();
       if (!d.ok) { toast.error(d.error || 'فشل النشر'); setPrResult({ error: d.error }); return; }
@@ -226,20 +259,68 @@ export default function ContinuationPreviewPanel({ projectId, onClose }) {
     } finally { setDeploying(false); }
   };
 
+  const runDirectDeploy = async () => {
+    if (confirmText.trim() !== 'نشر مباشر') {
+      toast.error('اكتب "نشر مباشر" بالضبط للتأكيد');
+      return;
+    }
+    if (!deployTarget.target_dir.trim().startsWith('/')) {
+      toast.error('مسار النشر لازم يبدأ بـ /');
+      return;
+    }
+    setDirectLoading(true);
+    setDirectResult(null);
+    try {
+      // 1) Save / update deploy target config
+      const save = await authedFetch(`${API}/api/freebuild-chat/project/${projectId}/continuation/deploy-target`, {
+        method: 'POST',
+        body: JSON.stringify(deployTarget),
+      });
+      const saveD = await save.json();
+      if (!saveD.ok) { toast.error(saveD.detail || 'فشل حفظ إعدادات النشر'); return; }
+
+      // 2) Trigger direct deploy
+      const r = await authedFetch(`${API}/api/freebuild-chat/project/${projectId}/continuation/sandbox/approve-and-deploy`, {
+        method: 'POST',
+        body: JSON.stringify({ mode: 'direct_live', transport }),
+      });
+      const d = await r.json();
+      setDirectResult(d);
+      if (!d.ok) {
+        toast.error(d.error || 'فشل النشر المباشر');
+      } else {
+        toast.success('🚀 نُشر مباشرة على السيرفر الحي');
+        setConfirmText('');
+      }
+    } catch (e) {
+      toast.error('فشل النشر — راجع الشبكة');
+    } finally { setDirectLoading(false); }
+  };
+
   return (
     <div data-testid="continuation-preview-panel" dir="rtl" className="rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-black via-fuchsia-950/30 to-black backdrop-blur p-4 sm:p-5 mb-4">
       <div className="flex items-center gap-3 mb-3 pb-3 border-b border-white/5">
         <Eye className="w-5 h-5 text-fuchsia-300" />
         <h3 className="text-sm font-black text-fuchsia-100">معاينة Sandbox + السجل</h3>
         <button
+          onClick={() => { setShowDirect(true); setDirectResult(null); }}
+          disabled={deploying || directLoading}
+          data-testid="direct-deploy-btn"
+          className="mr-auto px-3 py-1.5 rounded-lg bg-gradient-to-r from-rose-600 to-orange-500 hover:from-rose-500 hover:to-orange-400 text-[11px] font-black text-white disabled:opacity-40 flex items-center gap-1.5"
+          title="ارفع التعديلات مباشرة على السيرفر الحي بدون GitHub"
+        >
+          <Rocket className="w-3.5 h-3.5" />
+          نشر مباشر للسيرفر
+        </button>
+        <button
           onClick={approveAndDeploy}
-          disabled={deploying}
+          disabled={deploying || directLoading}
           data-testid="approve-deploy-btn"
-          className="mr-auto px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-[11px] font-black text-white disabled:opacity-40 flex items-center gap-1.5"
+          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-[11px] font-black text-white disabled:opacity-40 flex items-center gap-1.5"
           title="ارفع التعديلات على فرع مراجعة في GitHub"
         >
           {deploying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-          اعتمد ونشر
+          فرع مراجعة (PR)
         </button>
         {onClose && (
           <button onClick={onClose} data-testid="preview-close-btn" className="text-zinc-400 hover:text-fuchsia-300">
@@ -260,6 +341,146 @@ export default function ContinuationPreviewPanel({ projectId, onClose }) {
                   افتح Pull Request في GitHub →
                 </a>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Deploy result banner */}
+      {directResult && (
+        <div data-testid="direct-deploy-result" className={`mb-3 p-3 rounded-xl border ${directResult.ok ? 'bg-orange-500/10 border-orange-500/30' : 'bg-rose-500/10 border-rose-500/40'}`}>
+          <div className="flex items-start gap-2">
+            {directResult.ok
+              ? <Rocket className="w-4 h-4 text-orange-300 shrink-0 mt-0.5" />
+              : <AlertTriangle className="w-4 h-4 text-rose-300 shrink-0 mt-0.5" />}
+            <div className="flex-1 min-w-0">
+              <div className={`text-[11px] font-bold mb-1 ${directResult.ok ? 'text-orange-100' : 'text-rose-100'}`}>
+                {directResult.ok ? 'نُشر مباشر على السيرفر الحي' : `فشل النشر: ${directResult.error || 'غير معروف'}`}
+              </div>
+              {directResult.deployed_to && (
+                <div className="text-[10px] text-zinc-300 mb-1 font-mono break-all">{directResult.deployed_to}</div>
+              )}
+              {directResult.instructions_ar && (
+                <div className="text-[10px] text-zinc-300/80 mb-2">{directResult.instructions_ar}</div>
+              )}
+              {directResult.snapshot_id && (
+                <div className="text-[10px] text-zinc-400">سناب شوت احتياطي قبل النشر: <code className="text-zinc-200">{directResult.snapshot_id}</code></div>
+              )}
+              {(directResult.post_stderr || directResult.stderr) && (
+                <pre className="mt-2 max-h-32 overflow-auto text-[10px] bg-black/40 p-2 rounded text-rose-200 font-mono whitespace-pre-wrap">{directResult.post_stderr || directResult.stderr}</pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Deploy confirmation modal */}
+      {showDirect && (
+        <div data-testid="direct-deploy-modal" className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => !directLoading && setShowDirect(false)}>
+          <div dir="rtl" className="w-full max-w-lg rounded-2xl border border-rose-500/40 bg-gradient-to-br from-zinc-950 via-rose-950/30 to-zinc-950 p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <Rocket className="w-5 h-5 text-rose-300" />
+              <h4 className="text-base font-black text-rose-100">نشر مباشر للسيرفر الحي</h4>
+              <button onClick={() => setShowDirect(false)} disabled={directLoading} className="mr-auto text-zinc-400 hover:text-rose-300"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="mb-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-100 leading-relaxed">
+              <div className="flex items-center gap-1.5 font-bold mb-1"><AlertTriangle className="w-4 h-4" /> تحذير</div>
+              هذا الإجراء يكتب فوق ملفات سيرفرك الحي مباشرة. سيتم أخذ نسخة احتياطية تلقائية قبل النشر، لكن المسؤولية الكاملة عليك. للنشر الأكثر أماناً استخدم زر «فرع مراجعة (PR)».
+            </div>
+
+            {/* Transport selector */}
+            <div className="mb-3">
+              <label className="text-[11px] font-bold text-zinc-300 mb-1.5 block">قناة النقل:</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  data-testid="transport-ssh"
+                  onClick={() => setTransport('ssh')}
+                  disabled={!hasSsh}
+                  className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-bold border transition ${transport === 'ssh' ? 'bg-rose-500/30 border-rose-400 text-white' : 'bg-black/30 border-white/10 text-zinc-400 hover:bg-white/5'} ${!hasSsh ? 'opacity-40 cursor-not-allowed' : ''}`}
+                >
+                  SSH + rsync {hasSsh ? '✓' : '(لا توجد مفاتيح)'}
+                </button>
+                <button
+                  type="button"
+                  data-testid="transport-ftp"
+                  onClick={() => setTransport('ftp')}
+                  disabled={!hasFtp}
+                  className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-bold border transition ${transport === 'ftp' ? 'bg-rose-500/30 border-rose-400 text-white' : 'bg-black/30 border-white/10 text-zinc-400 hover:bg-white/5'} ${!hasFtp ? 'opacity-40 cursor-not-allowed' : ''}`}
+                >
+                  FTP / SFTP {hasFtp ? '✓' : '(لا توجد بيانات)'}
+                </button>
+              </div>
+            </div>
+
+            {/* Deploy target fields */}
+            <div className="space-y-2 mb-3">
+              <label className="text-[11px] font-bold text-zinc-300 block">
+                مسار النشر على السيرفر الحي (target_dir):
+                <input
+                  data-testid="deploy-target-dir"
+                  value={deployTarget.target_dir}
+                  onChange={(e) => setDeployTarget({ ...deployTarget, target_dir: e.target.value })}
+                  placeholder="/var/www/html/  أو  /opt/myapp/frontend/build/"
+                  className="mt-1 w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-[12px] text-white font-mono placeholder:text-zinc-600 focus:border-rose-400 outline-none"
+                />
+              </label>
+              <label className="text-[11px] font-bold text-zinc-300 block">
+                المجلد المصدر داخل Sandbox (source_subdir):
+                <input
+                  data-testid="deploy-source-subdir"
+                  value={deployTarget.source_subdir}
+                  onChange={(e) => setDeployTarget({ ...deployTarget, source_subdir: e.target.value })}
+                  placeholder="repo"
+                  className="mt-1 w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-[12px] text-white font-mono placeholder:text-zinc-600 focus:border-rose-400 outline-none"
+                />
+              </label>
+              {transport === 'ssh' && (
+                <label className="text-[11px] font-bold text-zinc-300 block">
+                  أمر بعد النشر (اختياري — بناء/إعادة تشغيل):
+                  <textarea
+                    data-testid="deploy-post-cmd"
+                    value={deployTarget.post_deploy_command}
+                    onChange={(e) => setDeployTarget({ ...deployTarget, post_deploy_command: e.target.value })}
+                    placeholder="cd /opt/myapp && yarn build && systemctl reload nginx"
+                    rows={2}
+                    className="mt-1 w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-[11px] text-white font-mono placeholder:text-zinc-600 focus:border-rose-400 outline-none"
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="mb-4">
+              <label className="text-[11px] font-bold text-rose-200 block mb-1.5">
+                للتأكيد — اكتب <code className="bg-black/40 px-1.5 py-0.5 rounded text-white">نشر مباشر</code>:
+              </label>
+              <input
+                data-testid="deploy-confirm-text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="نشر مباشر"
+                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-rose-500/40 text-[12px] text-white font-bold focus:border-rose-400 outline-none"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                data-testid="deploy-cancel-btn"
+                onClick={() => setShowDirect(false)}
+                disabled={directLoading}
+                className="flex-1 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[12px] font-bold text-zinc-200 disabled:opacity-40"
+              >
+                إلغاء
+              </button>
+              <button
+                data-testid="deploy-confirm-btn"
+                onClick={runDirectDeploy}
+                disabled={directLoading || (!hasSsh && !hasFtp)}
+                className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-rose-600 to-orange-500 hover:from-rose-500 hover:to-orange-400 text-[12px] font-black text-white disabled:opacity-40 flex items-center justify-center gap-1.5"
+              >
+                {directLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
+                نفّذ النشر المباشر
+              </button>
             </div>
           </div>
         </div>
