@@ -1431,6 +1431,316 @@ def make_freebuild_chat_router(db, get_current_user):
         return {"id": pid, "name": payload.name, "mode": proj_mode, "video_submode": video_submode, "platform": platform}
 
     # ===== Continuation Mode — analyze existing website + AI maintenance =====
+    @router.get("/continuation/providers-catalog")
+    async def get_continuation_providers_catalog():
+        """Return the catalog of Git providers + Hosting providers used in the
+        opening chat flow of a continuation project. Each entry includes label,
+        emoji, credential keys, instructions, where-to-get URL, and tutorial
+        video links (AR/EN)."""
+        import json as _json
+        from pathlib import Path
+        path = Path(__file__).parent.parent.parent / "data" / "continuation_providers.json"
+        if not path.exists():
+            return {"git_providers": [], "hosting_providers": []}
+        with open(path, "r", encoding="utf-8") as f:
+            return _json.load(f)
+
+    # ─── Continuation Onboarding Wizard (الفاحص → Provider → Keys → Consent) ───
+    @router.post("/continuation/inspect-url")
+    async def inspect_continuation_url(payload: dict, user=Depends(get_current_user)):
+        """الفاحص — Fetch the user's site externally and detect tech stack.
+        Returns a brief that the Inspector card displays before the user picks
+        a repository provider. Read-only, no credentials needed."""
+        import re
+        import httpx
+        url = (payload.get("url") or "").strip()
+        if not url:
+            raise HTTPException(status_code=400, detail="url is required")
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+        domain = re.sub(r"^https?://", "", url).split("/")[0]
+        # Fetch HTML + headers
+        platform = "unknown"
+        framework = "unknown"
+        hints = []
+        title = ""
+        favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+        ssl_ok = url.startswith("https://")
+        status_code = 0
+        try:
+            async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+                resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 ZenrexInspector/1.0"})
+                status_code = resp.status_code
+                html = resp.text[:80000] if resp.text else ""
+                headers_l = {k.lower(): v for k, v in resp.headers.items()}
+                # Detect platform from headers
+                server = headers_l.get("server", "").lower()
+                xpb = headers_l.get("x-powered-by", "").lower()
+                if "vercel" in server or "vercel" in xpb or "x-vercel-id" in headers_l:
+                    platform, framework = "Vercel", "Next.js (likely)"
+                    hints.append("الموقع مستضاف على Vercel — يفضّل ربط Vercel + GitHub")
+                elif "netlify" in server or "x-nf-request-id" in headers_l:
+                    platform, framework = "Netlify", "Static / JAMstack"
+                    hints.append("استضافة Netlify — يفضّل ربط Netlify + Git")
+                elif "cloudflare" in server:
+                    platform = "Cloudflare"
+                    hints.append("Cloudflare في الواجهة — قد يكون Pages/Workers أو Proxy فقط")
+                elif "nginx" in server or "apache" in server or "litespeed" in server:
+                    platform = "VPS / Shared Hosting"
+                    hints.append("الموقع على VPS أو استضافة مشتركة — يحتاج SSH أو FTP/cPanel")
+                # Detect framework from HTML
+                hl = html.lower()
+                if "wp-content/" in hl or "wp-json" in hl:
+                    framework = "WordPress"
+                    if platform == "unknown":
+                        platform = "WordPress Hosting"
+                    hints.append("اكتشفنا WordPress — يحتاج Application Password أو FTP/cPanel")
+                elif "__next_data__" in hl or "_next/static" in hl:
+                    framework = "Next.js"
+                elif "data-react-helmet" in hl or "react" in hl[:5000]:
+                    if framework == "unknown":
+                        framework = "React"
+                elif "ng-version" in hl:
+                    framework = "Angular"
+                elif "shopify" in hl[:5000]:
+                    framework = "Shopify"
+                    hints.append("الموقع على Shopify — حالياً ندعم Git/VPS فقط، Shopify قريباً")
+                # Title
+                m = re.search(r"<title[^>]*>([^<]+)</title>", html, re.IGNORECASE)
+                if m:
+                    title = m.group(1).strip()[:120]
+        except httpx.TimeoutException:
+            hints.append("⚠️ الموقع تأخر في الرد — تأكّد من الرابط")
+        except Exception as e:
+            logger.warning(f"[continuation.inspect] {url} failed: {e}")
+            hints.append("⚠️ تعذّر فحص الموقع خارجياً — يمكنك المتابعة يدوياً")
+        # Recommend a provider
+        recommended_provider = None
+        if framework == "WordPress":
+            recommended_provider = "wordpress_com"
+        elif platform == "Vercel":
+            recommended_provider = "vercel"
+        elif platform == "Netlify":
+            recommended_provider = "netlify"
+        elif platform == "VPS / Shared Hosting":
+            recommended_provider = "hetzner"  # generic VPS card
+        return {
+            "url": url,
+            "domain": domain,
+            "title": title,
+            "favicon": favicon,
+            "platform": platform,
+            "framework": framework,
+            "ssl": ssl_ok,
+            "status_code": status_code,
+            "hints": hints,
+            "recommended_provider": recommended_provider,
+            "fetched_at": _now(),
+        }
+
+    @router.get("/project/{pid}/continuation/setup")
+    async def get_continuation_setup(pid: str, user=Depends(get_current_user)):
+        """Current setup-wizard state for the chat-embedded onboarding."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "mode": 1, "continuation_setup": 1,
+             "continuation_site_url": 1, "continuation_inspection": 1,
+             "continuation_provider_id": 1, "continuation_credentials_meta": 1,
+             "continuation_llm_provider": 1, "continuation_consent": 1},
+        )
+        if not proj:
+            raise HTTPException(status_code=404, detail="project not found")
+        if proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        setup = proj.get("continuation_setup") or {"state": "url", "completed": False}
+        return {
+            "state": setup.get("state", "url"),
+            "completed": bool(setup.get("completed")),
+            "site_url": proj.get("continuation_site_url"),
+            "inspection": proj.get("continuation_inspection"),
+            "provider_id": proj.get("continuation_provider_id"),
+            "credentials_meta": proj.get("continuation_credentials_meta") or {},
+            "llm_provider": proj.get("continuation_llm_provider"),
+            "consent": proj.get("continuation_consent"),
+        }
+
+    @router.post("/project/{pid}/continuation/setup/save-url")
+    async def save_continuation_url(pid: str, payload: dict, user=Depends(get_current_user)):
+        """Step 1 — store the inspected URL on the project and check for
+        duplicates across the user's other continuation projects."""
+        from .secure_credentials import fingerprint_secret
+        proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1})
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        url = (payload.get("url") or "").strip().lower().rstrip("/")
+        inspection = payload.get("inspection") or {}
+        if not url:
+            raise HTTPException(status_code=400, detail="url is required")
+        # Duplicate check across user projects (soft, returns existing pid)
+        dupe = await db.freebuild_projects.find_one(
+            {"user_id": user["user_id"], "mode": "continuation",
+             "continuation_site_url_norm": url, "id": {"$ne": pid},
+             "status": {"$ne": "deleted"}},
+            {"_id": 0, "id": 1, "name": 1, "created_at": 1, "continuation_setup": 1},
+        )
+        if dupe:
+            return {
+                "ok": False,
+                "duplicate": True,
+                "existing_project_id": dupe.get("id"),
+                "existing_project_name": dupe.get("name"),
+                "message": "عندك مشروع تكملة سابق لنفس الرابط. تكمل عليه أو تبدأ جديد؟",
+            }
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {
+                "continuation_site_url": payload.get("url"),
+                "continuation_site_url_norm": url,
+                "continuation_inspection": inspection,
+                "continuation_setup": {"state": "provider", "completed": False},
+                "updated_at": _now(),
+            }},
+        )
+        return {"ok": True, "next_state": "provider"}
+
+    @router.post("/project/{pid}/continuation/setup/select-provider")
+    async def select_continuation_provider(pid: str, payload: dict, user=Depends(get_current_user)):
+        """Step 2 — record the chosen provider (does not save the key yet)."""
+        proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1})
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        provider_id = (payload.get("provider_id") or "").strip()
+        if not provider_id:
+            raise HTTPException(status_code=400, detail="provider_id required")
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {
+                "continuation_provider_id": provider_id,
+                "continuation_setup": {"state": "provider_key", "completed": False},
+                "updated_at": _now(),
+            }},
+        )
+        return {"ok": True, "next_state": "provider_key", "provider_id": provider_id}
+
+    @router.post("/project/{pid}/continuation/setup/save-credential")
+    async def save_continuation_credential(pid: str, payload: dict, user=Depends(get_current_user)):
+        """Step 3 — encrypt + persist a single credential value. Body:
+        { key_name: 'GITHUB_TOKEN', value: '...', validity_months: 6 }."""
+        from .secure_credentials import encrypt_secret, fingerprint_secret, mask_secret
+        proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1})
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        key_name = (payload.get("key_name") or "").strip()
+        value = (payload.get("value") or "").strip()
+        validity_months = int(payload.get("validity_months") or 6)
+        if not key_name or not value:
+            raise HTTPException(status_code=400, detail="key_name and value are required")
+        if validity_months < 3:
+            raise HTTPException(status_code=400, detail="validity_months must be >= 3")
+        # Encrypt + fingerprint
+        try:
+            ciphertext = encrypt_secret(value)
+        except Exception as e:
+            logger.exception(f"[continuation.save-cred] encryption failed: {e}")
+            raise HTTPException(status_code=500, detail="encryption_unavailable")
+        fp = fingerprint_secret(value)
+        masked = mask_secret(value)
+        # Persist encrypted blob + metadata. Plaintext NEVER touches DB.
+        from datetime import datetime, timedelta, timezone
+        expires_at = datetime.now(timezone.utc) + timedelta(days=validity_months * 30)
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$set": {
+                f"continuation_credentials.{key_name}": {
+                    "ciphertext": ciphertext,
+                    "fingerprint": fp,
+                    "validity_months": validity_months,
+                    "expires_at": expires_at.isoformat(),
+                    "saved_at": _now(),
+                },
+                f"continuation_credentials_meta.{key_name}": {
+                    "mask": masked,
+                    "validity_months": validity_months,
+                    "expires_at": expires_at.isoformat(),
+                    "saved_at": _now(),
+                },
+                "updated_at": _now(),
+            }},
+        )
+        return {"ok": True, "key_name": key_name, "mask": masked,
+                "expires_at": expires_at.isoformat()}
+
+    @router.post("/project/{pid}/continuation/setup/save-llm-key")
+    async def save_continuation_llm_key(pid: str, payload: dict, user=Depends(get_current_user)):
+        """Step 4 — second key for the AI brain. Either:
+        - provider='anthropic' + value=sk-ant-...  (uses user's own Claude budget)
+        - provider='emergent'  (uses Zenrex's Universal Key, billed as credits)
+        """
+        from .secure_credentials import encrypt_secret, fingerprint_secret, mask_secret
+        proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1})
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        provider = (payload.get("provider") or "emergent").strip().lower()
+        if provider not in {"anthropic", "emergent"}:
+            raise HTTPException(status_code=400, detail="provider must be 'anthropic' or 'emergent'")
+        update = {"continuation_llm_provider": provider, "updated_at": _now(),
+                  "continuation_setup": {"state": "consent", "completed": False}}
+        if provider == "anthropic":
+            value = (payload.get("value") or "").strip()
+            if not value.startswith("sk-ant-"):
+                raise HTTPException(status_code=400, detail="Anthropic key must start with sk-ant-")
+            ciphertext = encrypt_secret(value)
+            update["continuation_credentials.ANTHROPIC_API_KEY"] = {
+                "ciphertext": ciphertext,
+                "fingerprint": fingerprint_secret(value),
+                "saved_at": _now(),
+            }
+            update["continuation_credentials_meta.ANTHROPIC_API_KEY"] = {
+                "mask": mask_secret(value), "saved_at": _now(),
+            }
+        await db.freebuild_projects.update_one({"id": pid}, {"$set": update})
+        return {"ok": True, "provider": provider, "next_state": "consent"}
+
+    @router.post("/project/{pid}/continuation/setup/consent")
+    async def sign_continuation_consent(pid: str, payload: dict, request: Request, user=Depends(get_current_user)):
+        """Step 5 — record the electronic signature unlocking AI work.
+        Audit trail: ip, timestamp, clauses-accepted."""
+        proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0, "mode": 1})
+        if not proj or proj.get("mode") != "continuation":
+            raise HTTPException(status_code=400, detail="not a continuation project")
+        clauses = payload.get("clauses_accepted") or []
+        signature_name = (payload.get("signature_name") or "").strip()
+        if not clauses or len(clauses) < 3:
+            raise HTTPException(status_code=400, detail="must accept all clauses")
+        if not signature_name:
+            raise HTTPException(status_code=400, detail="signature_name required")
+        ip = request.client.host if request.client else "unknown"
+        consent = {
+            "signed_at": _now(),
+            "ip": ip,
+            "user_agent": request.headers.get("user-agent", "")[:200],
+            "clauses_accepted": clauses,
+            "signature_name": signature_name,
+        }
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {
+                "continuation_consent": consent,
+                "continuation_setup": {"state": "ready", "completed": True, "completed_at": _now()},
+                "updated_at": _now(),
+            }},
+        )
+        # Inject a system kickoff message so the engineer manager starts work
+        kickoff = (
+            "✅ **اكتمل الإعداد الآمن** — العميل وقّع الموافقة الإلكترونية وزوّدنا بمفاتيح الوصول المشفّرة.\n\n"
+            f"🌐 الموقع: {proj.get('continuation_site_url', '—')}\n"
+            "🔐 المفاتيح: محفوظة بتشفير AES-128 ومتاحة عبر أدوات الاستنساخ الآمن.\n\n"
+            "🎯 **مهمتك الآن (كمدير هندسي):** ابدأ بـ Read-Only، استنسخ الكود إلى Sandbox معزول، "
+            "وقدّم تقرير تشخيص شامل قبل أي اقتراح تعديل. لا تلمس الإنتاج إطلاقاً قبل موافقة العميل الصريحة."
+        )
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$push": {"messages": {"role": "user", "content": kickoff, "created_at": _now()}}},
+        )
+        return {"ok": True, "completed": True}
+
     @router.post("/projects/continuation/create")
     async def create_continuation_project(
         payload: ContinuationCreatePayload, user=Depends(get_current_user),

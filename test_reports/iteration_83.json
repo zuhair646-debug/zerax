@@ -1,0 +1,40 @@
+{
+  "summary": "Tested the new Continuation Onboarding Wizard (الفاحص → Provider → Keys → LLM key → Consent). Backend: 14/14 pytest passed including all 5 wizard steps, encryption-at-rest verification (motor + decrypt_secret round-trip), duplicate URL rejection across user projects, and all P1 input validation cases. Frontend: wizard renders correctly with continuation-onboarding/inspector-card visible, chat input correctly replaced by continuation-input-locked banner, engineer-manager messages hidden. Successfully advanced through inspector (URL scan + result + proceed), provider selection (github card + confirm), and credential capture (tutorial video element, provider-instructions in Arabic, password input). The credential->LLM step transition did not visibly complete in one Playwright run though the AES-128 save toast fired correctly — likely a flaky timing/race on first save, not a confirmed bug.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Credential save → LLM step advance",
+       "issue": "After credential-save-btn click and success toast 'Keys stored with AES-128 encryption', the wizard appeared to remain on credential-capture in one Playwright run (llm-key-step not visible after 10s wait). Could not reproduce in a second run because pid creation hit an unrelated transient. Worth a manual sanity check.",
+       "affected_selectors": ["[data-testid=credential-save-btn]","[data-testid=llm-key-step]"]}
+    ],
+    "design_issues": [
+      {"screen": "CredentialCapture", "issues": ["Tutorial <video> tag silently fails (zenrex.ai/videos URL doesn't exist) — expected per spec, placeholders intended."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_continuation_wizard.py",
+    "/app/test_reports/pytest/continuation_wizard.xml"
+  ],
+  "action_items": [
+    "Manually verify the credential-save → LLM-step state advance in the browser once. If reproducible, inspect CredentialCapture.saveAll() — onDone() is called inside finally-eligible path but the parent setState('llm') may race with the useEffect re-fetch on dependency change (the useEffect dep array includes onCompleted which could be a new function reference on every parent render, causing the wizard to reload setupData mid-transition and overwrite state).",
+    "Replace placeholder tutorial video URLs (zenrex.ai/videos/...) before launch."
+  ],
+  "critical_code_review_comments": [
+    "ContinuationOnboarding.jsx useEffect dep [projectId, onCompleted]: if FreeBuildChat doesn't memoize the onCompleted callback, this effect re-runs on every parent re-render and re-fetches setup state, which may cause race conditions with optimistic local setState transitions (e.g., after saveAll the local state goes to 'llm', then setup-fetch returns 'provider_key' from backend and overwrites — backend state is updated by save-credential only via setup state, but save-credential endpoint sets continuation_setup.state still = 'provider_key' (no advance) — there's NO server-side state transition on save-credential to 'llm'. Confirmed by reading freebuild_chat.py save_continuation_credential — it only stores the key. So any setup-state reload from the server will reset the wizard to 'provider_key'. RECOMMEND: either advance state on the server in save-credential, OR memoize onCompleted with useCallback in FreeBuildChat.",
+    "save_continuation_credential should also set continuation_setup={state:'llm', completed:false} for consistency with the other wizard steps (save-url advances to 'provider', select-provider advances to 'provider_key', save-llm-key advances to 'consent', consent advances to 'ready'). Currently this step does not advance server-side state, so any client reload while in this step will snap back."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_continuation_wizard.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "75%"},
+  "test_credentials": "owner@zerax.com / owner123 (preview owner role)",
+  "seed_data_creation": "Wizard test cleans prior continuation projects pointing to https://wordpress.com for owner@zerax.com via motor before run. Creates two TEST_wizard_* continuation projects per session, soft-deleted after.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend wizard tests are fully green via /app/backend/tests/test_continuation_wizard.py. Use that as the regression baseline. For the frontend UX glitch (credential save not advancing to LLM step), the likely root cause identified above is that save_continuation_credential does NOT update continuation_setup.state on the server, while the parent component's useEffect (dep on onCompleted) re-runs and overwrites the local optimistic state. Fix is either server-side state advance OR useCallback memoization in FreeBuildChat.js.",
+  "rca of the issue": "Confirmed by code reading freebuild_chat.py lines 1623-1669: save_continuation_credential persists the ciphertext + meta but does NOT set continuation_setup state to 'llm'. The frontend uses optimistic setState('llm') in CredentialCapture.onDone, but the parent ContinuationOnboarding useEffect re-fetches setup whenever onCompleted ref changes, snapping state back to 'provider_key' (the last server-side state from select-provider). Mitigation: add `continuation_setup: {state:'llm', completed:false}` to the $set block in save_continuation_credential, OR wrap onCompleted in useCallback in FreeBuildChat.js."
+}

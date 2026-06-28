@@ -6,6 +6,7 @@ import ZCrownSpinner from '../components/ZCrownSpinner';
 import ZenrexBrand from '../components/ZenrexBrand';
 import ConnectionHelpModal from '../components/ConnectionHelpModal';
 import StorageIndicator from '../components/StorageIndicator';
+import ContinuationOnboarding from './ContinuationOnboarding';
 import { EngineerAuditModal } from '../components/EngineerAuditModal';
 import { ConciergeWizardPanel } from '../components/ConciergeWizard';
 // UsageIndicator removed — duplicate of the credits pill, was confusing users.
@@ -4719,10 +4720,32 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   const isStudioMode = isVideoMode || project?.mode === 'image_studio';
   const isAppMode = project?.mode === 'app';
   const isContinuationMode = project?.mode === 'continuation';
+  // Continuation onboarding gate — when in continuation mode, we hide the chat
+  // input + engineer messages until the user finishes the Inspector → Provider →
+  // Keys → Consent wizard. Initial value is `null` (unknown); flips to `true`/`false`
+  // once the project loads.
+  const [continuationSetupDone, setContinuationSetupDone] = useState(null);
+  useEffect(() => {
+    if (!isContinuationMode || !projectId) { setContinuationSetupDone(null); return; }
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/continuation/setup`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const d = await r.json();
+          setContinuationSetupDone(!!d.completed);
+        } else {
+          setContinuationSetupDone(false);
+        }
+      } catch { setContinuationSetupDone(false); }
+    })();
+  }, [isContinuationMode, projectId]);
   // Website-from-scratch mode — هذا اللي المستخدم طلب فيه:
   // إلغاء تبويبات "المعاينة الحية" و "المعتمدات" بالكامل، وخلي بس المحادثة + المراحل.
   // الـ studios والـ app modes تحافظ على تبويباتها (تحتاج المعاينة المرئية).
-  const isWebsiteMode = !isStudioMode && !isAppMode;
+  const isWebsiteMode = !isStudioMode && !isAppMode && !isContinuationMode;
   // Guard: في وضع بناء المواقع من الصفر، نسمح بتبويب 'live' لكن نمنع 'approved'
   // (المعتمدات شيلناها كلياً). الـ live الآن يستخدم الرابط المنشور بدل srcDoc.
   const setActiveTab = useCallback((tab) => {
@@ -6155,8 +6178,19 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
           {/* Tab Content */}
           {activeTab === 'chat' && (
             <div ref={chatScrollRef} onScroll={onChatScroll} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" data-testid="chat-messages">
-              {/* 💳 Continuation payment banner — appears AFTER first update delivered */}
-              {isContinuationMode && (
+              {/* 🔐 Continuation onboarding wizard — Inspector → Provider → Keys → Consent.
+                  Renders at the top of the chat in continuation mode until setup is complete. */}
+              {isContinuationMode && continuationSetupDone === false && (
+                <ContinuationOnboarding
+                  projectId={projectId}
+                  onCompleted={() => {
+                    setContinuationSetupDone(true);
+                    refreshProject();
+                  }}
+                />
+              )}
+              {/* 💳 Continuation payment banner — only after setup is done + first update delivered */}
+              {isContinuationMode && continuationSetupDone === true && (
                 <ContinuationPaymentBanner
                   projectId={projectId}
                   onUnlocked={() => setProject((p) => p ? { ...p, continuation_unlocked: true } : p)}
@@ -6178,7 +6212,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                   }}
                 />
               )}
-              {messages.length === 0 && (
+              {messages.length === 0 && !(isContinuationMode && continuationSetupDone === false) && (
                 <div className="text-center py-12 max-w-2xl mx-auto">
                   <Sparkles className="w-12 h-12 mx-auto mb-4 text-emerald-400/60" />
                   <h3 className="text-xl font-bold text-emerald-200 mb-2">أهلين! ابدأ بسرد فكرتك</h3>
@@ -6208,7 +6242,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                 </div>
               )}
 
-              {messages.map((m, i) => (
+              {!(isContinuationMode && continuationSetupDone === false) && messages.map((m, i) => (
                 m.role === 'engineer_offer' ? (
                   <div key={`offer-${i}-${m.timestamp}`} className="flex justify-start" data-testid={`engineer-offer-${i}`}>
                     <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-gradient-to-br from-purple-500/15 to-fuchsia-500/10 border border-purple-400/40 text-purple-100 shadow-lg shadow-purple-500/10">
@@ -7450,7 +7484,11 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
             <div className="flex gap-2">
               {/* When out of credits, the entire input bar is replaced by the
                   Recharge banner — typing is fully disabled across the chat. */}
-              {creditsBlocked ? (
+              {(isContinuationMode && continuationSetupDone === false) ? (
+                <div className="flex-1 px-4 py-3 rounded-xl bg-fuchsia-500/10 border border-fuchsia-500/30 text-center text-xs text-fuchsia-200" data-testid="continuation-input-locked">
+                  🔐 أكمل خطوات الإعداد الآمن في الأعلى قبل ما تتكلم مع المهندس
+                </div>
+              ) : creditsBlocked ? (
                 <div className="flex-1">
                   <CreditsBlockedBanner />
                 </div>
