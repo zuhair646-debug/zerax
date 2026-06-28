@@ -206,8 +206,25 @@ def _preflight_toolchain(cmd: str) -> Optional[Dict[str, Any]]:
 # ───────────────────────────────────────────────────────────────────
 # Tool 1 — detect_project_stack
 # ───────────────────────────────────────────────────────────────────
+
+# ── Project ID resolver ──────────────────────────────────────────────────
+# The Anthropic AI sometimes passes literal placeholders like "current",
+# "$project_id", "{{project_id}}", or just the empty string when it cannot
+# distinguish runtime context from arguments. Treat any of these as "use
+# the project bound to the current request context" so tools never fail
+# with "project not found" just because the AI guessed at the field.
+_PID_SENTINELS = {"", "current", "this", "self", "null", "none",
+                  "$project_id", "{{project_id}}", "<project_id>"}
+
+def _resolve_pid(args, ctx):
+    raw = (args.get("project_id") or "").strip()
+    if raw.lower() in _PID_SENTINELS:
+        raw = ""
+    return raw or (ctx and getattr(ctx, "project_id", None) or "")
+
+
 async def handle_detect_project_stack(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     sub = (args.get("path") or "repo").strip().strip("/")
     if not pid:
         return {"ok": False, "error": "project_id required"}
@@ -236,7 +253,7 @@ async def handle_detect_project_stack(args: Dict[str, Any], ctx: Any = None) -> 
 # Tool 2 — run_sandbox_command (paywall-gated, whitelist-protected)
 # ───────────────────────────────────────────────────────────────────
 async def handle_run_sandbox_command(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     cmd = (args.get("command") or "").strip()
     workdir = (args.get("workdir") or "repo").strip().strip("/")
     timeout = int(args.get("timeout") or 180)
@@ -343,7 +360,7 @@ async def handle_submit_to_app_store(args: Dict[str, Any], ctx: Any = None) -> D
     For MVP we only IMPLEMENT the integrations we have concrete creds for;
     others return `not_implemented` with a clear path forward.
     """
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     provider = (args.get("provider") or "").strip()
     artifact_path = (args.get("artifact_path") or "").strip()
     release_notes = (args.get("release_notes") or "").strip()[:1000]
@@ -605,7 +622,7 @@ def _manual_steps_for(provider: str) -> List[str]:
 # ───────────────────────────────────────────────────────────────────
 async def handle_delete_sandbox_file(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     """Delete a file in the sandbox. Snapshots before; paywall-gated."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     rel = (args.get("path") or "").strip()
     if not pid or not rel:
         return {"ok": False, "error": "project_id and path required"}
@@ -640,7 +657,7 @@ async def handle_delete_sandbox_file(args: Dict[str, Any], ctx: Any = None) -> D
 
 async def handle_move_sandbox_file(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     """Rename or move a file/folder inside the sandbox. Snapshots first."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     src = (args.get("source") or "").strip()
     dst = (args.get("destination") or "").strip()
     if not pid or not src or not dst:
@@ -678,7 +695,7 @@ async def handle_apply_patch(args: Dict[str, Any], ctx: Any = None) -> Dict[str,
     """Apply a unified diff to a file in the sandbox. Lighter than full-file rewrite.
     The patch must be in the standard `--- a/path\\n+++ b/path\\n@@…` format."""
     import tempfile as _tmp
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     rel = (args.get("path") or "").strip()
     patch_text = args.get("patch_text") or ""
     if not pid or not rel or not patch_text:
@@ -726,7 +743,7 @@ async def handle_apply_patch(args: Dict[str, Any], ctx: Any = None) -> Dict[str,
 async def handle_get_continuation_status(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     """Read project's paywall + setup state. AI calls this BEFORE attempting
     writes to know whether it's pre-mark, locked, or unlocked."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     if not pid:
         return {"ok": False, "error": "project_id required"}
     db = getattr(ctx, "db", None) if ctx else None
@@ -763,7 +780,7 @@ async def handle_get_continuation_status(args: Dict[str, Any], ctx: Any = None) 
 async def handle_inspect_saved_credentials(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     """Return ONLY THE NAMES of saved credentials — never the values. So
     the AI can decide what to ask the customer for without leaking secrets."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     if not pid:
         return {"ok": False, "error": "project_id required"}
     db = getattr(ctx, "db", None) if ctx else None
@@ -797,7 +814,7 @@ async def handle_inspect_saved_credentials(args: Dict[str, Any], ctx: Any = None
 async def handle_read_continuation_audit(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     """Let the AI read its own audit history so it doesn't repeat
     destructive actions or contradict prior commitments."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     limit = int(args.get("limit") or 30)
     if not pid:
         return {"ok": False, "error": "project_id required"}
@@ -1231,7 +1248,7 @@ CONTINUATION_APP_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         },
     },
     {
-        "name": "get_integration_playbook",
+        "name": "get_saudi_integration_playbook",
         "description": (
             "READ-ONLY. Retrieve a complete integration playbook for a Saudi/GCC "
             "market integration: Nafath (national SSO), Mada payment, Tabby BNPL, "
@@ -1269,5 +1286,5 @@ CONTINUATION_APP_TOOL_HANDLERS: Dict[str, Any] = {
     "inspect_saved_credentials": handle_inspect_saved_credentials,
     "read_continuation_audit": handle_read_continuation_audit,
     "lookup_domain_knowledge": handle_lookup_domain_knowledge,
-    "get_integration_playbook": handle_get_integration_playbook,
+    "get_saudi_integration_playbook": handle_get_integration_playbook,
 }

@@ -66,6 +66,23 @@ def _safe_path(sandbox: Path, rel: str) -> Path:
     return target
 
 
+
+# ── Project ID resolver ──────────────────────────────────────────────────
+# The Anthropic AI sometimes passes literal placeholders like "current",
+# "$project_id", "{{project_id}}", or just the empty string when it cannot
+# distinguish runtime context from arguments. Treat any of these as "use
+# the project bound to the current request context" so tools never fail
+# with "project not found" just because the AI guessed at the field.
+_PID_SENTINELS = {"", "current", "this", "self", "null", "none",
+                  "$project_id", "{{project_id}}", "<project_id>"}
+
+def _resolve_pid(args, ctx):
+    raw = (args.get("project_id") or "").strip()
+    if raw.lower() in _PID_SENTINELS:
+        raw = ""
+    return raw or (ctx and getattr(ctx, "project_id", None) or "")
+
+
 async def _run(cmd: List[str], cwd: Optional[Path] = None,
                env: Optional[Dict[str, str]] = None,
                timeout: int = MAX_OP_SECONDS) -> Dict[str, Any]:
@@ -132,7 +149,7 @@ async def _load_cred(db, pid: str, key_name: str) -> Optional[str]:
 async def handle_create_snapshot(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     """Tar-gzip the current sandbox contents (excluding .snapshots itself)
     and write a SHA256 fingerprint alongside. Returns the snapshot id."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     label = (args.get("label") or "manual").strip()[:50]
     if not pid:
         return {"ok": False, "error": "project_id required"}
@@ -188,7 +205,7 @@ async def handle_create_snapshot(args: Dict[str, Any], ctx: Any = None) -> Dict[
 
 
 async def handle_list_snapshots(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     if not pid:
         return {"ok": False, "error": "project_id required"}
     sandbox = _ensure_sandbox(pid)
@@ -205,7 +222,7 @@ async def handle_list_snapshots(args: Dict[str, Any], ctx: Any = None) -> Dict[s
 
 async def handle_restore_snapshot(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     """Wipe sandbox (except snapshots) and extract the chosen snapshot."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     snap_id = (args.get("snapshot_id") or "").strip()
     if not pid or not snap_id:
         return {"ok": False, "error": "project_id and snapshot_id required"}
@@ -231,7 +248,7 @@ async def handle_clone_remote_repo(args: Dict[str, Any], ctx: Any = None) -> Dic
     """Clone the customer's Git repo into the sandbox using the encrypted
     GITHUB_TOKEN (or generic GIT_TOKEN). Always snapshots first if the
     sandbox already has content."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     repo_url = (args.get("repo_url") or "").strip()
     branch = (args.get("branch") or "main").strip()
     if not pid or not repo_url:
@@ -323,7 +340,7 @@ async def handle_push_to_review_branch(args: Dict[str, Any], ctx: Any = None) ->
       • Rollback = just close the PR
     """
     import time
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     commit_message = (args.get("commit_message") or "Zenrex AI proposed changes").strip()[:200]
     branch_suffix = (args.get("branch_suffix") or str(int(time.time()))).strip()[:30]
     if not pid:
@@ -524,7 +541,7 @@ async def handle_deploy_to_live_vps(args: Dict[str, Any], ctx: Any = None) -> Di
       - source_subdir: dir inside sandbox to push (default 'repo')
       - post_deploy_command: optional shell command (e.g. 'systemctl reload nginx')
     """
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     if not pid:
         return {"ok": False, "error": "project_id required"}
 
@@ -688,7 +705,7 @@ async def handle_deploy_to_live_ftp(args: Dict[str, Any], ctx: Any = None) -> Di
     """Upload sandbox contents directly to a live FTP/SFTP server using lftp
     mirror -R (reverse mirror = upload). Used for shared hosting providers
     (Hostinger, GoDaddy, etc.) that don't give SSH access."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     if not pid:
         return {"ok": False, "error": "project_id required"}
 
@@ -837,7 +854,7 @@ async def handle_mark_first_update(args: Dict[str, Any], ctx: Any = None) -> Dic
       • Requires continuation mode + at least one sandbox edit on record
       • Records the trigger reason in the audit log
     """
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     summary = (args.get("summary") or "").strip()[:300]
     if not pid:
         return {"ok": False, "error": "project_id required"}
@@ -896,7 +913,7 @@ async def handle_mark_first_update(args: Dict[str, Any], ctx: Any = None) -> Dic
 async def handle_ftp_sync_pull(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     """Mirror files from an FTP/SFTP host into the sandbox using lftp.
     Credentials expected on the project: FTP_HOST, FTP_USERNAME, FTP_PASSWORD."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     remote_dir = (args.get("remote_dir") or "/").strip()
     if not pid:
         return {"ok": False, "error": "project_id required"}
@@ -956,7 +973,7 @@ async def handle_ftp_sync_pull(args: Dict[str, Any], ctx: Any = None) -> Dict[st
 
 # ────────────── Sandbox file ops ──────────────
 async def handle_list_sandbox_files(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     sub = (args.get("path") or "").strip()
     max_entries = int(args.get("max_entries") or 200)
     if not pid:
@@ -981,7 +998,7 @@ async def handle_list_sandbox_files(args: Dict[str, Any], ctx: Any = None) -> Di
 
 
 async def handle_read_sandbox_file(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     rel = (args.get("path") or "").strip()
     max_bytes = int(args.get("max_bytes") or 200_000)
     if not pid or not rel:
@@ -1005,7 +1022,7 @@ async def handle_read_sandbox_file(args: Dict[str, Any], ctx: Any = None) -> Dic
 async def handle_propose_sandbox_change(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
     """Write a proposed change to the sandbox (NOT to production). Always
     snapshots first so the customer can roll back with one click."""
-    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    pid = _resolve_pid(args, ctx)
     rel = (args.get("path") or "").strip()
     new_content = args.get("new_content")
     if not pid or not rel or new_content is None:
@@ -1090,12 +1107,12 @@ CONTINUATION_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         },
     },
     {
-        "name": "list_snapshots",
+        "name": "list_sandbox_snapshots",
         "description": "List all snapshots in the sandbox (newest first) with id + size + created_at.",
         "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": []},
     },
     {
-        "name": "restore_snapshot",
+        "name": "restore_sandbox_snapshot",
         "description": "Roll back the sandbox to a previous snapshot. Wipes current sandbox contents (except snapshots dir).",
         "input_schema": {
             "type": "object",
@@ -1194,8 +1211,8 @@ CONTINUATION_TOOL_HANDLERS: Dict[str, Any] = {
     "clone_remote_repo": handle_clone_remote_repo,
     "ftp_sync_pull": handle_ftp_sync_pull,
     "create_snapshot": handle_create_snapshot,
-    "list_snapshots": handle_list_snapshots,
-    "restore_snapshot": handle_restore_snapshot,
+    "list_sandbox_snapshots": handle_list_snapshots,
+    "restore_sandbox_snapshot": handle_restore_snapshot,
     "list_sandbox_files": handle_list_sandbox_files,
     "read_sandbox_file": handle_read_sandbox_file,
     "propose_sandbox_change": handle_propose_sandbox_change,
