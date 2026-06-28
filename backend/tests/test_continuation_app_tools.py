@@ -315,27 +315,56 @@ async def test_run_sandbox_command_readonly_bypasses_paywall(mock_db, ctx_factor
 
 @pytest.mark.asyncio
 async def test_submit_to_app_store_returns_manual_instructions(mock_db, ctx_factory, tmp_path):
+    """Microsoft Store is still in the manual-steps fallback (not yet fastlane'd)."""
     from backend.modules.freebuild import continuation_tools as ct
     from backend.modules.freebuild.continuation_app_tools import handle_submit_to_app_store
     ct.SANDBOX_ROOT = tmp_path
     sandbox = ct._ensure_sandbox("test-pid")
-    artifact = sandbox / "repo" / "build" / "app.apk"
+    artifact = sandbox / "repo" / "build" / "app.msix"
     artifact.parent.mkdir(parents=True, exist_ok=True)
-    artifact.write_bytes(b"fake apk bytes")
+    artifact.write_bytes(b"fake msix bytes")
 
     mock_db.freebuild_projects.find_one.side_effect = [
         {"mode": "continuation"},  # mode guard
         {"first_update_delivered": False, "continuation_unlocked": False},  # paywall guard
     ]
     res = await handle_submit_to_app_store(
-        {"project_id": "test-pid", "provider": "play_store_internal",
-         "artifact_path": "repo/build/app.apk", "release_notes": "test"},
+        {"project_id": "test-pid", "provider": "microsoft_store",
+         "artifact_path": "repo/build/app.msix", "release_notes": "test"},
         ctx_factory(),
     )
     assert res["ok"] is False
     assert res["error"] == "provider_not_implemented_yet"
     assert "manual_steps_ar" in res
     assert len(res["manual_steps_ar"]) >= 2
+
+
+@pytest.mark.asyncio
+async def test_submit_play_store_now_returns_credentials_error(mock_db, ctx_factory, tmp_path):
+    """play_store_internal IS implemented via fastlane now — without creds it
+    returns the credentials error, not 'not implemented'."""
+    from backend.modules.freebuild import continuation_tools as ct
+    from backend.modules.freebuild.continuation_app_tools import handle_submit_to_app_store
+    ct.SANDBOX_ROOT = tmp_path
+    sandbox = ct._ensure_sandbox("test-pid")
+    artifact = sandbox / "repo" / "build" / "app.aab"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(b"fake aab bytes")
+    mock_db.freebuild_projects.find_one.side_effect = [
+        {"mode": "continuation"},
+        {"first_update_delivered": False, "continuation_unlocked": False},
+        # _load_cred calls for service json + package
+        {"continuation_credentials": {}},
+        {"continuation_credentials": {}},
+    ]
+    res = await handle_submit_to_app_store(
+        {"project_id": "test-pid", "provider": "play_store_internal",
+         "artifact_path": "repo/build/app.aab"},
+        ctx_factory(),
+    )
+    assert res["ok"] is False
+    # Could be either credentials_incomplete or fastlane_not_installed depending on env
+    assert res["error"] in ("play_store_credentials_incomplete", "fastlane_not_installed")
 
 
 @pytest.mark.asyncio

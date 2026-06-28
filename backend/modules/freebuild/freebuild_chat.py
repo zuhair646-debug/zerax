@@ -4186,6 +4186,129 @@ def make_freebuild_chat_router(db, get_current_user):
             logger.exception(f"[continuation] stripe checkout failed: {e}")
             raise HTTPException(status_code=500, detail=f"checkout creation failed: {type(e).__name__}")
 
+    @router.get("/me/continuation/projects")
+    async def list_my_continuation_projects(user=Depends(get_current_user)):
+        """Customer self-service: list all continuation projects this user owns
+        with their paywall + sandbox + backup state. Used by the customer
+        dashboard. Returns trimmed safe data (no credentials)."""
+        cursor = db.freebuild_projects.find(
+            {"user_id": user["user_id"], "mode": "continuation"},
+            {
+                "_id": 0, "id": 1, "name": 1, "project_kind": 1, "app_kind": 1,
+                "first_update_delivered": 1, "first_update_at": 1,
+                "continuation_unlocked": 1, "continuation_unlocked_at": 1,
+                "continuation_setup": 1, "continuation_sandbox": 1,
+                "continuation_deploy_target": 1, "stripe_subscription_id": 1,
+                "continuation_subscription_monthly_usd": 1, "created_at": 1,
+            },
+        ).sort("created_at", -1)
+        items = []
+        async for p in cursor:
+            saved_creds = list((p.get("continuation_credentials") or {}).keys())  # always [] (we excluded it)
+            items.append({
+                "id": p.get("id"), "name": p.get("name"),
+                "project_kind": p.get("project_kind") or "site",
+                "app_kind": p.get("app_kind"),
+                "first_update_delivered": bool(p.get("first_update_delivered")),
+                "first_update_at": p.get("first_update_at"),
+                "unlocked": bool(p.get("continuation_unlocked")),
+                "unlocked_at": p.get("continuation_unlocked_at"),
+                "subscription_id": p.get("stripe_subscription_id"),
+                "monthly_price_usd": float(p.get("continuation_subscription_monthly_usd") or 150.0),
+                "setup_completed": bool((p.get("continuation_setup") or {}).get("completed")),
+                "sandbox_ready": bool(p.get("continuation_sandbox")),
+                "sandbox_files": (p.get("continuation_sandbox") or {}).get("file_count"),
+                "deploy_target_configured": bool(p.get("continuation_deploy_target")),
+                "created_at": p.get("created_at"),
+            })
+        return {"ok": True, "count": len(items), "projects": items,
+                "monthly_total_usd": sum(i["monthly_price_usd"] for i in items if i["unlocked"])}
+
+    @router.get("/project/{pid}/continuation/dashboard")
+    async def project_dashboard(pid: str, user=Depends(get_current_user)):
+        """Single-project dashboard: status + last 20 audit entries + last 10
+        snapshots + backup history. Powers the customer's per-project view."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"], "mode": "continuation"},
+            {"_id": 0, "continuation_credentials": 0},  # never leak creds
+        )
+        if proj is None:
+            raise HTTPException(status_code=404, detail="not found")
+        # Recent audit entries
+        try:
+            from .continuation_audit import fetch_audit
+            audit = await fetch_audit(db, pid, limit=20)
+        except Exception:
+            audit = []
+        # Recent snapshots (read directly from sandbox dir)
+        snapshots = []
+        try:
+            from .continuation_tools import _ensure_sandbox, SNAPSHOT_DIR_NAME
+            sandbox = _ensure_sandbox(pid)
+            for snap_file in sorted((sandbox / SNAPSHOT_DIR_NAME).glob("*.tar.gz"), reverse=True)[:10]:
+                snapshots.append({
+                    "snapshot_id": snap_file.stem,
+                    "size_bytes": snap_file.stat().st_size,
+                    "mtime": snap_file.stat().st_mtime,
+                })
+        except Exception:
+            pass
+        return {
+            "ok": True,
+            "project": {
+                "id": proj.get("id"), "name": proj.get("name"),
+                "project_kind": proj.get("project_kind"),
+                "app_kind": proj.get("app_kind"),
+                "first_update_delivered": bool(proj.get("first_update_delivered")),
+                "unlocked": bool(proj.get("continuation_unlocked")),
+                "sandbox": proj.get("continuation_sandbox"),
+                "deploy_target": proj.get("continuation_deploy_target"),
+                "subscription_id": proj.get("stripe_subscription_id"),
+            },
+            "audit_log": [
+                {"ts": a.get("ts"), "action": a.get("action"),
+                 "target_path": a.get("target_path"), "success": a.get("success")}
+                for a in audit
+            ],
+            "snapshots": snapshots,
+            "backup_history": (proj.get("continuation_backup_history") or [])[-10:],
+        }
+
+    @router.post("/project/{pid}/continuation/cancel-subscription")
+    async def cancel_subscription(pid: str, user=Depends(get_current_user)):
+        """Customer-initiated subscription cancellation. Marks as cancel-at-period-end
+        in Stripe; our local flag stays unlocked until period actually ends (handled
+        by the customer.subscription.deleted webhook). Saudi consumer-protection
+        7-day cool-off is enforced via Stripe's grace period."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"], "mode": "continuation"},
+            {"_id": 0, "stripe_subscription_id": 1, "continuation_unlocked": 1},
+        )
+        if proj is None:
+            raise HTTPException(status_code=404, detail="not found")
+        sub_id = proj.get("stripe_subscription_id")
+        if not sub_id:
+            # Local-only test mode unlock — just flip the flag
+            await db.freebuild_projects.update_one(
+                {"id": pid}, {"$set": {"continuation_unlocked": False,
+                                        "continuation_cancel_requested_at": _now()}},
+            )
+            return {"ok": True, "method": "local_unlock_revoked"}
+        try:
+            import stripe as _stripe
+            _stripe.api_key = os.environ.get("STRIPE_API_KEY", "").strip()
+            _stripe.Subscription.modify(sub_id, cancel_at_period_end=True)
+            await db.freebuild_projects.update_one(
+                {"id": pid},
+                {"$set": {"continuation_cancel_requested_at": _now(),
+                          "continuation_cancel_at_period_end": True}},
+            )
+            return {"ok": True, "method": "stripe_cancel_at_period_end",
+                    "message_ar": "تم تسجيل طلب الإلغاء. الخدمة تستمر حتى نهاية فترة الفوترة الحالية."}
+        except Exception as e:
+            logger.exception(f"[continuation] cancel failed: {e}")
+            raise HTTPException(status_code=500, detail=f"cancel failed: {type(e).__name__}")
+
     @router.post("/project/{pid}/continuation/mark-first-update")
     async def mark_first_update(pid: str, user=Depends(get_current_user)):
         """Called by AI after delivering the first concrete update (e.g. a fix

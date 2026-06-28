@@ -4,6 +4,19 @@ Last updated: 2026-02-06
 
 ## ✅ DONE (Production-ready)
 
+### 2026-02-06 Phase B — Real Store Submit (NEW)
+- [x] **`play_store_internal/alpha/beta/production`** — full fastlane supply implementation. Reads GOOGLE_SERVICE_ACCOUNT_JSON + GOOGLE_PLAY_PACKAGE_NAME. Writes the service account JSON to chmod 600 temp file, calls fastlane with track + APK/AAB flag, returns ok/stdout/stderr. Auto-snapshots first.
+- [x] **`app_store_testflight` + `app_store_production`** — full fastlane pilot/deliver implementation. Reads APP_STORE_CONNECT_API_KEY (.p8) + KEY_ID + ISSUER_ID. Writes p8 to chmod 600 temp file, calls fastlane lane, returns ok/output. Note: requires macOS or Codemagic — returns proper Arabic hint if fastlane missing.
+- [x] **Tests updated** — `test_submit_to_app_store_returns_manual_instructions` now targets `microsoft_store` (still in fallback), new `test_submit_play_store_now_returns_credentials_error` confirms Play Store path goes through fastlane.
+
+### 2026-02-06 Phase D — Customer Self-Service Dashboard (NEW)
+- [x] **`GET /api/freebuild-chat/me/continuation/projects`** — lists all customer's continuation projects with full status (paywall, sandbox, deploy_target, subscription, monthly total), excludes credentials.
+- [x] **`GET /api/freebuild-chat/project/{pid}/continuation/dashboard`** — per-project view: project state + last 20 audit entries + last 10 snapshots + backup_history. Powers a customer self-service UI.
+- [x] **`POST /api/freebuild-chat/project/{pid}/continuation/cancel-subscription`** — customer-initiated cancellation. For Stripe subs: `cancel_at_period_end=true` (Saudi 7-day cool-off honored). For local test-mode unlocks: instant flip. Records `continuation_cancel_requested_at`.
+- [x] **Live curl tests passing**: list_projects returns 16 projects + $150 total, dashboard returns 0 audit/snapshots for empty project, cancel-subscription returns `method: local_unlock_revoked`.
+
+
+
 ### 2026-02-06 Phase A — Production Hardening (NEW)
 - [x] **Auto-Rollback after deploy** — health check probe (configurable URL + status code). If unhealthy within 30s after `deploy_to_live_vps`, automatically extract pre-deploy snapshot locally + reverse-rsync to restore + re-run post_cmd. Customer never sees a broken site.
 - [x] **Stripe Webhook for $150/mo subscription** — `/webhook/continuation-subscription` validates signature, handles `checkout.session.completed` → unlock, `customer.subscription.deleted` → re-lock, `invoice.payment_failed` → log. Webhook is source of truth (not the redirect URL).

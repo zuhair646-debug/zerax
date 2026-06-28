@@ -431,9 +431,112 @@ async def handle_submit_to_app_store(args: Dict[str, Any], ctx: Any = None) -> D
                 result = {"ok": bool(proc.get("ok")), "method": "expo_eas_submit",
                           "stdout": (proc.get("stdout") or "")[:1500],
                           "stderr": (proc.get("stderr") or "")[:1500]}
+    elif provider == "play_store_internal" or provider == "play_store_alpha" or provider == "play_store_beta" or provider == "play_store_production":
+        # Map provider → fastlane track
+        track_map = {
+            "play_store_internal": "internal",
+            "play_store_alpha": "alpha",
+            "play_store_beta": "beta",
+            "play_store_production": "production",
+        }
+        track = track_map[provider]
+        service_json = await _load_cred(db, pid, "GOOGLE_SERVICE_ACCOUNT_JSON")
+        package = await _load_cred(db, pid, "GOOGLE_PLAY_PACKAGE_NAME")
+        if not (service_json and package):
+            result = {"ok": False, "error": "play_store_credentials_incomplete",
+                      "hint": "Need GOOGLE_SERVICE_ACCOUNT_JSON + GOOGLE_PLAY_PACKAGE_NAME"}
+        else:
+            fastlane = shutil.which("fastlane")
+            if not fastlane:
+                result = {"ok": False, "error": "fastlane_not_installed",
+                          "hint": "Install: gem install fastlane"}
+            else:
+                # Write the service account JSON to a temp file
+                import tempfile as _tmp
+                key_file = _tmp.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+                try:
+                    key_file.write(service_json)
+                    key_file.flush()
+                    key_file.close()
+                    os.chmod(key_file.name, 0o600)
+                    # Run fastlane supply
+                    is_aab = str(artifact).endswith(".aab")
+                    flag = "--aab" if is_aab else "--apk"
+                    cmd = [
+                        fastlane, "supply",
+                        "--package_name", package,
+                        "--track", track,
+                        "--json_key", key_file.name,
+                        flag, str(artifact),
+                        "--skip_upload_metadata", "true",
+                        "--skip_upload_changelogs", "true",
+                        "--skip_upload_images", "true",
+                        "--skip_upload_screenshots", "true",
+                    ]
+                    if release_notes:
+                        # Write release notes file for fastlane
+                        notes_dir = sandbox / ".fastlane_metadata" / "android" / "en-US" / "changelogs"
+                        notes_dir.mkdir(parents=True, exist_ok=True)
+                        # Need versionCode of the APK — fastlane figures this out
+                        cmd.extend(["--metadata_path", str(sandbox / ".fastlane_metadata" / "android")])
+                    proc = await _run(cmd, cwd=sandbox / "repo", timeout=900)
+                    result = {
+                        "ok": bool(proc.get("ok")),
+                        "method": "fastlane_supply",
+                        "track": track, "package": package,
+                        "stdout": (proc.get("stdout") or "")[:1500],
+                        "stderr": (proc.get("stderr") or "")[:1500],
+                    }
+                finally:
+                    try:
+                        os.unlink(key_file.name)
+                    except Exception:
+                        pass
+    elif provider == "app_store_testflight" or provider == "app_store_production":
+        api_key = await _load_cred(db, pid, "APP_STORE_CONNECT_API_KEY")
+        key_id = await _load_cred(db, pid, "APP_STORE_CONNECT_KEY_ID")
+        issuer = await _load_cred(db, pid, "APP_STORE_CONNECT_ISSUER_ID")
+        if not (api_key and key_id and issuer):
+            result = {"ok": False, "error": "app_store_credentials_incomplete",
+                      "hint": "Need APP_STORE_CONNECT_API_KEY + KEY_ID + ISSUER_ID"}
+        else:
+            fastlane = shutil.which("fastlane")
+            if not fastlane:
+                result = {"ok": False, "error": "fastlane_not_installed",
+                          "hint_ar": "App Store يحتاج macOS — استخدم Codemagic/EAS بدلاً"}
+            else:
+                import tempfile as _tmp
+                key_file = _tmp.NamedTemporaryFile(mode="w", suffix=".p8", delete=False)
+                try:
+                    key_file.write(api_key)
+                    key_file.flush()
+                    key_file.close()
+                    os.chmod(key_file.name, 0o600)
+                    lane = "pilot" if provider == "app_store_testflight" else "deliver"
+                    cmd = [
+                        fastlane, lane, "upload",
+                        "--ipa", str(artifact),
+                        "--api_key_path", key_file.name,
+                        "--key_id", key_id,
+                        "--issuer_id", issuer,
+                        "--skip_waiting_for_build_processing", "true",
+                    ]
+                    if release_notes and provider == "app_store_testflight":
+                        cmd.extend(["--changelog", release_notes])
+                    proc = await _run(cmd, cwd=sandbox / "repo", timeout=1800)
+                    result = {
+                        "ok": bool(proc.get("ok")),
+                        "method": f"fastlane_{lane}",
+                        "stdout": (proc.get("stdout") or "")[:1500],
+                        "stderr": (proc.get("stderr") or "")[:1500],
+                    }
+                finally:
+                    try:
+                        os.unlink(key_file.name)
+                    except Exception:
+                        pass
     else:
-        # Play Store / App Store Connect / others: implementation deferred.
-        # We acknowledge the request, log it, and tell the AI what's needed.
+        # Microsoft Store / Steam / itch.io / Huawei / Amazon — return manual steps
         result = {
             "ok": False,
             "error": "provider_not_implemented_yet",

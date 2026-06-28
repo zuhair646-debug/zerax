@@ -161,13 +161,13 @@ async def main():
 
     # ─── STEP 10: submit to unimplemented provider → manual steps ────
     play = await cat.handle_submit_to_app_store(
-        {"project_id": pid, "provider": "play_store_internal",
+        {"project_id": pid, "provider": "microsoft_store",
          "artifact_path": "repo/mobile/build/app.apk"}, ctx,
     )
     assert play["ok"] is False
     assert play["error"] == "provider_not_implemented_yet"
     assert play["manual_steps_ar"]
-    print(f"✓ STEP 10 play_store_internal returns {len(play['manual_steps_ar'])} manual Arabic steps")
+    print(f"✓ STEP 10 microsoft_store returns {len(play['manual_steps_ar'])} manual Arabic steps")
 
     # ─── STEP 11: Audit log has every action ────────────────────────
     logs = await cad.fetch_audit(db, pid, limit=50)
