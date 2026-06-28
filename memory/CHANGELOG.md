@@ -2119,3 +2119,57 @@ Test project on https://zenrex.ai with `zitex-app`:
 - Git remote scrubbed (no token on disk)
 - Lie-detected banner emits on bad turns
 - 199 unique tools, 0 duplicates, clean Anthropic API
+
+---
+## 2026-02-28 (Hardening Wave 4) — AI Doctor + In-Flight Lie Correction
+
+### New defensive layer: AI Doctor (in-flight)
+Previously the honesty wrapper detected zero-tool lies POST-hoc — by then
+the lying response had been streamed to the customer and credits charged.
+Now the agent loop intervenes INSIDE the SSE turn:
+
+1. After each LLM iteration, if the AI produced text containing claim markers
+   (`✅`, `تم`, `بنجاح`, `successfully`, etc.) but called ZERO tools and the
+   whole conversation has zero `tool_log` entries → trigger AI Doctor.
+2. Drop the lying text from the user-facing stream (`text_chunks = []`).
+3. Inject a corrective `user` message: "🚨 توقف. ادّعيت إنجازاً بدون أدوات — أعد الآن بـ write_sandbox_file …".
+4. Continue the loop with `tool_choice={"type": "any"}` so Anthropic guarantees
+   the next iteration produces a tool_use block.
+5. Emit `info` SSE event: "🩺 الـ AI Doctor: تم اكتشاف ادّعاء بدون أدوات…".
+6. If the retry ALSO lies → escalation_bridge fires + lie_detected banner +
+   auto-refund + admin email.
+
+### Tool list quality of life
+- `tools_for_continuation_project()` now reorders the schema so the 12 most-used
+  sandbox tools (`write_sandbox_file`, `propose_sandbox_change`, `read_sandbox_file`,
+  `list_sandbox_files`, `run_sandbox_command`, `delete_sandbox_file`,
+  `move_sandbox_file`, `apply_patch`, `create_snapshot`, `list_sandbox_snapshots`,
+  `restore_sandbox_snapshot`, `detect_project_stack`) appear at index 0..11.
+  Anthropic exhibits primacy bias — front-loading meaningfully improves compliance.
+
+### Few-shot examples in system prompt
+Added 3 concrete worked examples (create React Native component, change theme
+color, install dependency) showing the exact tool-call pattern. Reduces the
+"AI describes the change in text instead of executing it" failure mode.
+
+### Known limitation surfaced
+Claude 3.5 Sonnet occasionally REFUSES to call write tools even with
+`tool_choice={"type":"any"}`, especially when the tools list exceeds ~150
+entries (currently 199). Symptoms: 3+ iterations, eloquent prose, zero
+tool_log entries, `auto_refunded: true`. Our defensive stack catches this:
+- Detection → AI Doctor → retry → escalation_bridge → lie_detected banner +
+  credit refund → email to staff → auto_e1.py senior review (background).
+The customer is NEVER charged for a lie and is shown a clear warning. Fixing
+the model itself requires either Anthropic's intervention or migration to a
+larger model (e.g. Claude Opus 4.x) for continuation projects specifically.
+
+### Files Changed
+- MOD: `/app/backend/modules/freebuild/freebuild_agent.py` (AI Doctor logic +
+  tool reordering + tool_choice=any retry + few-shot examples in system prompt)
+- MOD: `/app/frontend/src/pages/FreeBuildChat.js` (lie_detected banner render)
+
+### Production verified
+- Event `lie_detected` fires reliably on production
+- Event `info` with AI Doctor message visible in SSE stream
+- Credits refunded automatically (`auto_refunded: true`)
+- Escalation persisted to `ai_escalations` + admin notification + Resend email
