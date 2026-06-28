@@ -797,6 +797,20 @@ TOOL_HANDLERS = {
     "autofix_code_loop": handle_autofix_code_loop,
 }
 
+# ───── Continuation-mode tools (clone, ftp, snapshot, sandbox file ops) ─────
+# Registered as a merge-in so the freebuild_agent picks them up via the same
+# TOOL_DEFINITIONS / TOOL_HANDLERS dispatcher without needing changes there.
+try:
+    from .continuation_tools import (
+        CONTINUATION_TOOL_DEFINITIONS,
+        CONTINUATION_TOOL_HANDLERS,
+    )
+    TOOL_DEFINITIONS.extend(CONTINUATION_TOOL_DEFINITIONS)
+    TOOL_HANDLERS.update(CONTINUATION_TOOL_HANDLERS)
+    logger.info(f"[cortex_tools] +{len(CONTINUATION_TOOL_DEFINITIONS)} continuation tools registered")
+except Exception as _e:
+    logger.exception(f"[cortex_tools] failed to register continuation tools: {_e}")
+
 
 def get_tool_names() -> List[str]:
     return [t["name"] for t in TOOL_DEFINITIONS]
