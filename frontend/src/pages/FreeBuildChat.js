@@ -5277,6 +5277,14 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               liveSteps.push({ kind: eventName, ...payload });
             } else if (eventName === 'concierge_setup_required') {
               liveSteps.push({ kind: 'concierge_setup_required', ...payload, _conciergeCards: [] });
+            } else if (eventName === 'lie_detected') {
+              // 🚨 Server detected the AI claimed completion without calling
+              // any tool — push a high-visibility banner BEFORE the lying
+              // text bubble so the customer cannot miss it. Credits already
+              // auto-refunded server-side.
+              liveSteps.push({ kind: 'lie_detected', ...payload });
+              scheduleUpdate();
+              try { toast.error(payload.title_ar || 'الذكاء ادّعى تنفيذاً وهمياً'); } catch (_e) { /* toast lib not ready */ }
             } else if (eventName === 'concierge_wizard_card') {
               // Append to the latest concierge_setup_required step's cards
               const last = liveSteps.filter(s => s.kind === 'concierge_setup_required').pop();
@@ -6460,6 +6468,36 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                     {m.role === 'assistant' && Array.isArray(m.agent_steps) && m.agent_steps.length > 0 && (
                       <div className="mt-3 space-y-1.5" data-testid={`agent-steps-${i}`}>
                         {m.agent_steps.map((s, sIdx) => {
+                          if (s.kind === 'lie_detected') {
+                            return (
+                              <div key={sIdx} data-testid={`lie-detected-${sIdx}`}
+                                className="relative rounded-xl border-2 border-rose-500/60 bg-gradient-to-br from-rose-950/60 to-orange-950/40 p-4 my-2">
+                                <div className="flex items-start gap-3">
+                                  <div className="text-2xl flex-shrink-0">🚨</div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-black text-rose-100 mb-1">
+                                      {s.title_ar || '⚠️ الذكاء ادّعى تنفيذاً وهمياً'}
+                                    </div>
+                                    <div className="text-[12px] text-rose-200/90 leading-relaxed">
+                                      {s.message_ar}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
+                                      {s.auto_refund_applied && (
+                                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-200">
+                                          💰 الرصيد مُسترجع تلقائياً
+                                        </span>
+                                      )}
+                                      {s.engineer_notified && (
+                                        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-200">
+                                          📨 المهندس مُنبَّه
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
                           if (s.kind === 'thinking') {
                             return (
                               <div key={sIdx} className="flex gap-2 text-xs text-zinc-400 bg-zinc-900/50 border-r-2 border-cyan-500/40 px-3 py-1.5 rounded">

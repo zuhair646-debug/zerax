@@ -274,7 +274,44 @@ async def handle_clone_remote_repo(args: Dict[str, Any], ctx: Any = None) -> Dic
     sandbox = _ensure_sandbox(pid)
     target = sandbox / "repo"
 
-    # Snapshot existing sandbox content before overwrite
+    # ── Idempotency check ──
+    # If the sandbox already has a checked-out repo for the SAME remote URL,
+    # do NOT re-clone (re-cloning wipes pending AI edits + snapshots = data
+    # loss). Skip cleanly and report. The AI was previously calling this
+    # tool repeatedly in the same turn, blowing away its own work.
+    if target.exists() and (target / ".git").exists():
+        try:
+            existing = await _run(
+                ["git", "-C", str(target), "config", "--get", "remote.origin.url"],
+                cwd=target,
+            )
+            current_url = (existing.get("stdout") or "").strip()
+            # Compare ignoring the embedded `x-access-token:...` userinfo
+            # part because we strip tokens after each successful clone.
+            def _normalise(u: str) -> str:
+                p = urllib.parse.urlparse(u)
+                return f"{p.scheme}://{p.hostname}{p.path}".rstrip(".git").lower()
+            if _normalise(current_url) == _normalise(repo_url):
+                # Best-effort: pull latest if branch matches; otherwise just
+                # report the existing checkout so the agent can keep working.
+                pull_res = await _run(
+                    ["git", "-C", str(target), "pull", "--rebase=false", "--ff-only", "origin", branch],
+                    cwd=target,
+                )
+                file_count = sum(1 for _ in target.rglob("*") if _.is_file())
+                return {
+                    "ok": True,
+                    "already_cloned": True,
+                    "repo_url": _normalise(repo_url),
+                    "branch": branch,
+                    "file_count": file_count,
+                    "pull_ok": bool(pull_res.get("ok")),
+                    "note": "Sandbox already had this repo. Skipped re-clone to preserve any AI edits / snapshots. Pulled latest if possible.",
+                }
+        except Exception as _e:
+            logger.warning(f"[clone_remote_repo] idempotency check failed: {_e}")
+
+    # Snapshot existing sandbox content before overwrite (different repo).
     if any(p.name != SNAPSHOT_DIR_NAME for p in sandbox.iterdir()):
         await handle_create_snapshot({"project_id": pid, "label": "pre_clone"}, ctx)
 
@@ -282,7 +319,8 @@ async def handle_clone_remote_repo(args: Dict[str, Any], ctx: Any = None) -> Dic
     parsed = urllib.parse.urlparse(repo_url)
     auth_url = f"{parsed.scheme}://x-access-token:{token}@{parsed.netloc}{parsed.path}"
 
-    # Wipe target dir if exists
+    # Wipe target dir if exists (this is the destructive path — only reached
+    # when the existing remote URL differs from the requested one).
     if target.exists():
         shutil.rmtree(target)
 
@@ -1159,7 +1197,35 @@ CONTINUATION_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     },
     {
         "name": "propose_sandbox_change",
-        "description": "Write a proposed edit to a file IN THE SANDBOX (never production). Auto-snapshots first. The customer must approve via UI before this gets pushed live.",
+        "description": (
+            "Write/CREATE/OVERWRITE a file in the SANDBOX (never production). "
+            "This is the ONLY way to write to the customer's repo in "
+            "continuation mode — site-builder `write_file` does NOT exist "
+            "here. Auto-snapshots before every write. Use this to: add new "
+            "files, edit existing files, change colors in CSS/styled-components, "
+            "modify configs (app.json, package.json), refactor code. If you "
+            "didn't call this tool, the file was NOT written — never claim "
+            "otherwise."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "path": {"type": "string", "description": "Relative path inside the repo, e.g. 'frontend/components/Hello.tsx'"},
+                "new_content": {"type": "string", "description": "Full file contents (UTF-8). Overwrites existing file or creates new one."},
+            },
+            "required": ["path", "new_content"],
+        },
+    },
+    {
+        "name": "write_sandbox_file",
+        "description": (
+            "ALIAS of `propose_sandbox_change` with a more discoverable name. "
+            "Use this whenever you would naturally reach for `write_file` — "
+            "in continuation mode the canonical write tool lives here, not "
+            "in the site-builder. Creates or overwrites a file in the sandbox "
+            "with an automatic pre-edit snapshot."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -1227,6 +1293,7 @@ CONTINUATION_TOOL_HANDLERS: Dict[str, Any] = {
     "list_sandbox_files": handle_list_sandbox_files,
     "read_sandbox_file": handle_read_sandbox_file,
     "propose_sandbox_change": handle_propose_sandbox_change,
+    "write_sandbox_file": handle_propose_sandbox_change,
     "push_to_review_branch": handle_push_to_review_branch,
     "deploy_to_live_vps": handle_deploy_to_live_vps,
     "deploy_to_live_ftp": handle_deploy_to_live_ftp,

@@ -2040,6 +2040,37 @@ def tools_for_user(is_owner: bool) -> List[Dict[str, Any]]:
     return [t for t in TOOLS_SCHEMA if t["name"] not in OWNER_ONLY_TOOL_NAMES]
 
 
+# Site-builder tools that write to the project's workspace storage (not the
+# customer's real repo). When a project is in continuation mode the AI must
+# NEVER use these because they don't touch the sandbox clone — leading to the
+# silent "tool ran, file vanished" failure mode. Hide them so the AI is forced
+# to use `propose_sandbox_change`, `delete_sandbox_file`, etc.
+SITE_ONLY_TOOL_NAMES = frozenset({
+    "write_file",
+    "read_file",
+    "list_files",
+    "delete_file",
+    "rename_file",
+    "ask_about_file",
+    "run_shell",
+    "run_bash_unrestricted",  # writes to /tmp/zenrex_workspaces — NOT the sandbox
+    "write_full_html",
+    "patch_html",
+    "patch_full_html",
+})
+
+
+def tools_for_continuation_project(is_owner: bool) -> List[Dict[str, Any]]:
+    """Tool list for a project whose `mode == 'continuation'`. Strips out
+    site-builder file ops that would silently write to the wrong place.
+
+    The AI keeps everything else (cortex, integrations, deploy, snapshots,
+    sandbox file ops, app/store tools) so its reach inside the customer's
+    real repo is unrestricted."""
+    base = tools_for_user(is_owner)
+    return [t for t in base if t["name"] not in SITE_ONLY_TOOL_NAMES]
+
+
 def _smart_merge_preserve_sections(old_html: str, new_html: str) -> tuple:
     """🧠 Smart-Merge — protects against the #1 destructive failure mode:
     the AI calls `write_full_html` for what was meant to be a surgical edit,
@@ -6899,6 +6930,23 @@ AI:
 
 🆕 **وضع تكملة المشروع (`mode='continuation'`) — أنت مدير هندسي محترف، لست مولّد كود**:
 
+🛑 **قاعدة الصدق المطلق (Anti-Hallucination)**:
+- ❌ ممنوع تكتب "✅ تم إنشاء الملف" / "تم التعديل بنجاح" / "📝 الملف محدّث" بدون استدعاء أداة كتابة فعلية في نفس الـ turn.
+- ❌ ممنوع تفترض إن أي ملف اتعدّل ما لم ترى رد الأداة `{"ok": true}` بنفسك.
+- ✅ لو طلب العميل تعديل فيك أداة → **يجب** تستدعي الأداة. لا تكذب.
+- ✅ لو ما عرفت أي أداة تستخدم، اسأل بـ `ask_user_inline` بدل ما تخترع رد.
+
+🔧 **الأدوات الصحيحة للكتابة في sandbox** (`write_file` السايت بنّاء **محذوف هنا**):
+- ✏️ **إنشاء/تعديل ملف**: `write_sandbox_file` أو `propose_sandbox_change` (alias) — `path` + `new_content`.
+- 🗑️ **حذف ملف**: `delete_sandbox_file`.
+- 🔀 **نقل/إعادة تسمية**: `move_sandbox_file`.
+- 🩹 **تطبيق diff/patch**: `apply_patch`.
+- 📖 **قراءة**: `read_sandbox_file` (مش `read_file`).
+- 📂 **استعراض**: `list_sandbox_files` (مش `list_files`).
+- ⚙️ **أمر shell**: `run_sandbox_command` (مش `run_shell`) — يشتغل داخل `/opt/zerax/sandboxes/{pid}/repo/` مع toolchain (Java, Android SDK, Flutter, Node) محمّلة تلقائياً.
+- 📸 **Snapshot قبل أي تعديل خطر**: `create_snapshot` (auto-creates قبل كل write — لكن تقدر تنشئ يدوياً قبل عمليات معقّدة).
+- ⏪ **استرجاع**: `restore_sandbox_snapshot` (لا تستخدم `restore_snapshot` المتعلّق بالـ HTML).
+
 ⚠️ **القاعدة الذهبية**: ممنوع تنسخ موقع العميل أو تعيد بناءه من الصفر. مشروعه قائم ويحتاج **صيانة + تطوير**، ليس استبدالاً. لو لاحظت نفسك تكتب HTML من الصفر بناءً على رابط فقط، **توقّف فوراً** — أنت غلطان.
 
 **1) مرحلة الاستلام (acquisition)** — قبل أي شي، اسأل العميل عبر `ask_user_inline`:
@@ -9430,11 +9478,22 @@ async def _run_anthropic_agent(
     for _step in range(max_iterations):
         iterations += 1
         try:
+            # Continuation projects need the site-only file tools stripped
+            # out so the AI doesn't accidentally write to the wrong storage.
+            _is_continuation = (
+                isinstance(getattr(ctx, "project", None), dict)
+                and ctx.project.get("mode") == "continuation"
+            )
+            _tools_list = (
+                tools_for_continuation_project(ctx.is_owner)
+                if _is_continuation
+                else tools_for_user(ctx.is_owner)
+            )
             _create_kwargs: Dict[str, Any] = dict(
                 model=model,
                 system=full_system_prompt,
                 max_tokens=8000,
-                tools=tools_for_user(ctx.is_owner),
+                tools=_tools_list,
                 messages=messages,
             )
             if _force_any_tool_next:
@@ -10010,6 +10069,18 @@ async def _stream_one_provider(
     # (e.g. "نفّذ الآن", "استدع X الآن", "ابدأ التنفيذ", "execute now").
     # The planner can eat 30-60s of the SSE window on complex projects.
     _skip_planner = False
+    # ── Continuation projects ALWAYS skip the planner ──
+    # The planner is designed for site-builder mode where the AI generates
+    # HTML pages. In continuation mode the customer's project already
+    # exists; the AI works directly with sandbox tools, so the planner just
+    # wastes a turn (and confuses the AI into describing changes instead
+    # of executing them — observed lying behavior in test 2026-02-28).
+    try:
+        if isinstance(getattr(ctx, "project", None), dict) and ctx.project.get("mode") == "continuation":
+            _skip_planner = True
+            logger.info("[planner] SKIPPED — continuation project")
+    except Exception:
+        pass
     try:
         import re as _re_plan
         _exec_intent_patterns = [
@@ -11292,6 +11363,27 @@ async def _stream_one_provider(
                     "zero_tool_lie": True if not (ctx.tool_log or []) else False,
                     "auto_refunded_hint": True if not (ctx.tool_log or []) else False,
                 })
+                # ── User-facing lie-detected banner ──
+                # The AI just claimed to do work without calling any tool.
+                # Emit a `lie_detected` event so the frontend can render a
+                # distinct red banner above the lying message: the customer
+                # MUST know not to trust this response. The credit was already
+                # auto-refunded above; a senior engineer (auto_e1.py) will be
+                # invoked below if no human responds.
+                if not (ctx.tool_log or []):
+                    yield _sse("lie_detected", {
+                        "severity": "high",
+                        "title_ar": "⚠️ الذكاء ادّعى تنفيذاً وهمياً",
+                        "message_ar": (
+                            "نظام الصدق التلقائي اكتشف أن الذكاء كتب \"✅ تم\" "
+                            "بدون استدعاء أي أداة فعلية في هذا الـ turn. "
+                            "لا يمكن الوثوق بالنتيجة المعروضة. تم تنبيه المهندس "
+                            "+ استرجاع الرصيد + إعادة تدريب الذكاء على الـ tools. "
+                            "أعد إرسال رسالتك بصياغة أوضح أو انتظر تدخّل المهندس."
+                        ),
+                        "auto_refund_applied": True,
+                        "engineer_notified": True,
+                    })
             else:
                 yield _sse("honesty_check", {
                     "verified": True,
