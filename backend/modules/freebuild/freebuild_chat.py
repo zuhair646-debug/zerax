@@ -1784,13 +1784,31 @@ def make_freebuild_chat_router(db, get_current_user):
 
         For 'direct_live', a `transport` hint can be 'ssh' (default) or 'ftp'.
         We auto-detect from saved credentials if not specified.
+
+        Paywall: once `first_update_delivered=True` and not yet
+        `continuation_unlocked`, ALL deploy modes refuse with PAYWALL_LOCKED.
         """
         proj = await db.freebuild_projects.find_one(
             {"id": pid, "user_id": user["user_id"], "mode": "continuation"},
-            {"_id": 0, "id": 1, "continuation_credentials": 1},
+            {"_id": 0, "id": 1, "continuation_credentials": 1,
+             "first_update_delivered": 1, "continuation_unlocked": 1},
         )
         if proj is None:
             raise HTTPException(status_code=404, detail="not found")
+
+        # ─── Paywall: refuse ALL deploys after first_update until subscribed ─
+        if proj.get("first_update_delivered") and not proj.get("continuation_unlocked"):
+            return {
+                "ok": False,
+                "error": "subscription_required",
+                "code": "PAYWALL_LOCKED",
+                "monthly_price_usd": 150.0,
+                "message_ar": (
+                    "🔒 أول تحديث مجاني تم تسليمه. فعّل اشتراك $150/شهر من "
+                    "البانر فوق الشات قبل أي نشر آخر."
+                ),
+                "ui_action_required": "subscribe_continuation",
+            }
 
         mode = (payload.get("mode") or "github_pr").strip()
 
@@ -4100,10 +4118,11 @@ def make_freebuild_chat_router(db, get_current_user):
         # Real path: Stripe RECURRING subscription at $150/month
         try:
             import stripe as _stripe
-            _stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+            # Project-wide convention: STRIPE_API_KEY (matches /api/stripe/* endpoints)
+            _stripe.api_key = os.environ.get("STRIPE_API_KEY", "").strip()
             if not _stripe.api_key:
                 # Fallback when Stripe is not configured: instant unlock (test mode)
-                logger.warning(f"[continuation] STRIPE_SECRET_KEY missing — granting test unlock for {pid}")
+                logger.warning(f"[continuation] STRIPE_API_KEY missing — granting test unlock for {pid}")
                 await db.freebuild_projects.update_one(
                     {"id": pid}, {"$set": {"continuation_unlocked": True, "unlocked_at": _now(), "unlock_method": "test_mode"}},
                 )

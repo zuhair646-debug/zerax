@@ -1158,3 +1158,36 @@ A 5-step in-chat onboarding for `mode=continuation` projects that gates the Engi
 - **Safety rails:** auto-snapshot قبل أي نشر، private key في tmp 0600 file مع unlink في finally، subprocess timeouts، absolute-path validation، tamper-evident audit log entries.
 
 **Tests:** 5 unit tests في `/app/backend/tests/test_continuation_direct_deploy.py` (continuation guard، missing target، missing creds × 2، empty sandbox) — جميعها PASSED. 4 curl tests للـ endpoints — جميعها PASSED.
+
+---
+
+## 🔒 2026-02-06 — Paywall Gate ($150/month) — ثغرتان مغلقتان
+
+**الثغرتان اللي كانتا موجودتين:**
+1. `mark_first_update` كان في الـ system prompt كأداة، لكنها **لم تكن مسجّلة** في الـ tool catalog → الـ AI ينادي أداة غير موجودة، البانر ما يظهر أبداً، **لا أحد يدفع $150**.
+2. `STRIPE_SECRET_KEY` كان مكتوب في كود الـ unlock، بينما الـ env name الفعلي هو `STRIPE_API_KEY` → كل المستخدمين كانوا يحصلون على test_mode مجاني بدل ما يتحوّلوا للـ Stripe checkout.
+
+**الإصلاحات الكاملة:**
+- **`mark_first_update` صار أداة AI رسمية** في `continuation_tools.py` (مع schema، summary param، idempotency، audit log).
+- **`_guard_subscription_lock` helper جديد** يرفع `code: PAYWALL_LOCKED` + `monthly_price_usd: 150.0` + رسالة عربية.
+- **paywall guard مزروع في 4 أدوات كتابة**: `propose_sandbox_change`, `push_to_review_branch`, `deploy_to_live_vps`, `deploy_to_live_ftp`. أدوات القراءة (`list_sandbox_files`, `read_sandbox_file`, `list_snapshots`) تبقى مفتوحة.
+- **defense-in-depth في HTTP layer**: endpoint `/sandbox/approve-and-deploy` نفسه يفحص الـ paywall قبل أي عملية، بحيث لو حد بايباس الـ AI ونادى الـ HTTP مباشرة، نفس النتيجة.
+- **System prompt مدعّم**: `freebuild_agent.py` الآن يُجبر الـ AI على نداء `mark_first_update` مع `summary` ويحدّد بالضبط أي أدوات ممنوعة بعدها.
+- **`STRIPE_API_KEY` صحيح** في unlock endpoint → غير المالك ينحوّل لـ Stripe checkout حقيقي عند الـ unlock.
+
+**E2E test lifecycle (10 خطوات curl) كلها PASSED:**
+1. status أولي: banner مخفي ✅
+2. mark_first_update HTTP → `ok: true` ✅
+3. status بعد mark: `show_subscription_prompt: true` ✅
+4. direct_live deploy → `code: PAYWALL_LOCKED` + رسالة عربية ✅
+5. github_pr deploy → `code: PAYWALL_LOCKED` ✅
+6. read tool (list files) → شغّال ✅
+7. mark_first_update مرة ثانية → idempotent ✅
+8. owner unlock → `method: test_mode` ✅
+9. status بعد unlock: `show_subscription_prompt: false` ✅
+10. deploy بعد unlock → يتجاوز الـ paywall ✅
+
+**Unit tests:** 15 اختبار في `test_continuation_paywall.py` + `test_continuation_direct_deploy.py` — كلها PASSED.
+
+**ملاحظة عن Stripe في dev:** الـ env المحلي عنده `STRIPE_API_KEY=sk_test_emergent` (placeholder). على `zenrex.ai` فيه مفتاح حقيقي، فالـ checkout الحقيقي بـ $150/شهر يشتغل تلقائياً هناك. الكود نفسه صحيح ١٠٠٪.
+

@@ -47,13 +47,9 @@ async def test_deploy_vps_refuses_non_continuation_mode(mock_db, ctx_factory):
 async def test_deploy_vps_refuses_missing_target(mock_db, ctx_factory):
     from backend.modules.freebuild.continuation_tools import handle_deploy_to_live_vps
     # Mode check ok, target missing
-    async def find_one(query, *args, **kwargs):
-        proj = query.get("id") if isinstance(query, dict) else None
-        if "mode" in str(args) + str(kwargs):
-            return {"mode": "continuation"}
-        return {"mode": "continuation", "continuation_deploy_target": None}
     mock_db.freebuild_projects.find_one.side_effect = [
         {"mode": "continuation"},  # _guard_continuation_mode
+        {"first_update_delivered": False, "continuation_unlocked": False},  # paywall guard
         {"continuation_deploy_target": None},  # _load_deploy_target
     ]
     res = await handle_deploy_to_live_vps({"project_id": "test-pid"}, ctx_factory())
@@ -68,6 +64,7 @@ async def test_deploy_vps_refuses_missing_ssh_creds(mock_db, ctx_factory, tmp_pa
     ct.SANDBOX_ROOT = tmp_path
     mock_db.freebuild_projects.find_one.side_effect = [
         {"mode": "continuation"},  # mode guard
+        {"first_update_delivered": False, "continuation_unlocked": False},  # paywall guard
         {"continuation_deploy_target": {"target_dir": "/var/www/html/",
                                          "source_subdir": "repo",
                                          "post_deploy_command": ""}},
@@ -88,6 +85,7 @@ async def test_deploy_ftp_refuses_missing_ftp_creds(mock_db, ctx_factory, tmp_pa
     ct.SANDBOX_ROOT = tmp_path
     mock_db.freebuild_projects.find_one.side_effect = [
         {"mode": "continuation"},
+        {"first_update_delivered": False, "continuation_unlocked": False},  # paywall guard
         {"continuation_deploy_target": {"target_dir": "/public_html/",
                                          "source_subdir": "repo"}},
         {"continuation_credentials": {}},
@@ -118,6 +116,7 @@ async def test_deploy_vps_refuses_empty_sandbox(mock_db, ctx_factory, tmp_path, 
 
     mock_db.freebuild_projects.find_one.side_effect = [
         {"mode": "continuation"},
+        {"first_update_delivered": False, "continuation_unlocked": False},  # paywall guard
         {"continuation_deploy_target": {"target_dir": "/var/www/html/",
                                          "source_subdir": "repo"}},
         {"continuation_credentials": {"SSH_HOST": {"ciphertext": ciphertext}}},

@@ -294,6 +294,10 @@ async def handle_push_to_review_branch(args: Dict[str, Any], ctx: Any = None) ->
     err = await _guard_continuation_mode(db, pid)
     if err:
         return {"ok": False, "error": err}
+    # Paywall: refuse pushes after first_update if not subscribed
+    locked = await _guard_subscription_lock(db, pid)
+    if locked:
+        return locked
 
     token = await _load_cred(db, pid, "GITHUB_TOKEN") or await _load_cred(db, pid, "GIT_TOKEN")
     if not token:
@@ -421,6 +425,10 @@ async def handle_deploy_to_live_vps(args: Dict[str, Any], ctx: Any = None) -> Di
     err = await _guard_continuation_mode(db, pid)
     if err:
         return {"ok": False, "error": err}
+    # Paywall: direct live deploy is locked after first_update_delivered
+    locked = await _guard_subscription_lock(db, pid)
+    if locked:
+        return locked
 
     target_cfg = await _load_deploy_target(db, pid)
     if not target_cfg or not target_cfg.get("target_dir"):
@@ -544,6 +552,10 @@ async def handle_deploy_to_live_ftp(args: Dict[str, Any], ctx: Any = None) -> Di
     err = await _guard_continuation_mode(db, pid)
     if err:
         return {"ok": False, "error": err}
+    # Paywall: FTP direct deploy is locked after first_update_delivered
+    locked = await _guard_subscription_lock(db, pid)
+    if locked:
+        return locked
 
     target_cfg = await _load_deploy_target(db, pid)
     if not target_cfg or not target_cfg.get("target_dir"):
@@ -624,6 +636,112 @@ async def _guard_continuation_mode(db, pid: str) -> Optional[str]:
     if proj.get("mode") != "continuation":
         return "this tool only works on continuation-mode projects"
     return None
+
+
+async def _guard_subscription_lock(db, pid: str) -> Optional[Dict[str, Any]]:
+    """Paywall gate. Once `first_update_delivered=True` is set, the AI must
+    stop ALL further mutations on the customer's code until the project
+    `continuation_unlocked=True` (paid). Returns a structured error dict that
+    must be RETURNED VERBATIM from the tool handler so the AI sees it and
+    relays the payment prompt to the user.
+
+    Tools that MUST call this before mutating: propose_sandbox_change,
+    push_to_review_branch, deploy_to_live_vps, deploy_to_live_ftp, and any
+    future write tool. READ tools (list/read/audit) are NOT gated.
+    """
+    if not pid:
+        return None
+    proj = await db.freebuild_projects.find_one(
+        {"id": pid},
+        {"_id": 0, "first_update_delivered": 1, "continuation_unlocked": 1},
+    )
+    if not proj:
+        return None
+    if proj.get("first_update_delivered") and not proj.get("continuation_unlocked"):
+        return {
+            "ok": False,
+            "error": "subscription_required",
+            "code": "PAYWALL_LOCKED",
+            "monthly_price_usd": 150.0,
+            "message_ar": (
+                "🔒 تم تسليم أول تحديث ملموس مجاناً، والآن المشروع مقفول للاشتراك. "
+                "اطلب من العميل تفعيل الاشتراك ($150/شهر) من البانر الظاهر في الواجهة "
+                "قبل أي تعديل آخر. لا تحاول تنفيذ أي عملية كتابة قبل الدفع."
+            ),
+            "message_en": (
+                "First concrete update was delivered. The project is now locked "
+                "until the customer subscribes at $150/month. Ask them to click "
+                "the subscription banner before any further edits."
+            ),
+            "ui_action_required": "subscribe_continuation",
+        }
+    return None
+
+
+async def handle_mark_first_update(args: Dict[str, Any], ctx: Any = None) -> Dict[str, Any]:
+    """Flip `first_update_delivered=True` on the continuation project AFTER
+    the AI engineer delivered the FIRST concrete, visible fix in the sandbox.
+    This triggers the $150/month subscription banner in the customer's UI
+    and locks all further write-tools until they pay.
+
+    Rules baked in:
+      • Idempotent — calling twice is a no-op (returns already_marked=True)
+      • Requires continuation mode + at least one sandbox edit on record
+      • Records the trigger reason in the audit log
+    """
+    pid = (args.get("project_id") or (ctx and getattr(ctx, "project_id", None)) or "").strip()
+    summary = (args.get("summary") or "").strip()[:300]
+    if not pid:
+        return {"ok": False, "error": "project_id required"}
+
+    db = getattr(ctx, "db", None) if ctx else None
+    if db is None:
+        from server import db as _db  # type: ignore
+        db = _db
+
+    err = await _guard_continuation_mode(db, pid)
+    if err:
+        return {"ok": False, "error": err}
+
+    proj = await db.freebuild_projects.find_one(
+        {"id": pid},
+        {"_id": 0, "first_update_delivered": 1, "continuation_unlocked": 1},
+    )
+    if proj and proj.get("first_update_delivered"):
+        return {
+            "ok": True,
+            "already_marked": True,
+            "first_update_delivered": True,
+            "continuation_unlocked": bool(proj.get("continuation_unlocked")),
+            "message_ar": "أول تحديث مسجّل سابقاً — البانر ظاهر للعميل.",
+        }
+
+    await db.freebuild_projects.update_one(
+        {"id": pid},
+        {"$set": {
+            "first_update_delivered": True,
+            "first_update_at": _now_iso(),
+            "first_update_summary": summary or "AI delivered the first concrete fix",
+        }},
+    )
+    await _audit(ctx, db, pid, "mark_first_update",
+                 tool_name="mark_first_update", success=True,
+                 details={"summary": summary[:200] if summary else None,
+                          "triggered_banner": True, "monthly_price_usd": 150.0})
+    return {
+        "ok": True,
+        "first_update_delivered": True,
+        "monthly_price_usd": 150.0,
+        "message_ar": (
+            "✅ تم تسجيل أول تحديث ملموس. سيظهر للعميل بانر اشتراك $150/شهر فوراً. "
+            "توقّف عن أي تعديل آخر لحد ما يفعّل الاشتراك."
+        ),
+        "next_instruction_ar": (
+            "أخبر العميل بوضوح: «جاهز التحديث الأول في الـ Sandbox، فعّل الاشتراك "
+            "من البانر فوق الشات عشان نكمل باقي التعديلات». ولا تنفّذ أي أداة كتابة "
+            "(propose_sandbox_change / push_to_review_branch / deploy_to_live_*) قبل ذلك."
+        ),
+    }
 
 
 # ────────────── FTP sync ──────────────
@@ -756,6 +874,10 @@ async def handle_propose_sandbox_change(args: Dict[str, Any], ctx: Any = None) -
         err = await _guard_continuation_mode(db_check, pid)
         if err:
             return {"ok": False, "error": err}
+        # Paywall: after first_update_delivered, refuse any write until paid
+        locked = await _guard_subscription_lock(db_check, pid)
+        if locked:
+            return locked
     sandbox = _ensure_sandbox(pid)
     try:
         p = _safe_path(sandbox, rel)
@@ -903,6 +1025,21 @@ CONTINUATION_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+        "name": "mark_first_update",
+        "description": "CALL THIS ONCE — and only once — RIGHT AFTER you delivered the first concrete, customer-visible fix in the sandbox preview (e.g. swapped a real image, fixed a real bug, optimized a real component). It flips the project flag that triggers the $150/month subscription banner in the customer's UI. AFTER calling this, you MUST STOP all further write actions (propose_sandbox_change, push_to_review_branch, deploy_to_live_*) until the customer pays. Do NOT call this on speculative work, plans, or analysis — only on a real shipped fix.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "summary": {
+                    "type": "string",
+                    "description": "One short Arabic sentence describing the concrete fix you just shipped (e.g. 'استبدلت صورة البطل بصورة جديدة'). Shown in audit log.",
+                },
+            },
+            "required": ["summary"],
+        },
+    },
 ]
 
 CONTINUATION_TOOL_HANDLERS: Dict[str, Any] = {
@@ -917,4 +1054,5 @@ CONTINUATION_TOOL_HANDLERS: Dict[str, Any] = {
     "push_to_review_branch": handle_push_to_review_branch,
     "deploy_to_live_vps": handle_deploy_to_live_vps,
     "deploy_to_live_ftp": handle_deploy_to_live_ftp,
+    "mark_first_update": handle_mark_first_update,
 }
